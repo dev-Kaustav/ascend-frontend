@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #f7f5ff;
+  --color-ink: #0f172a;
+  --color-accent: #7c4dff;
+  --color-accent-soft: #e6ddff;
+  --color-border: #e4ddf5;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  color: var(--color-ink);
+  background-color: var(--color-bg);
+}
+
+::selection {
+  background: #cbb8ff;
+  color: #0f172a;
+}
+
+@layer utilities {
+  .section-pad {
+    @apply px-4 sm:px-6 lg:px-8;
+  }
+}
+
+.reveal .reveal-text {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 1000ms ease, transform 1000ms ease;
+}
+
+.reveal.is-visible .reveal-text {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal .reveal-text {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
