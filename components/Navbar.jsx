@@ -1,10 +1,11 @@
 import Link from "next/link";
 
 const navItems = [
-  { label: "Product", href: "#product" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Why Ascend", href: "#why-ascend" },
-  { label: "Contact", href: "#contact" }
+  { label: "Product", href: "/product" },
+  { label: "How It Works", href: "/how-it-works" },
+  { label: "Why Ascend", href: "/why-ascend" },
+  { label: "Who It's For", href: "/who-its-for" },
+  { label: "Contact", href: "/contact" }
 ];
 
 export default function Navbar() {
@@ -30,7 +31,7 @@ export default function Navbar() {
         </nav>
         <div className="hidden md:flex md:justify-self-end">
           <Link
-            href="#contact"
+            href="/contact"
             className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-[#6b3df0]"
           >
             Talk to Us
@@ -52,7 +53,7 @@ export default function Navbar() {
                 </Link>
               ))}
               <Link
-                href="#contact"
+                href="/contact"
                 className="rounded-lg bg-accent px-3 py-2 text-center font-semibold text-white"
               >
                 Talk to Us

@@ -21,13 +21,13 @@ export default function CTA() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="#contact"
+                href="/contact"
                 className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#6b3df0]"
               >
                 Get in Touch
               </Link>
               <Link
-                href="#contact"
+                href="/contact"
                 className="rounded-full border border-white/30 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/60"
               >
                 Partner with Ascend

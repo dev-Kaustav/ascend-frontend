@@ -21,13 +21,13 @@ export default function Hero() {
           </p>
           <div className="flex w-full flex-col justify-center gap-3 sm:flex-row">
             <Link
-              href="#contact"
+              href="/contact"
               className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_-24px_rgba(124,77,255,0.6)] transition hover:bg-[#6b3df0]"
             >
               Talk to Us
             </Link>
             <Link
-              href="#contact"
+              href="/contact"
               className="rounded-full border border-white/20 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/10"
             >
               Partner with Ascend
