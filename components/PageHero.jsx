@@ -9,7 +9,7 @@ export default function PageHero({
   return (
     <section className="relative overflow-hidden bg-night text-white">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(124,77,255,0.35)_0,_rgba(11,6,20,0.65)_45%,_#0b0614_100%)]" />
-      <div className="absolute -top-24 right-12 h-48 w-48 rounded-full bg-accent/20 blur-3xl" />
+      <div className="absolute -top-24 right-12 h-48 w-48 rounded-full bg-[radial-gradient(circle,_rgba(124,77,255,0.45)_0,_rgba(124,77,255,0.18)_45%,_rgba(124,77,255,0)_70%)]" />
       <div className="mx-auto flex max-w-5xl flex-col gap-6 py-16 section-pad sm:py-20 lg:py-24">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
           Ascend Foods
