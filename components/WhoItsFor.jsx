@@ -23,7 +23,7 @@ export default function WhoItsFor() {
       <div className="mx-auto max-w-6xl section-pad">
         <div className="flex flex-col gap-4 reveal-text">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            Who It's For
+            Who It&apos;s For
           </p>
           <h2 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
             Teams that need distribution certainty
