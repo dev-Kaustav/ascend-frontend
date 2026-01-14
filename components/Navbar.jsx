@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Product", href: "/product" },
@@ -9,6 +12,9 @@ const navItems = [
 ];
 
 export default function Navbar() {
+  const pathname = usePathname();
+  const showLogin = pathname === "/";
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-night/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between section-pad md:grid md:grid-cols-[1fr_auto_1fr]">
@@ -29,7 +35,15 @@ export default function Navbar() {
             </Link>
           ))}
         </nav>
-        <div className="hidden md:flex md:justify-self-end">
+        <div className="hidden items-center gap-3 md:flex md:justify-self-end">
+          {showLogin ? (
+            <Link
+              href="/login"
+              className="rounded-full border border-white/30 px-3.5 py-1.5 text-xs font-semibold text-white/80 transition hover:border-white/60 hover:text-white"
+            >
+              Login
+            </Link>
+          ) : null}
           <Link
             href="/contact"
             className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-[#6b3df0]"
@@ -52,6 +66,14 @@ export default function Navbar() {
                   {item.label}
                 </Link>
               ))}
+              {showLogin ? (
+                <Link
+                  href="/login"
+                  className="rounded-lg border border-white/20 px-3 py-2 text-center font-semibold text-white/80 hover:text-white"
+                >
+                  Login
+                </Link>
+              ) : null}
               <Link
                 href="/contact"
                 className="rounded-lg bg-accent px-3 py-2 text-center font-semibold text-white"

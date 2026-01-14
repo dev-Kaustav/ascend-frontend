@@ -1,0 +1,18 @@
+:root {
+  --app-ink: #0f172a;
+  --app-muted: #64748b;
+  --app-accent: #0f766e;
+}
+
+.app-shell {
+  font-family: var(--font-body), "Inter", system-ui, sans-serif;
+  color: var(--app-ink);
+}
+
+.app-shell h1,
+.app-shell h2,
+.app-shell h3,
+.app-shell h4 {
+  font-family: var(--font-display), "Inter", system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
