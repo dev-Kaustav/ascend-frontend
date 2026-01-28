@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import StatCard from "@/components/layout/StatCard";
@@ -10,6 +10,12 @@ import LineChartCard from "@/components/charts/LineChartCard";
 import BarChartCard from "@/components/charts/BarChartCard";
 
 function getOrderTotal(order) {
+  if (!order) return 0;
+  if (typeof order.total_amount === "number") return order.total_amount;
+  if (order.total_amount !== undefined && order.total_amount !== null) {
+    const parsed = Number(order.total_amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
   if (!order?.items?.length) return 0;
   return order.items.reduce((sum, item) => {
     const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
@@ -22,29 +28,63 @@ function getPaymentDate(payment) {
   return payment?.created_at || payment?.payment_date || payment?.date || null;
 }
 
+function getCreditNoteAmount(note) {
+  if (!note) return 0;
+  if (typeof note.amount === "number") return note.amount;
+  if (note.amount !== undefined && note.amount !== null) {
+    const parsed = Number(note.amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  if (!note.items?.length) return 0;
+  return note.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
+}
+
 export default function AdminAccounting() {
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
   const [credits, setCredits] = useState([]);
   const [retailers, setRetailers] = useState([]);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [paymentsTotalAmount, setPaymentsTotalAmount] = useState(null);
+  const [paymentsDailyTotals, setPaymentsDailyTotals] = useState([]);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [paymentsPageSize, setPaymentsPageSize] = useState(20);
+  const [creditsTotal, setCreditsTotal] = useState(0);
+  const [creditsTotalAmount, setCreditsTotalAmount] = useState(null);
+  const [creditsPage, setCreditsPage] = useState(1);
+  const [creditsPageSize, setCreditsPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [creditsLoading, setCreditsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [paymentsError, setPaymentsError] = useState("");
+  const [creditsError, setCreditsError] = useState("");
 
   useEffect(() => {
     let active = true;
-    async function load() {
+    async function loadOrders() {
+      setLoading(true);
       try {
-        const [ordersResponse, paymentsResponse, creditsResponse, retailersResponse] = await Promise.all([
-          apiFetch(apiEndpoints.admin.orders),
-          apiFetch(apiEndpoints.admin.accountingPayments),
-          apiFetch(apiEndpoints.admin.accountingCredits),
-          apiFetch(apiEndpoints.admin.retailers)
-        ]);
+        const lookupsPromise = apiFetchCached(apiEndpoints.admin.lookups);
+        const limit = 200;
+        let offset = 0;
+        let combined = [];
+        let total = null;
+        // Fetch in pages to respect backend limit (<=200)
+        // Stop early if we read all or hit a short page.
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const resp = await apiFetch(`${apiEndpoints.admin.orders}?limit=${limit}&offset=${offset}`);
+          const items = resp?.items || [];
+          combined = combined.concat(items);
+          total = resp?.total ?? combined.length;
+          offset += limit;
+          if (!resp?.total || combined.length >= total || items.length < limit) break;
+        }
+        const lookupsResponse = await lookupsPromise;
         if (!active) return;
-        setOrders(ordersResponse || []);
-        setPayments(paymentsResponse || []);
-        setCredits(creditsResponse || []);
-        setRetailers(retailersResponse || []);
+        setOrders(combined);
+        setRetailers(lookupsResponse?.retailers || []);
         setError("");
       } catch (err) {
         if (!active) return;
@@ -53,29 +93,82 @@ export default function AdminAccounting() {
         if (active) setLoading(false);
       }
     }
-    load();
+    loadOrders();
     return () => {
       active = false;
     };
   }, []);
 
-  const totals = useMemo(() => {
-    const outgoingOrders = orders.filter((order) => String(order.order_type).toUpperCase() === "OUTGOING");
-    const receivables = outgoingOrders.reduce((sum, order) => sum + getOrderTotal(order), 0);
-    const collected = payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const creditsTotal = credits.reduce((sum, note) => {
-      if (note.amount !== undefined) return sum + (note.amount || 0);
-      if (note.items?.length) {
-        return (
-          sum +
-          note.items.reduce((itemSum, item) => itemSum + (item.quantity || 0) * (item.unit_price || 0), 0)
-        );
+  useEffect(() => {
+    let active = true;
+    async function loadPayments() {
+      setPaymentsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", String(paymentsPageSize));
+        params.set("offset", String((paymentsPage - 1) * paymentsPageSize));
+        const response = await apiFetch(`${apiEndpoints.admin.accountingPayments}?${params.toString()}`);
+        if (!active) return;
+        const items = response?.items || response || [];
+        setPayments(items);
+        setPaymentsTotal(response?.total ?? items.length);
+        setPaymentsTotalAmount(response?.total_amount ?? null);
+        setPaymentsDailyTotals(response?.daily_totals || []);
+        setPaymentsError("");
+      } catch (err) {
+        if (!active) return;
+        setPaymentsError(err?.message || "Unable to load payments.");
+      } finally {
+        if (active) setPaymentsLoading(false);
       }
-      return sum;
-    }, 0);
+    }
+    loadPayments();
+    return () => {
+      active = false;
+    };
+  }, [paymentsPage, paymentsPageSize]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCredits() {
+      setCreditsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("limit", String(creditsPageSize));
+        params.set("offset", String((creditsPage - 1) * creditsPageSize));
+        const response = await apiFetch(`${apiEndpoints.admin.accountingCredits}?${params.toString()}`);
+        if (!active) return;
+        const items = response?.items || response || [];
+        setCredits(items);
+        setCreditsTotal(response?.total ?? items.length);
+        setCreditsTotalAmount(response?.total_amount ?? null);
+        setCreditsError("");
+      } catch (err) {
+        if (!active) return;
+        setCreditsError(err?.message || "Unable to load credit notes.");
+      } finally {
+        if (active) setCreditsLoading(false);
+      }
+    }
+    loadCredits();
+    return () => {
+      active = false;
+    };
+  }, [creditsPage, creditsPageSize]);
+
+  const totals = useMemo(() => {
+    const receivables = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
+    const collected =
+      paymentsTotalAmount !== null
+        ? paymentsTotalAmount
+        : payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    const creditsTotal =
+      creditsTotalAmount !== null
+        ? creditsTotalAmount
+        : credits.reduce((sum, note) => sum + getCreditNoteAmount(note), 0);
 
     return { receivables, collected, creditsTotal };
-  }, [orders, payments, credits]);
+  }, [orders, payments, credits, paymentsTotalAmount, creditsTotalAmount]);
 
   const retailerMap = useMemo(() => {
     const map = new Map();
@@ -106,6 +199,12 @@ export default function AdminAccounting() {
   }, [orderMap, payments, retailerMap]);
 
   const paymentsOverTime = useMemo(() => {
+    if (paymentsDailyTotals.length) {
+      return paymentsDailyTotals.map((entry) => ({
+        label: new Date(entry.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
+        amount: entry.amount || 0
+      }));
+    }
     const grouped = new Map();
     payments.forEach((payment) => {
       const date = getPaymentDate(payment);
@@ -116,7 +215,7 @@ export default function AdminAccounting() {
       grouped.set(label, current);
     });
     return Array.from(grouped.values());
-  }, [payments]);
+  }, [payments, paymentsDailyTotals]);
 
   const outstandingByRetailer = useMemo(() => {
     const grouped = new Map();
@@ -178,17 +277,7 @@ export default function AdminAccounting() {
       {
         header: "Amount",
         accessorKey: "amount",
-        cell: ({ row }) => {
-          if (row.original.amount !== undefined) return formatCurrency(row.original.amount);
-          if (row.original.items?.length) {
-            const sum = row.original.items.reduce(
-              (total, item) => total + (item.quantity || 0) * (item.unit_price || 0),
-              0
-            );
-            return formatCurrency(sum);
-          }
-          return "—";
-        }
+        cell: ({ row }) => formatCurrency(getCreditNoteAmount(row.original))
       },
       {
         header: "Reason",
@@ -232,13 +321,13 @@ export default function AdminAccounting() {
         <StatCard
           title="Total Collected"
           value={formatCurrency(totals.collected)}
-          subtitle={`${formatNumber(payments.length)} payments logged`}
+          subtitle={`${formatNumber(paymentsTotal)} payments logged`}
           accent="emerald"
         />
         <StatCard
           title="Total Credits Issued"
           value={formatCurrency(totals.creditsTotal)}
-          subtitle={`${formatNumber(credits.length)} credit notes`}
+          subtitle={`${formatNumber(creditsTotal)} credit notes`}
           accent="amber"
         />
       </div>
@@ -258,12 +347,120 @@ export default function AdminAccounting() {
         />
       </div>
 
-      <SectionCard title="Payments" subtitle="Captured collections">
-        <DataTable columns={paymentColumns} data={paymentRows} emptyLabel="No payments available." />
+      <SectionCard
+        title="Payments"
+        subtitle="Captured collections"
+        actions={
+          <select
+            value={paymentsPageSize}
+            onChange={(event) => {
+              setPaymentsPageSize(Number(event.target.value));
+              setPaymentsPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
+        {paymentsError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-600">
+            {paymentsError}
+          </div>
+        ) : (
+          <>
+            <DataTable
+              columns={paymentColumns}
+              data={paymentRows}
+              emptyLabel={paymentsLoading ? "Loading payments..." : "No payments available."}
+            />
+            <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Page {paymentsPage} of {Math.max(1, Math.ceil(paymentsTotal / paymentsPageSize))}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentsPage((prev) => Math.max(1, prev - 1))}
+                  disabled={paymentsPage === 1}
+                  className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentsPage((prev) => prev + 1)}
+                  disabled={paymentsPage >= Math.ceil(paymentsTotal / paymentsPageSize)}
+                  className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </SectionCard>
 
-      <SectionCard title="Credit Notes" subtitle="Issued credits">
-        <DataTable columns={creditColumns} data={credits} emptyLabel="No credit notes available." />
+      <SectionCard
+        title="Credit Notes"
+        subtitle="Issued credits"
+        actions={
+          <select
+            value={creditsPageSize}
+            onChange={(event) => {
+              setCreditsPageSize(Number(event.target.value));
+              setCreditsPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
+        {creditsError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-600">
+            {creditsError}
+          </div>
+        ) : (
+          <>
+            <DataTable
+              columns={creditColumns}
+              data={credits}
+              emptyLabel={creditsLoading ? "Loading credit notes..." : "No credit notes available."}
+            />
+            <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Page {creditsPage} of {Math.max(1, Math.ceil(creditsTotal / creditsPageSize))}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCreditsPage((prev) => Math.max(1, prev - 1))}
+                  disabled={creditsPage === 1}
+                  className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreditsPage((prev) => prev + 1)}
+                  disabled={creditsPage >= Math.ceil(creditsTotal / creditsPageSize)}
+                  className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </SectionCard>
     </div>
   );

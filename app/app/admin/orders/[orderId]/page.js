@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
@@ -32,7 +32,7 @@ export default function AdminOrderDetail() {
       try {
         const [orderResponse, skuResponse] = await Promise.all([
           apiFetch(apiEndpoints.orders.detail(orderId)),
-          apiFetch(apiEndpoints.admin.skus)
+          apiFetchCached(apiEndpoints.admin.skus)
         ]);
         if (!active) return;
         setOrder(orderResponse);
@@ -124,7 +124,7 @@ export default function AdminOrderDetail() {
     <div className="space-y-6">
       <SectionCard
         title={`Order #${order.id}`}
-        subtitle={`${toTitleCase(order.order_type)} • ${toTitleCase(order.status)} • ${formatDate(getOrderDate(order))}`}
+        subtitle={`${toTitleCase(order.status)} • ${formatDate(getOrderDate(order))}`}
       >
         <div className="grid gap-4 md:grid-cols-4">
           <div>
@@ -154,23 +154,6 @@ export default function AdminOrderDetail() {
 
       <SectionCard title="Line Items" subtitle="SKU-level breakdown with GST and discounts">
         <DataTable columns={itemColumns} data={order.items || []} emptyLabel="No line items on this order." />
-      </SectionCard>
-
-      <SectionCard title="Batch Allocations" subtitle="Expiry + batch code allocations">
-        {order.batch_allocations?.length ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            {order.batch_allocations.map((batch) => (
-              <div key={batch.batch_code} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-                <p className="text-sm font-semibold text-slate-900">{batch.batch_code}</p>
-                <p className="text-xs text-slate-500">Expiry {formatDate(batch.expiry_date)}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-400">
-            No batch allocation data available.
-          </div>
-        )}
       </SectionCard>
 
       <SectionCard title="Payments" subtitle="Payment history on this order">

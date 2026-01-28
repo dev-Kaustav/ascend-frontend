@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
@@ -13,6 +13,12 @@ function getOrderDate(order) {
 }
 
 function getOrderTotal(order) {
+  if (!order) return 0;
+  if (typeof order.total_amount === "number") return order.total_amount;
+  if (order.total_amount !== undefined && order.total_amount !== null) {
+    const parsed = Number(order.total_amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
   if (!order?.items?.length) return 0;
   return order.items.reduce((sum, item) => {
     const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
@@ -29,6 +35,10 @@ export default function AdminInvoices() {
     status: "ALL",
     paymentStatus: "ALL"
   });
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -36,13 +46,26 @@ export default function AdminInvoices() {
     let active = true;
     async function load() {
       try {
-        const [ordersResponse, retailersResponse] = await Promise.all([
-          apiFetch(apiEndpoints.admin.orders),
-          apiFetch(apiEndpoints.admin.retailers)
+        const params = new URLSearchParams();
+        params.set("limit", String(pageSize));
+        params.set("offset", String((page - 1) * pageSize));
+        params.set("has_invoice", "true");
+        if (filters.search) params.set("search", filters.search);
+        if (filters.status !== "ALL") params.set("status", filters.status);
+        if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
+
+        const lookupsPromise = lookupsLoaded ? Promise.resolve(null) : apiFetchCached(apiEndpoints.admin.lookups);
+        const [ordersResponse, lookupsResponse] = await Promise.all([
+          apiFetch(`${apiEndpoints.admin.orders}?${params.toString()}`),
+          lookupsPromise
         ]);
         if (!active) return;
-        setOrders(ordersResponse || []);
-        setRetailers(retailersResponse || []);
+        setOrders(ordersResponse?.items || []);
+        setTotal(ordersResponse?.total || 0);
+        if (lookupsResponse) {
+          setRetailers(lookupsResponse?.retailers || []);
+          setLookupsLoaded(true);
+        }
         setError("");
       } catch (err) {
         if (!active) return;
@@ -55,11 +78,7 @@ export default function AdminInvoices() {
     return () => {
       active = false;
     };
-  }, []);
-
-  const invoiceOrders = useMemo(() => {
-    return orders.filter((order) => order.invoice_number);
-  }, [orders]);
+  }, [filters, page, pageSize]);
 
   const retailerMap = useMemo(() => {
     const map = new Map();
@@ -69,32 +88,14 @@ export default function AdminInvoices() {
     return map;
   }, [retailers]);
 
-  const filteredOrders = useMemo(() => {
-    return invoiceOrders.filter((order) => {
-      if (filters.search && !String(order.invoice_number).toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
-      }
-      if (filters.status !== "ALL" && String(order.status).toUpperCase() !== filters.status) {
-        return false;
-      }
-      if (
-        filters.paymentStatus !== "ALL" &&
-        String(order.payment_status || "UNPAID").toUpperCase() !== filters.paymentStatus
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [filters, invoiceOrders]);
-
   const totals = useMemo(() => {
-    const totalInvoices = invoiceOrders.length;
-    const totalBilled = invoiceOrders.reduce((sum, order) => sum + getOrderTotal(order), 0);
-    const paidInvoices = invoiceOrders.filter(
+    const totalInvoices = total;
+    const totalBilled = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
+    const paidInvoices = orders.filter(
       (order) => String(order.payment_status || "UNPAID").toUpperCase() === "PAID"
     ).length;
     return { totalInvoices, totalBilled, paidInvoices };
-  }, [invoiceOrders]);
+  }, [orders, total]);
 
   const columns = useMemo(
     () => [
@@ -183,24 +184,35 @@ export default function AdminInvoices() {
           <input
             type="text"
             value={filters.search}
-            onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, search: event.target.value }));
+              setPage(1);
+            }}
             placeholder="Search invoice"
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           />
           <select
             value={filters.status}
-            onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, status: event.target.value }));
+              setPage(1);
+            }}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Status</option>
             <option value="PENDING">Pending</option>
+            <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="CONFIRMED">Confirmed</option>
             <option value="DELIVERED">Delivered</option>
+            <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
           <select
             value={filters.paymentStatus}
-            onChange={(event) => setFilters((prev) => ({ ...prev, paymentStatus: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, paymentStatus: event.target.value }));
+              setPage(1);
+            }}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Payment</option>
@@ -211,8 +223,50 @@ export default function AdminInvoices() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Invoices" subtitle={`${formatNumber(filteredOrders.length)} invoices`}>
-        <DataTable columns={columns} data={filteredOrders} emptyLabel="No invoices to display." />
+      <SectionCard
+        title="Invoices"
+        subtitle={`${formatNumber(total)} invoices`}
+        actions={
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
+        <DataTable columns={columns} data={orders} emptyLabel="No invoices to display." />
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page >= Math.ceil(total / pageSize)}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </SectionCard>
     </div>
   );

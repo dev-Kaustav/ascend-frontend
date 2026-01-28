@@ -14,16 +14,27 @@ function getPaymentDate(payment) {
 
 export default function AdminCashCollection() {
   const [payments, setPayments] = useState([]);
+  const [paymentsTotal, setPaymentsTotal] = useState(0);
+  const [dailyTotals, setDailyTotals] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     async function load() {
+      setLoading(true);
       try {
-        const response = await apiFetch(apiEndpoints.admin.accountingPayments);
+        const params = new URLSearchParams();
+        params.set("limit", String(pageSize));
+        params.set("offset", String((page - 1) * pageSize));
+        const response = await apiFetch(`${apiEndpoints.admin.accountingPayments}?${params.toString()}`);
         if (!active) return;
-        setPayments(response || []);
+        const items = response?.items || response || [];
+        setPayments(items);
+        setPaymentsTotal(response?.total ?? items.length);
+        setDailyTotals(response?.daily_totals || []);
         setError("");
       } catch (err) {
         if (!active) return;
@@ -36,7 +47,7 @@ export default function AdminCashCollection() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page, pageSize]);
 
   const stats = useMemo(() => {
     const today = new Date();
@@ -47,24 +58,47 @@ export default function AdminCashCollection() {
     let collectedToday = 0;
     let collected7 = 0;
     let collected30 = 0;
-    payments.forEach((payment) => {
-      const dateValue = getPaymentDate(payment);
-      if (!dateValue) return;
-      const date = new Date(dateValue);
-      if (date.toDateString() === today.toDateString()) {
-        collectedToday += payment.amount || 0;
-      }
-      if (date >= last7) {
-        collected7 += payment.amount || 0;
-      }
-      if (date >= last30) {
-        collected30 += payment.amount || 0;
-      }
-    });
-    return { collectedToday, collected7, collected30 };
-  }, [payments]);
 
-  const dailyTotals = useMemo(() => {
+    if (dailyTotals.length) {
+      dailyTotals.forEach((entry) => {
+        const date = new Date(entry.date);
+        if (Number.isNaN(date.getTime())) return;
+        if (date.toDateString() === today.toDateString()) {
+          collectedToday += entry.amount || 0;
+        }
+        if (date >= last7) {
+          collected7 += entry.amount || 0;
+        }
+        if (date >= last30) {
+          collected30 += entry.amount || 0;
+        }
+      });
+    } else {
+      payments.forEach((payment) => {
+        const dateValue = getPaymentDate(payment);
+        if (!dateValue) return;
+        const date = new Date(dateValue);
+        if (date.toDateString() === today.toDateString()) {
+          collectedToday += payment.amount || 0;
+        }
+        if (date >= last7) {
+          collected7 += payment.amount || 0;
+        }
+        if (date >= last30) {
+          collected30 += payment.amount || 0;
+        }
+      });
+    }
+    return { collectedToday, collected7, collected30 };
+  }, [payments, dailyTotals]);
+
+  const chartTotals = useMemo(() => {
+    if (dailyTotals.length) {
+      return dailyTotals.map((entry) => ({
+        label: new Date(entry.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
+        value: entry.amount || 0
+      }));
+    }
     const grouped = new Map();
     payments.forEach((payment) => {
       const dateValue = getPaymentDate(payment);
@@ -75,7 +109,7 @@ export default function AdminCashCollection() {
       grouped.set(label, current);
     });
     return Array.from(grouped.values());
-  }, [payments]);
+  }, [payments, dailyTotals]);
 
   const columns = useMemo(
     () => [
@@ -145,12 +179,54 @@ export default function AdminCashCollection() {
       <LineChartCard
         title="Daily cash collection"
         subtitle="Payments captured per day"
-        data={dailyTotals}
+        data={chartTotals}
         lines={[{ dataKey: "value", name: "Collected", color: "#22c55e" }]}
       />
 
-      <SectionCard title="Payment log" subtitle={`${formatNumber(payments.length)} payments captured`}>
+      <SectionCard
+        title="Payment log"
+        subtitle={`${formatNumber(paymentsTotal)} payments captured`}
+        actions={
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
         <DataTable columns={columns} data={payments} emptyLabel="No payment records yet." />
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Page {page} of {Math.max(1, Math.ceil(paymentsTotal / pageSize))}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page >= Math.ceil(paymentsTotal / pageSize)}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </SectionCard>
     </div>
   );

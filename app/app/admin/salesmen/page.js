@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
@@ -9,6 +9,12 @@ import BarChartCard from "@/components/charts/BarChartCard";
 import DataTable from "@/components/tables/DataTable";
 
 function getOrderTotal(order) {
+  if (!order) return 0;
+  if (typeof order.total_amount === "number") return order.total_amount;
+  if (order.total_amount !== undefined && order.total_amount !== null) {
+    const parsed = Number(order.total_amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
   if (!order?.items?.length) return 0;
   return order.items.reduce((sum, item) => {
     const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
@@ -27,13 +33,22 @@ export default function AdminSalesmen() {
     let active = true;
     async function load() {
       try {
-        const [ordersResponse, salesmenResponse] = await Promise.all([
-          apiFetch(apiEndpoints.admin.orders),
-          apiFetch(apiEndpoints.admin.salesmen)
-        ]);
+        const lookupsPromise = apiFetchCached(apiEndpoints.admin.lookups);
+        const limit = 200;
+        let offset = 0;
+        let combined = [];
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const resp = await apiFetch(`${apiEndpoints.admin.orders}?limit=${limit}&offset=${offset}`);
+          const items = resp?.items || [];
+          combined = combined.concat(items);
+          offset += limit;
+          if (!resp?.total || combined.length >= resp.total || items.length < limit) break;
+        }
+        const lookupsResponse = await lookupsPromise;
         if (!active) return;
-        setOrders(ordersResponse || []);
-        setSalesmen(salesmenResponse || []);
+        setOrders(combined);
+        setSalesmen(lookupsResponse?.salesmen || []);
         setError("");
       } catch (err) {
         if (!active) return;
@@ -57,9 +72,8 @@ export default function AdminSalesmen() {
   }, [salesmen]);
 
   const stats = useMemo(() => {
-    const outgoingOrders = orders.filter((order) => String(order.order_type).toUpperCase() === "OUTGOING");
     const map = new Map();
-    outgoingOrders.forEach((order) => {
+    orders.forEach((order) => {
       const salesmanId = order.salesman_id || 0;
       const name = salesmenMap.get(salesmanId) || (salesmanId ? `Salesman ${salesmanId}` : "Unassigned");
       const entry =

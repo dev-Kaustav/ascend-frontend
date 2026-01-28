@@ -8,7 +8,12 @@ import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 
 function getCreditNoteAmount(note) {
-  if (note.amount !== undefined) return note.amount || 0;
+  if (!note) return 0;
+  if (typeof note.amount === "number") return note.amount;
+  if (note.amount !== undefined && note.amount !== null) {
+    const parsed = Number(note.amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
   if (!note.items) return 0;
   return note.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
 }
@@ -17,6 +22,10 @@ export default function AdminCreditNotes() {
   const [creditNotes, setCreditNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -24,10 +33,17 @@ export default function AdminCreditNotes() {
   useEffect(() => {
     let active = true;
     async function load() {
+      setLoading(true);
       try {
-        const response = await apiFetch(apiEndpoints.admin.accountingCredits);
+        const params = new URLSearchParams();
+        params.set("limit", String(pageSize));
+        params.set("offset", String((page - 1) * pageSize));
+        const response = await apiFetch(`${apiEndpoints.admin.accountingCredits}?${params.toString()}`);
         if (!active) return;
-        setCreditNotes(response || []);
+        const items = response?.items || response || [];
+        setCreditNotes(items);
+        setTotal(response?.total ?? items.length);
+        setTotalAmount(response?.total_amount ?? null);
         setError("");
       } catch (err) {
         if (!active) return;
@@ -40,7 +56,7 @@ export default function AdminCreditNotes() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     let active = true;
@@ -65,9 +81,9 @@ export default function AdminCreditNotes() {
   }, [selectedNote]);
 
   const totals = useMemo(() => {
-    const totalValue = creditNotes.reduce((sum, note) => sum + getCreditNoteAmount(note), 0);
+    const totalValue = totalAmount !== null ? totalAmount : creditNotes.reduce((sum, note) => sum + getCreditNoteAmount(note), 0);
     return { totalValue };
-  }, [creditNotes]);
+  }, [creditNotes, totalAmount]);
 
   const columns = useMemo(
     () => [
@@ -116,7 +132,7 @@ export default function AdminCreditNotes() {
       <div className="grid gap-4 lg:grid-cols-3">
         <StatCard
           title="Credit Notes"
-          value={formatNumber(creditNotes.length)}
+          value={formatNumber(total)}
           subtitle="Issued credits"
           accent="sky"
         />
@@ -134,13 +150,55 @@ export default function AdminCreditNotes() {
         />
       </div>
 
-      <SectionCard title="Credit Notes" subtitle="Select a credit note to view totals">
+      <SectionCard
+        title="Credit Notes"
+        subtitle="Select a credit note to view totals"
+        actions={
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
         <DataTable
           columns={columns}
           data={creditNotes}
           emptyLabel="No credit notes available."
           onRowClick={(note) => setSelectedNote(note)}
         />
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page >= Math.ceil(total / pageSize)}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </SectionCard>
 
       <SectionCard title="Credit Note Detail" subtitle="Taxable value and totals">

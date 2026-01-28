@@ -25,7 +25,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
         <div className="absolute right-0 top-40 h-72 w-72 rounded-full bg-[radial-gradient(circle,#fde68a_0%,transparent_60%)] opacity-70 blur-2xl" />
       </div>
 
-      <div className="mx-auto flex w-full max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-screen-2xl gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <aside className="hidden w-60 shrink-0 flex-col justify-between rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-[0_20px_60px_-40px_rgba(15,23,42,0.45)] backdrop-blur lg:flex">
           <div>
             <div className="flex items-center gap-3">
@@ -68,7 +68,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
           </button>
         </aside>
 
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <header className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/80 px-5 py-4 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.45)] backdrop-blur">
             <div>
               <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Ascend Foods</p>

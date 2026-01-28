@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
@@ -12,11 +12,7 @@ function getOrderDate(order) {
 }
 
 function getWarehouseId(order) {
-  if (order?.warehouse_id) return order.warehouse_id;
-  const type = String(order?.order_type || "").toUpperCase();
-  if (type === "INCOMING") return order?.to_entity_id;
-  if (type === "OUTGOING") return order?.from_entity_id;
-  return null;
+  return order?.warehouse_id || order?.from_entity_id || null;
 }
 
 export default function AdminOrders() {
@@ -25,9 +21,12 @@ export default function AdminOrders() {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
-    orderType: "ALL",
     status: "ALL",
     paymentStatus: "ALL",
     fromDate: "",
@@ -37,14 +36,27 @@ export default function AdminOrders() {
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const [ordersResponse, retailersResponse, warehousesResponse] = await Promise.all([
-        apiFetch(apiEndpoints.admin.orders),
-        apiFetch(apiEndpoints.admin.retailers),
-        apiFetch(apiEndpoints.admin.warehouses)
+      const params = new URLSearchParams();
+      params.set("limit", String(pageSize));
+      params.set("offset", String((page - 1) * pageSize));
+      if (filters.search) params.set("search", filters.search);
+      if (filters.status !== "ALL") params.set("status", filters.status);
+      if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
+      if (filters.fromDate) params.set("from_date", filters.fromDate);
+      if (filters.toDate) params.set("to_date", filters.toDate);
+
+      const lookupsPromise = lookupsLoaded ? Promise.resolve(null) : apiFetchCached(apiEndpoints.admin.lookups);
+      const [ordersResponse, lookupsResponse] = await Promise.all([
+        apiFetch(`${apiEndpoints.admin.orders}?${params.toString()}`),
+        lookupsPromise
       ]);
-      setOrders(ordersResponse || []);
-      setRetailers(retailersResponse || []);
-      setWarehouses(warehousesResponse || []);
+      setOrders(ordersResponse?.items || []);
+      setTotal(ordersResponse?.total || 0);
+      if (lookupsResponse) {
+        setRetailers(lookupsResponse?.retailers || []);
+        setWarehouses(lookupsResponse?.warehouses || []);
+        setLookupsLoaded(true);
+      }
       setError("");
     } catch (err) {
       setError(err?.message || "Unable to load orders.");
@@ -55,7 +67,7 @@ export default function AdminOrders() {
 
   useEffect(() => {
     loadOrders();
-  }, []);
+  }, [page, pageSize, filters]);
 
   const retailerMap = useMemo(() => {
     const map = new Map();
@@ -73,35 +85,6 @@ export default function AdminOrders() {
     return map;
   }, [warehouses]);
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const invoice = order.invoice_number || "";
-      if (filters.search && !invoice.toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
-      }
-      if (filters.orderType !== "ALL" && String(order.order_type).toUpperCase() !== filters.orderType) {
-        return false;
-      }
-      if (filters.status !== "ALL" && String(order.status).toUpperCase() !== filters.status) {
-        return false;
-      }
-      if (
-        filters.paymentStatus !== "ALL" &&
-        String(order.payment_status || "UNPAID").toUpperCase() !== filters.paymentStatus
-      ) {
-        return false;
-      }
-      const orderDate = getOrderDate(order);
-      if (filters.fromDate && orderDate && new Date(orderDate) < new Date(filters.fromDate)) {
-        return false;
-      }
-      if (filters.toDate && orderDate && new Date(orderDate) > new Date(filters.toDate)) {
-        return false;
-      }
-      return true;
-    });
-  }, [orders, filters]);
-
   const columns = useMemo(
     () => [
       {
@@ -112,11 +95,6 @@ export default function AdminOrders() {
             #{row.original.id}
           </Link>
         )
-      },
-      {
-        header: "Type",
-        accessorKey: "order_type",
-        cell: ({ row }) => toTitleCase(row.original.order_type)
       },
       {
         header: "Retailer",
@@ -178,48 +156,58 @@ export default function AdminOrders() {
     <div className="space-y-6">
       <SectionCard
         title="Orders Dashboard"
-        subtitle="Track incoming and outgoing orders across the network."
+        subtitle="Track outgoing orders across the network."
         actions={
-          <button
-            type="button"
-            onClick={() => loadOrders(false)}
-            className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/app/admin/orders/new"
+              className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white"
+            >
+              New Order
+            </Link>
+            <button
+              type="button"
+              onClick={() => loadOrders(false)}
+              className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+            >
+              Refresh
+            </button>
+          </div>
         }
       >
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <input
             type="text"
             placeholder="Search invoice"
             value={filters.search}
-            onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, search: event.target.value }));
+              setPage(1);
+            }}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm focus:border-slate-400 focus:outline-none"
           />
           <select
-            value={filters.orderType}
-            onChange={(event) => setFilters((prev) => ({ ...prev, orderType: event.target.value }))}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
-          >
-            <option value="ALL">Order Type</option>
-            <option value="INCOMING">Incoming</option>
-            <option value="OUTGOING">Outgoing</option>
-          </select>
-          <select
             value={filters.status}
-            onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, status: event.target.value }));
+              setPage(1);
+            }}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Status</option>
             <option value="PENDING">Pending</option>
+            <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="CONFIRMED">Confirmed</option>
             <option value="DELIVERED">Delivered</option>
+            <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
           <select
             value={filters.paymentStatus}
-            onChange={(event) => setFilters((prev) => ({ ...prev, paymentStatus: event.target.value }))}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, paymentStatus: event.target.value }));
+              setPage(1);
+            }}
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Payment</option>
@@ -227,25 +215,75 @@ export default function AdminOrders() {
             <option value="PARTIAL">Partial</option>
             <option value="UNPAID">Unpaid</option>
           </select>
-          <div className="flex gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <input
               type="date"
               value={filters.fromDate}
-              onChange={(event) => setFilters((prev) => ({ ...prev, fromDate: event.target.value }))}
+              onChange={(event) => {
+                setFilters((prev) => ({ ...prev, fromDate: event.target.value }));
+                setPage(1);
+              }}
               className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs"
             />
             <input
               type="date"
               value={filters.toDate}
-              onChange={(event) => setFilters((prev) => ({ ...prev, toDate: event.target.value }))}
+              onChange={(event) => {
+                setFilters((prev) => ({ ...prev, toDate: event.target.value }));
+                setPage(1);
+              }}
               className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs"
             />
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Orders" subtitle={`${filteredOrders.length} orders shown`}>
-        <DataTable columns={columns} data={filteredOrders} emptyLabel="No orders match the selected filters." />
+      <SectionCard
+        title="Orders"
+        subtitle={`${total} orders`}
+        actions={
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          >
+            {[10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size} / page
+              </option>
+            ))}
+          </select>
+        }
+      >
+        <div className="max-w-full overflow-x-auto pb-2">
+          <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filters." />
+        </div>
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page >= Math.ceil(total / pageSize)}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </SectionCard>
     </div>
   );

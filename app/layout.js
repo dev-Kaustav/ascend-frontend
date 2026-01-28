@@ -1,9 +1,5 @@
-import { Inter } from "next/font/google";
 import Script from "next/script";
-import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
@@ -75,14 +71,13 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className={`${inter.className} antialiased`}>
+      <body className="antialiased font-sans">
         <Script
           id="organization-jsonld"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
         {children}
-        <Analytics />
       </body>
     </html>
   );

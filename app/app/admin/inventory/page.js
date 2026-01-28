@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import Link from "next/link";
+import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, formatNumber } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
@@ -22,22 +23,36 @@ export default function AdminInventory() {
   const [inventory, setInventory] = useState([]);
   const [skus, setSkus] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
     async function load() {
+      setLoading(true);
       try {
-        const [inventoryResponse, skuResponse, warehouseResponse] = await Promise.all([
-          apiFetch(apiEndpoints.admin.inventory),
-          apiFetch(apiEndpoints.admin.skus),
-          apiFetch(apiEndpoints.admin.warehouses)
+        const params = new URLSearchParams();
+        params.set("limit", String(pageSize));
+        params.set("offset", String((page - 1) * pageSize));
+
+        const lookupsPromise = lookupsLoaded ? Promise.resolve(null) : apiFetchCached(apiEndpoints.admin.lookups);
+        const [inventoryResponse, lookupsResponse] = await Promise.all([
+          apiFetch(`${apiEndpoints.admin.inventory}?${params.toString()}`),
+          lookupsPromise
         ]);
         if (!active) return;
-        setInventory(inventoryResponse || []);
-        setSkus(skuResponse || []);
-        setWarehouses(warehouseResponse || []);
+        const inventoryItems = inventoryResponse?.items || inventoryResponse || [];
+        setInventory(inventoryItems);
+        setTotal(inventoryResponse?.total ?? inventoryItems.length);
+        if (lookupsResponse) {
+          setSkus(lookupsResponse?.skus || []);
+          setWarehouses(lookupsResponse?.warehouses || []);
+          setLookupsLoaded(true);
+        }
         setError("");
       } catch (err) {
         if (!active) return;
@@ -50,7 +65,7 @@ export default function AdminInventory() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [page, pageSize]);
 
   const skuMap = useMemo(() => {
     const map = new Map();
@@ -199,8 +214,58 @@ export default function AdminInventory() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Inventory by Warehouse" subtitle={`${inventoryRows.length} inventory rows`}>
+      <SectionCard
+        title="Inventory by Warehouse"
+        subtitle={`${total} inventory rows`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/app/admin/inventory/add"
+              className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white"
+            >
+              Add Inventory
+            </Link>
+            <select
+              value={pageSize}
+              onChange={(event) => {
+                setPageSize(Number(event.target.value));
+                setPage(1);
+              }}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+            >
+              {[10, 25, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      >
         <DataTable columns={columns} data={inventoryRows} emptyLabel="Inventory data is empty." />
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => prev + 1)}
+              disabled={page >= Math.ceil(total / pageSize)}
+              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </SectionCard>
     </div>
   );
