@@ -598,12 +598,17 @@ export default function QuickCreatePanel({
       {createError ? <p className="mb-3 text-sm text-rose-500">{createError}</p> : null}
       {entityOptions.length ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="text-xs uppercase tracking-widest text-slate-500">Select entity</label>
+          <div className={ROW_CLASSNAME}>
+            <label
+              htmlFor="quick-create-entity"
+              className={`${LABEL_CLASSNAME} uppercase tracking-widest`}
+            >
+              Select entity
+            </label>
             <SelectBar
+              id="quick-create-entity"
               value={selectedEntity}
               onChange={(event) => setSelectedEntity(event.target.value)}
-              className="w-auto"
             >
               {entityOptions.map((option) => (
                 <option key={option.value} value={option.value}>
