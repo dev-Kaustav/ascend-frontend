@@ -3,22 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
-import { formatDate, toTitleCase } from "@/lib/format";
+import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import { InputBar, SelectBar } from "@/components/ui/InputBars";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
 }
 
-function getWarehouseId(order) {
-  return order?.warehouse_id || order?.from_entity_id || null;
-}
-
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [retailers, setRetailers] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
+  const [salesmen, setSalesmen] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
@@ -54,7 +51,7 @@ export default function AdminOrders() {
       setTotal(ordersResponse?.total || 0);
       if (lookupsResponse) {
         setRetailers(lookupsResponse?.retailers || []);
-        setWarehouses(lookupsResponse?.warehouses || []);
+        setSalesmen(lookupsResponse?.salesmen || []);
         setLookupsLoaded(true);
       }
       setError("");
@@ -77,16 +74,21 @@ export default function AdminOrders() {
     return map;
   }, [retailers]);
 
-  const warehouseMap = useMemo(() => {
+  const salesmanMap = useMemo(() => {
     const map = new Map();
-    warehouses.forEach((warehouse) => {
-      map.set(warehouse.id, warehouse.name);
+    salesmen.forEach((salesman) => {
+      map.set(salesman.id, salesman);
     });
     return map;
-  }, [warehouses]);
+  }, [salesmen]);
 
   const columns = useMemo(
     () => [
+      {
+        header: "Date",
+        accessorKey: "created_at",
+        cell: ({ row }) => formatDate(getOrderDate(row.original))
+      },
       {
         header: "Order ID",
         accessorKey: "id",
@@ -97,6 +99,31 @@ export default function AdminOrders() {
         )
       },
       {
+        header: "Invoice ID",
+        accessorKey: "invoice_number",
+        cell: ({ row }) => row.original.invoice_number || "—"
+      },
+      {
+        header: "Status",
+        accessorKey: "status",
+        cell: ({ row }) => toTitleCase(row.original.status)
+      },
+      {
+        header: "Payment Status",
+        accessorKey: "payment_status",
+        cell: ({ row }) => toTitleCase(row.original.payment_status || "UNPAID")
+      },
+      {
+        header: "Total amount",
+        accessorKey: "total_amount",
+        cell: ({ row }) => formatCurrency(row.original.total_amount)
+      },
+      {
+        header: "Pending amount",
+        accessorKey: "pending_amount",
+        cell: ({ row }) => formatCurrency(row.original.pending_amount)
+      },
+      {
         header: "Retailer",
         accessorKey: "to_entity_id",
         cell: ({ row }) => {
@@ -105,35 +132,23 @@ export default function AdminOrders() {
         }
       },
       {
-        header: "Warehouse",
-        accessorKey: "warehouse_id",
+        header: "Salesman",
+        accessorKey: "salesman_id",
         cell: ({ row }) => {
-          const warehouseId = getWarehouseId(row.original);
-          return warehouseMap.get(warehouseId) || row.original.warehouse_name || warehouseId || "—";
+          const salesman = salesmanMap.get(row.original.salesman_id);
+          return salesman?.name || row.original.salesman_name || "—";
         }
       },
       {
-        header: "Status",
-        accessorKey: "status",
-        cell: ({ row }) => toTitleCase(row.original.status)
-      },
-      {
-        header: "Payment",
-        accessorKey: "payment_status",
-        cell: ({ row }) => toTitleCase(row.original.payment_status || "UNPAID")
-      },
-      {
-        header: "Order Date",
-        accessorKey: "created_at",
-        cell: ({ row }) => formatDate(getOrderDate(row.original))
-      },
-      {
-        header: "Invoice #",
-        accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || "—"
+        header: "Salesman Phone",
+        accessorKey: "salesman_phone",
+        cell: ({ row }) => {
+          const salesman = salesmanMap.get(row.original.salesman_id);
+          return salesman?.phone_number || "—";
+        }
       }
     ],
-    [retailerMap, warehouseMap]
+    [retailerMap, salesmanMap]
   );
 
   if (loading) {
@@ -176,7 +191,7 @@ export default function AdminOrders() {
         }
       >
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <input
+          <InputBar
             type="text"
             placeholder="Search invoice"
             value={filters.search}
@@ -184,55 +199,53 @@ export default function AdminOrders() {
               setFilters((prev) => ({ ...prev, search: event.target.value }));
               setPage(1);
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm focus:border-slate-400 focus:outline-none"
           />
-          <select
+          <SelectBar
             value={filters.status}
             onChange={(event) => {
               setFilters((prev) => ({ ...prev, status: event.target.value }));
               setPage(1);
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Status</option>
             <option value="PENDING">Pending</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
-            <option value="CONFIRMED">Confirmed</option>
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>
-          </select>
-          <select
+          </SelectBar>
+          <SelectBar
             value={filters.paymentStatus}
             onChange={(event) => {
               setFilters((prev) => ({ ...prev, paymentStatus: event.target.value }));
               setPage(1);
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Payment</option>
             <option value="PAID">Paid</option>
             <option value="PARTIAL">Partial</option>
             <option value="UNPAID">Unpaid</option>
-          </select>
+          </SelectBar>
           <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-            <input
+            <InputBar
               type="date"
               value={filters.fromDate}
               onChange={(event) => {
                 setFilters((prev) => ({ ...prev, fromDate: event.target.value }));
                 setPage(1);
               }}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              size="sm"
+              className="text-xs"
             />
-            <input
+            <InputBar
               type="date"
               value={filters.toDate}
               onChange={(event) => {
                 setFilters((prev) => ({ ...prev, toDate: event.target.value }));
                 setPage(1);
               }}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs"
+              size="sm"
+              className="text-xs"
             />
           </div>
         </div>

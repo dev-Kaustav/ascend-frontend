@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import SectionCard from "@/components/layout/SectionCard";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
+import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 
@@ -21,7 +22,7 @@ export default function AdminInventoryAdd() {
   const [brandId, setBrandId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const { items, updateItem, addItem, removeItem } = useLineItems(emptyItem);
-  const { brands, skus, warehouses, loading, error: lookupError, refreshLookups } = useAdminLookups({
+  const { brands, skus, warehouses, warehouseManagers, loading, error: lookupError, refreshLookups } = useAdminLookups({
     errorMessage: "Unable to load inventory form data."
   });
   const [saving, setSaving] = useState(false);
@@ -104,37 +105,25 @@ export default function AdminInventoryAdd() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Brand</label>
-              <div className="mt-2 flex h-9 w-full items-center rounded-2xl border border-slate-200 bg-white px-4">
-                <select
-                  value={brandId}
-                  onChange={(event) => setBrandId(event.target.value)}
-                  className="h-full w-full border-0 bg-transparent p-0 text-sm text-slate-700"
-                >
-                  <option value="">Select brand</option>
-                  {brands.map((brand) => (
-                    <option key={brand.id} value={brand.id}>
-                      {brand.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectBar value={brandId} onChange={(event) => setBrandId(event.target.value)} className="mt-2">
+                <option value="">Select brand</option>
+                {brands.map((brand) => (
+                  <option key={brand.id} value={brand.id}>
+                    {brand.name}
+                  </option>
+                ))}
+              </SelectBar>
             </div>
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse</label>
-              <div className="mt-2 flex h-9 w-full items-center rounded-2xl border border-slate-200 bg-white px-4">
-                <select
-                  value={warehouseId}
-                  onChange={(event) => setWarehouseId(event.target.value)}
-                  className="h-full w-full border-0 bg-transparent p-0 text-sm text-slate-700"
-                >
-                  <option value="">Select warehouse</option>
-                  {warehouses.map((warehouse) => (
-                    <option key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectBar value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="mt-2">
+                <option value="">Select warehouse</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </option>
+                ))}
+              </SelectBar>
             </div>
           </div>
 
@@ -152,40 +141,38 @@ export default function AdminInventoryAdd() {
                   key={`line-${index}`}
                   className="grid min-w-[720px] gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_auto]"
                 >
-                  <div className="flex h-9 w-full items-center rounded-2xl border border-slate-200 bg-white px-3">
-                    <select
-                      value={item.skuId}
-                      onChange={(event) => updateItem(index, { skuId: event.target.value })}
-                      className="h-full w-full border-0 bg-transparent p-0 text-sm text-slate-700 appearance-none"
-                    >
-                      <option value="">Select SKU</option>
-                      {skus.map((sku) => (
-                        <option key={sku.id} value={sku.id}>
-                          {sku.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <input
+                  <SelectBar
+                    value={item.skuId}
+                    onChange={(event) => updateItem(index, { skuId: event.target.value })}
+                    size="sm"
+                  >
+                    <option value="">Select SKU</option>
+                    {skus.map((sku) => (
+                      <option key={sku.id} value={sku.id}>
+                        {sku.name}
+                      </option>
+                    ))}
+                  </SelectBar>
+                  <InputBar
                     type="number"
                     min="0"
                     step="0.01"
                     value={item.quantity}
                     onChange={(event) => updateItem(index, { quantity: event.target.value })}
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    size="sm"
                     placeholder="0"
                   />
-                  <input
+                  <InputBar
                     type="date"
                     value={item.mfgDate}
                     onChange={(event) => updateItem(index, { mfgDate: event.target.value })}
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    size="sm"
                   />
-                  <input
+                  <InputBar
                     type="date"
                     value={item.expiryDate}
                     onChange={(event) => updateItem(index, { expiryDate: event.target.value })}
-                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                    size="sm"
                   />
                   <div className="flex items-center justify-end text-xs text-slate-500">
                     {items.length > 1 ? (
@@ -227,7 +214,11 @@ export default function AdminInventoryAdd() {
         </form>
       </SectionCard>
 
-      <QuickCreatePanel entities={["warehouse", "brand", "sku"]} onCreated={refreshLookups} />
+      <QuickCreatePanel
+        entities={["warehouse", "retailer", "sku"]}
+        warehouseManagers={warehouseManagers}
+        onCreated={refreshLookups}
+      />
     </div>
   );
 }

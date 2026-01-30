@@ -7,6 +7,7 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import OrderLineItemsTable from "@/components/orders/OrderLineItemsTable";
 import SectionCard from "@/components/layout/SectionCard";
+import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 import { createEmptyOrderItem, getSkuGstRate } from "@/lib/orders";
@@ -118,55 +119,43 @@ export default function AccountantOrderCreate() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Retailer</label>
-              <select
-                value={retailerId}
-                onChange={(event) => setRetailerId(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-              >
+              <SelectBar value={retailerId} onChange={(event) => setRetailerId(event.target.value)} className="mt-2">
                 <option value="">Select retailer</option>
                 {retailers.map((retailer) => (
                   <option key={retailer.id} value={retailer.id}>
                     {retailer.name}
                   </option>
                 ))}
-              </select>
+              </SelectBar>
             </div>
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse (optional)</label>
-              <select
-                value={warehouseId}
-                onChange={(event) => setWarehouseId(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-              >
+              <SelectBar value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="mt-2">
                 <option value="">Auto-assign</option>
                 {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
                   </option>
                 ))}
-              </select>
+              </SelectBar>
             </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Salesman (optional)</label>
-              <select
-                value={salesmanId}
-                onChange={(event) => setSalesmanId(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-              >
+              <SelectBar value={salesmanId} onChange={(event) => setSalesmanId(event.target.value)} className="mt-2">
                 <option value="">Select salesman</option>
                 {salesmen.map((salesman) => (
                   <option key={salesman.id} value={salesman.id}>
                     {salesman.name}
                   </option>
                 ))}
-              </select>
+              </SelectBar>
             </div>
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Payment mode</label>
-              <select
+              <SelectBar
                 value={paymentMode}
                 onChange={(event) => {
                   const value = event.target.value;
@@ -175,23 +164,23 @@ export default function AccountantOrderCreate() {
                     setPaymentAmount("");
                   }
                 }}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                className="mt-2"
               >
                 <option value="CASH">Cash</option>
                 <option value="UPI">UPI</option>
                 <option value="CHEQUE">Cheque</option>
                 <option value="CREDIT">Credit</option>
-              </select>
+              </SelectBar>
               {paymentMode !== "CREDIT" ? (
                 <>
                   <label className="mt-4 text-xs uppercase tracking-widest text-slate-400">Payment amount</label>
-                  <input
+                  <InputBar
                     type="number"
                     min="0"
                     step="0.01"
                     value={paymentAmount}
                     onChange={(event) => setPaymentAmount(event.target.value)}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                    className="mt-2"
                     placeholder="Enter payment amount"
                     required
                   />

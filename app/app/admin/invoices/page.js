@@ -202,7 +202,6 @@ export default function AdminInvoices() {
             <option value="ALL">Status</option>
             <option value="PENDING">Pending</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
-            <option value="CONFIRMED">Confirmed</option>
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>

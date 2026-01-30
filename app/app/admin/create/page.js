@@ -1,34 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiEndpoints, apiFetchCached } from "@/lib/api";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
+import useAdminLookups from "@/lib/hooks/useAdminLookups";
 
 export default function AdminCreate() {
-  const [salesmen, setSalesmen] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      try {
-        const data = await apiFetchCached(apiEndpoints.admin.salesmen);
-        if (!active) return;
-        setSalesmen(data || []);
-        setError("");
-      } catch (err) {
-        if (!active) return;
-        setError(err?.message || "Unable to load lookups.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { salesmen, warehouseManagers, loading, error } = useAdminLookups({
+    errorMessage: "Unable to load lookups."
+  });
 
   if (loading) {
     return (
@@ -45,6 +23,7 @@ export default function AdminCreate() {
         subtitle="Add entities without leaving this page."
         entities={["warehouse", "retailer", "sku"]}
         salesmen={salesmen}
+        warehouseManagers={warehouseManagers}
         headerError={error}
       />
     </div>

@@ -6,6 +6,7 @@ import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import { InputBar, SelectBar } from "@/components/ui/InputBars";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -149,7 +150,7 @@ export default function AccountantOrders() {
         }
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <input
+          <InputBar
             type="text"
             placeholder="Search invoice"
             value={filters.search}
@@ -157,15 +158,13 @@ export default function AccountantOrders() {
               setFilters((prev) => ({ ...prev, search: event.target.value }));
               setPage(1);
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           />
-          <select
+          <SelectBar
             value={filters.status}
             onChange={(event) => {
               setFilters((prev) => ({ ...prev, status: event.target.value }));
               setPage(1);
             }}
-            className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending</option>
@@ -173,7 +172,7 @@ export default function AccountantOrders() {
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>
-          </select>
+          </SelectBar>
         </div>
       </SectionCard>
 

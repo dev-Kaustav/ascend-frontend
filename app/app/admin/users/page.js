@@ -5,12 +5,13 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import { toTitleCase, formatDate } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import { InputBar, SelectBar } from "@/components/ui/InputBars";
 
 export default function AdminUsers() {
   const emailDomain = "ascendgoods.in";
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [form, setForm] = useState({ email: "", password: "", role: "ACCOUNTANT", employeeId: "", groupId: "" });
+  const [form, setForm] = useState({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,8 +65,13 @@ export default function AdminUsers() {
     event.preventDefault();
     setError("");
     const emailLocal = form.email.trim();
-    if (!emailLocal || !form.password) {
-      setError("Username and password are required.");
+    const phoneDigits = form.phoneNumber.replace(/\D/g, "");
+    if (!emailLocal || !form.password || !phoneDigits) {
+      setError("Username, phone number, and password are required.");
+      return;
+    }
+    if (phoneDigits.length !== 10) {
+      setError("Phone number must be 10 digits.");
       return;
     }
     const email = `${emailLocal}@${emailDomain}`;
@@ -78,11 +84,11 @@ export default function AdminUsers() {
           password: form.password,
           role: form.role,
           group_id: form.groupId ? Number(form.groupId) : null,
-          employee_id: form.employeeId ? Number(form.employeeId) : null,
+          phone_number: Number(phoneDigits),
           is_active: true
         })
       });
-      setForm({ email: "", password: "", role: "ACCOUNTANT", employeeId: "", groupId: "" });
+      setForm({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
       await loadData(false);
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create user.");
@@ -517,8 +523,8 @@ export default function AdminUsers() {
 
         {createMode === "user" ? (
           <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-2">
-            <div className="flex items-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm">
-              <input
+            <div className="relative">
+              <InputBar
                 type="text"
                 inputMode="email"
                 autoComplete="username"
@@ -529,29 +535,42 @@ export default function AdminUsers() {
                   setForm((prev) => ({ ...prev, email: localPart }));
                 }}
                 placeholder="username"
-                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm text-slate-700 focus:outline-none"
+                className="pr-24"
               />
-              <span className="ml-2 text-slate-400">@{emailDomain}</span>
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                @{emailDomain}
+              </span>
             </div>
-            <input
+            <InputBar
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
+              value={form.phoneNumber}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  phoneNumber: e.target.value.replace(/\D/g, "").slice(0, 10)
+                }))
+              }
+              placeholder="Phone number"
+            />
+            <InputBar
               type="password"
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Password"
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
             />
-            <select
+            <SelectBar
               value={form.role}
               onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
             >
               {["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN", "DRIVER", "BRAND", "RETAILER"].map((role) => (
                 <option key={role} value={role}>
                   {toTitleCase(role)}
                 </option>
               ))}
-            </select>
-            <select
+            </SelectBar>
+            <SelectBar
               value={form.groupId}
               onChange={(e) => {
                 const value = e.target.value;
@@ -562,7 +581,6 @@ export default function AdminUsers() {
                   role: selectedGroup?.role || prev.role
                 }));
               }}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
             >
               <option value="">No group</option>
               {groups.map((group) => (
@@ -570,56 +588,46 @@ export default function AdminUsers() {
                   {group.name} ({toTitleCase(group.role)})
                 </option>
               ))}
-            </select>
-            <input
-              type="number"
-              min="1"
-              value={form.employeeId}
-              onChange={(e) => setForm((prev) => ({ ...prev, employeeId: e.target.value }))}
-              placeholder="Employee ID (optional)"
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-            />
+            </SelectBar>
             <div className="md:col-span-2 flex items-center justify-between">
               {error ? <p className="text-sm text-rose-500">{error}</p> : <span />}
               <button
                 type="submit"
                 disabled={saving}
-              className={primaryButtonClass}
-            >
-              {saving ? "Creating..." : "Create User"}
-            </button>
-          </div>
+                className={primaryButtonClass}
+              >
+                {saving ? "Creating..." : "Create User"}
+              </button>
+            </div>
           </form>
         ) : (
           <form onSubmit={handleCreateGroup} className="grid gap-4 md:grid-cols-2">
-            <input
+            <InputBar
               type="text"
               value={groupForm.name}
               onChange={(e) => setGroupForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Group name"
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
             />
-            <select
+            <SelectBar
               value={groupForm.role}
               onChange={(e) => setGroupForm((prev) => ({ ...prev, role: e.target.value }))}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
             >
               {["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN", "DRIVER", "BRAND", "RETAILER"].map((role) => (
                 <option key={role} value={role}>
                   {toTitleCase(role)}
                 </option>
               ))}
-            </select>
+            </SelectBar>
             <div className="md:col-span-2 flex items-center justify-between">
               {groupError ? <p className="text-sm text-rose-500">{groupError}</p> : <span />}
               <button
                 type="submit"
                 disabled={groupSaving}
-              className={primaryButtonClass}
-            >
-              {groupSaving ? "Creating..." : "Create Group"}
-            </button>
-          </div>
+                className={primaryButtonClass}
+              >
+                {groupSaving ? "Creating..." : "Create Group"}
+              </button>
+            </div>
           </form>
         )}
       </SectionCard>
