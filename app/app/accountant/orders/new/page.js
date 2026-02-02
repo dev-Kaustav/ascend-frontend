@@ -11,6 +11,7 @@ import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 import { createEmptyOrderItem, getSkuGstRate } from "@/lib/orders";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AccountantOrderCreate() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function AccountantOrderCreate() {
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { notify } = useToast();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -84,6 +86,7 @@ export default function AccountantOrderCreate() {
           items: payloadItems
         })
       });
+      notify("Order created.");
       router.push("/app/accountant/orders");
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create order.");

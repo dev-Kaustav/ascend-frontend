@@ -7,6 +7,7 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import SectionCard from "@/components/layout/SectionCard";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
+import { useToast } from "@/components/ui/ToastProvider";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 
@@ -27,6 +28,7 @@ export default function AdminInventoryAdd() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { notify } = useToast();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -71,6 +73,7 @@ export default function AdminInventoryAdd() {
           items: payloadItems
         })
       });
+      notify("Inventory added.");
       router.push("/app/admin/inventory");
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to add inventory.");

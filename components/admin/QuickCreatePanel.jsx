@@ -5,6 +5,7 @@ import SectionCard from "@/components/layout/SectionCard";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import { getAccessToken, getRoleFromToken } from "@/lib/auth";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const ROW_CLASSNAME = "grid gap-2 sm:grid-cols-[160px_1fr] sm:items-center";
 const LABEL_CLASSNAME = "text-xs font-semibold text-slate-500";
@@ -126,6 +127,7 @@ export default function QuickCreatePanel({
     salesman_id: ""
   });
   const [newSku, setNewSku] = useState(emptySku());
+  const { notify } = useToast();
 
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
   const canManageWarehouse = useMemo(() => role === "ADMIN", [role]);
@@ -412,6 +414,7 @@ export default function QuickCreatePanel({
         pincode: "",
         manager_id: ""
       });
+      notify("Warehouse created.");
       if (onCreated) {
         await onCreated();
       }
@@ -437,6 +440,7 @@ export default function QuickCreatePanel({
         body: JSON.stringify({ name: newBrand.name, contact_info: newBrand.contact_info || null })
       });
       setNewBrand({ name: "", contact_info: "" });
+      notify("Brand created.");
       if (onCreated) {
         await onCreated();
       }
@@ -490,6 +494,7 @@ export default function QuickCreatePanel({
         gst_number: "",
         salesman_id: ""
       });
+      notify("Retailer created.");
       if (onCreated) {
         await onCreated();
       }
@@ -584,6 +589,7 @@ export default function QuickCreatePanel({
         })
       });
       setNewSku(emptySku());
+      notify("SKU created.");
       if (onCreated) {
         await onCreated();
       }

@@ -6,6 +6,7 @@ import { toTitleCase, formatDate } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AdminUsers() {
   const emailDomain = "ascendgoods.in";
@@ -30,6 +31,7 @@ export default function AdminUsers() {
   const [groupError, setGroupError] = useState("");
   const [createMode, setCreateMode] = useState("user");
   const [selectedGroupId, setSelectedGroupId] = useState("ALL");
+  const { notify } = useToast();
 
   const primaryButtonClass = "h-11 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50";
   const pillButtonClass = "h-11 rounded-full px-4 text-sm font-semibold";
@@ -89,6 +91,7 @@ export default function AdminUsers() {
         })
       });
       setForm({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
+      notify("User created.");
       await loadData(false);
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create user.");
@@ -182,6 +185,7 @@ export default function AdminUsers() {
       setGroups((prev) => [...prev, response]);
       setGroupError("");
       setGroupForm({ name: "", role: "ACCOUNTANT" });
+      notify("Group created.");
     } catch (err) {
       setGroupError(err?.payload?.detail || err?.message || "Unable to create group.");
     } finally {

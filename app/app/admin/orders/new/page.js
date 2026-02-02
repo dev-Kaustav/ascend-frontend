@@ -12,6 +12,7 @@ import { getAccessToken, getRoleFromToken } from "@/lib/auth";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 import { createEmptyOrderItem, getSkuGstRate } from "@/lib/orders";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AdminOrderCreate() {
   const router = useRouter();
@@ -39,6 +40,7 @@ export default function AdminOrderCreate() {
   const [error, setError] = useState("");
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
   const canEditDiscount = useMemo(() => role === "SALESMAN" || role === "ACCOUNTANT" || role === "ADMIN", [role]);
+  const { notify } = useToast();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -102,6 +104,7 @@ export default function AdminOrderCreate() {
           items: payloadItems
         })
       });
+      notify("Order created.");
       router.push(`/app/admin/orders/${response.id}`);
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create order.");
