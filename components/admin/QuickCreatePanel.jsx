@@ -65,9 +65,8 @@ const LAST_EDITED_DEFAULT = { discount: null, sgst: null, cgst: null, igst: null
 
 const emptySku = () => ({
   name: "",
-  brand_name: "",
+  brand_id: "",
   hsn_code: "",
-  pack_quantity: "1",
   mrp: "",
   discount_amount: "",
   discount_percent: "",
@@ -96,10 +95,11 @@ const ENTITY_LABELS = {
 export default function QuickCreatePanel({
   title = "Quick create",
   subtitle = "Add missing entities without leaving this form.",
-  entities = ["warehouse", "retailer", "sku"],
+  entities = ["warehouse", "retailer", "brand", "sku"],
   defaultEntity,
   salesmen = [],
   warehouseManagers = [],
+  brands = [],
   onCreated,
   headerError
 }) {
@@ -114,7 +114,12 @@ export default function QuickCreatePanel({
     pincode: "",
     manager_id: ""
   });
-  const [newBrand, setNewBrand] = useState({ name: "", contact_info: "" });
+  const [newBrand, setNewBrand] = useState({
+    name: "",
+    poc_name: "",
+    poc_phone_number: "",
+    poc_email: ""
+  });
   const [newRetailer, setNewRetailer] = useState({
     name: "",
     mobile_number: "",
@@ -183,10 +188,9 @@ export default function QuickCreatePanel({
   };
 
   const getMrpBase = (sku) => {
-    const quantity = toNumber(sku.pack_quantity);
     const mrp = toNumber(sku.mrp);
-    if (quantity === null || mrp === null) return null;
-    return quantity * mrp;
+    if (mrp === null) return null;
+    return mrp;
   };
 
   const getNextLastEdited = (current, field) => {
@@ -226,8 +230,7 @@ export default function QuickCreatePanel({
     if (
       changedField !== "discount_percent" &&
       changedField !== "discount_amount" &&
-      changedField !== "mrp" &&
-      changedField !== "pack_quantity"
+      changedField !== "mrp"
     ) {
       return;
     }
@@ -434,12 +437,31 @@ export default function QuickCreatePanel({
       setCreateError("Brand name is required.");
       return;
     }
+    if (!newBrand.poc_name) {
+      setCreateError("POC name is required.");
+      return;
+    }
+    if (!newBrand.poc_phone_number || newBrand.poc_phone_number.length !== 10) {
+      setCreateError("POC phone number must be 10 digits.");
+      return;
+    }
     try {
       await apiFetch(apiEndpoints.admin.brands, {
         method: "POST",
-        body: JSON.stringify({ name: newBrand.name, contact_info: newBrand.contact_info || null })
+        body: JSON.stringify({
+          name: newBrand.name,
+          poc_name: newBrand.poc_name,
+          poc_phone_number: Number(newBrand.poc_phone_number),
+          poc_email: newBrand.poc_email || null,
+          contact_info: null
+        })
       });
-      setNewBrand({ name: "", contact_info: "" });
+      setNewBrand({
+        name: "",
+        poc_name: "",
+        poc_phone_number: "",
+        poc_email: ""
+      });
       notify("Brand created.");
       if (onCreated) {
         await onCreated();
@@ -512,9 +534,8 @@ export default function QuickCreatePanel({
     }
     const requiredFields = [
       "name",
-      "brand_name",
+      "brand_id",
       "hsn_code",
-      "pack_quantity",
       "mrp",
       "discount_amount",
       "discount_percent",
@@ -537,7 +558,6 @@ export default function QuickCreatePanel({
       return;
     }
     const numericFields = [
-      "pack_quantity",
       "mrp",
       "discount_amount",
       "discount_percent",
@@ -560,17 +580,12 @@ export default function QuickCreatePanel({
       return;
     }
     try {
-      const brandResponse = await apiFetch(apiEndpoints.admin.brands, {
-        method: "POST",
-        body: JSON.stringify({ name: newSku.brand_name, contact_info: null })
-      });
       await apiFetch(apiEndpoints.admin.skus, {
         method: "POST",
         body: JSON.stringify({
           name: newSku.name,
-          brand_id: brandResponse.id,
+          brand_id: Number(newSku.brand_id),
           hsn_code: newSku.hsn_code,
-          pack_quantity: toNumber(newSku.pack_quantity),
           mrp: toNumber(newSku.mrp),
           discount_amount: toNumber(newSku.discount_amount),
           discount_percent: toNumber(newSku.discount_percent),
@@ -853,12 +868,35 @@ export default function QuickCreatePanel({
                   onChange={(event) => setNewBrand((prev) => ({ ...prev, name: event.target.value }))}
                 />
               </FieldRow>
-              <FieldRow id="brand-contact-info" label="Contact info">
+              <FieldRow id="brand-poc-name" label="POC name">
                 <InputBar
-                  id="brand-contact-info"
+                  id="brand-poc-name"
                   type="text"
-                  value={newBrand.contact_info}
-                  onChange={(event) => setNewBrand((prev) => ({ ...prev, contact_info: event.target.value }))}
+                  value={newBrand.poc_name}
+                  onChange={(event) => setNewBrand((prev) => ({ ...prev, poc_name: event.target.value }))}
+                />
+              </FieldRow>
+              <FieldRow id="brand-poc-number" label="POC number">
+                <InputBar
+                  id="brand-poc-number"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={newBrand.poc_phone_number}
+                  onChange={(event) =>
+                    setNewBrand((prev) => ({
+                      ...prev,
+                      poc_phone_number: event.target.value.replace(/\\D/g, "").slice(0, 10)
+                    }))
+                  }
+                />
+              </FieldRow>
+              <FieldRow id="brand-poc-email" label="POC email (optional)">
+                <InputBar
+                  id="brand-poc-email"
+                  type="email"
+                  value={newBrand.poc_email}
+                  onChange={(event) => setNewBrand((prev) => ({ ...prev, poc_email: event.target.value }))}
                 />
               </FieldRow>
               <button
@@ -883,14 +921,19 @@ export default function QuickCreatePanel({
                     placeholder="Enter SKU name"
                   />
                 </FieldRow>
-                <FieldRow id="sku-brand-name" label="Brand name">
-                  <InputBar
+                <FieldRow id="sku-brand-name" label="Brand">
+                  <SelectBar
                     id="sku-brand-name"
-                    type="text"
-                    value={newSku.brand_name}
-                    onChange={(event) => setNewSku((prev) => ({ ...prev, brand_name: event.target.value }))}
-                    placeholder="Enter brand name"
-                  />
+                    value={newSku.brand_id}
+                    onChange={(event) => setNewSku((prev) => ({ ...prev, brand_id: event.target.value }))}
+                  >
+                    <option value="">Select brand</option>
+                    {brands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </option>
+                    ))}
+                  </SelectBar>
                 </FieldRow>
                 <FieldRow id="sku-hsn-code" label="HSN code">
                   <InputBar

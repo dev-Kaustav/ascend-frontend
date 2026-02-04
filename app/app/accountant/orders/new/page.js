@@ -21,7 +21,7 @@ export default function AccountantOrderCreate() {
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [paymentAmount, setPaymentAmount] = useState("");
   const { items, updateItem, addItem, removeItem } = useLineItems(createEmptyOrderItem);
-  const { retailers, skus, warehouses, salesmen, loading, error: lookupError, refreshLookups } = useAdminLookups({
+  const { retailers, skus, warehouses, salesmen, brands, loading, error: lookupError, refreshLookups } = useAdminLookups({
     errorMessage: "Unable to load order form data."
   });
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
@@ -217,7 +217,7 @@ export default function AccountantOrderCreate() {
           </div>
         </form>
       </SectionCard>
-      <QuickCreatePanel entities={["sku"]} onCreated={refreshLookups} />
+      <QuickCreatePanel entities={["brand", "sku"]} brands={brands} onCreated={refreshLookups} />
     </div>
   );
 }

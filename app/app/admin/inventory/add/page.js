@@ -218,8 +218,9 @@ export default function AdminInventoryAdd() {
       </SectionCard>
 
       <QuickCreatePanel
-        entities={["warehouse", "retailer", "sku"]}
+        entities={["warehouse", "retailer", "brand", "sku"]}
         warehouseManagers={warehouseManagers}
+        brands={brands}
         onCreated={refreshLookups}
       />
     </div>

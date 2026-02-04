@@ -2,21 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import { toTitleCase, formatDate } from "@/lib/format";
+import { toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
+import { getAccessToken, getUserFromToken } from "@/lib/auth";
 
 export default function AdminUsers() {
-  const emailDomain = "ascendgoods.in";
+  const emailDomain = "ascendfoods.in";
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [togglingId, setTogglingId] = useState(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
   const [groupUpdatingId, setGroupUpdatingId] = useState(null);
   const [groupForm, setGroupForm] = useState({ name: "", role: "ACCOUNTANT" });
@@ -31,7 +31,24 @@ export default function AdminUsers() {
   const [groupError, setGroupError] = useState("");
   const [createMode, setCreateMode] = useState("user");
   const [selectedGroupId, setSelectedGroupId] = useState("ALL");
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordSavingId, setPasswordSavingId] = useState(null);
+  const [deleteSavingId, setDeleteSavingId] = useState(null);
+  const [modalUser, setModalUser] = useState(null);
+  const [modalMode, setModalMode] = useState(null);
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState(false);
   const { notify } = useToast();
+  const currentUser = getUserFromToken(getAccessToken());
+  const currentUserId = currentUser?.id ? Number(currentUser.id) : null;
+  const roleOptions = ["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN", "DRIVER", "BRAND", "RETAILER"];
+
+  const normalizeRoleValue = (value) => {
+    if (!value) return "";
+    const raw = typeof value === "string" ? value : String(value);
+    const cleaned = raw.includes(".") ? raw.split(".").pop() : raw;
+    const upper = cleaned.toUpperCase();
+    return roleOptions.includes(upper) ? upper : cleaned;
+  };
 
   const primaryButtonClass = "h-11 rounded-full bg-slate-900 px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50";
   const pillButtonClass = "h-11 rounded-full px-4 text-sm font-semibold";
@@ -100,19 +117,61 @@ export default function AdminUsers() {
     }
   }
 
-  async function handleToggleActive(userId, nextState) {
-    setTogglingId(userId);
+  async function handleResetPassword(userId) {
+    if (!passwordValue) {
+      setError("Enter a new password.");
+      return;
+    }
+    setError("");
+    setPasswordSavingId(userId);
+    try {
+      await apiFetch(apiEndpoints.admin.userPassword(userId), {
+        method: "PATCH",
+        body: JSON.stringify({ password: passwordValue })
+      });
+      setPasswordValue("");
+      notify("Password updated.");
+    } catch (err) {
+      setError(err?.payload?.detail || err?.message || "Unable to update password.");
+    } finally {
+      setPasswordSavingId(null);
+    }
+  }
+
+  async function handleDeleteUser(userId) {
+    setDeleteSavingId(userId);
     setError("");
     try {
-      const response = await apiFetch(`${apiEndpoints.admin.userActive(userId)}?is_active=${nextState}`, {
-        method: "PATCH"
-      });
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...response } : u)));
+      await apiFetch(apiEndpoints.admin.userDelete(userId), { method: "DELETE" });
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      closeModal();
+      notify("User deleted.");
     } catch (err) {
-      setError(err?.payload?.detail || err?.message || "Unable to update user.");
+      setError(err?.payload?.detail || err?.message || "Unable to delete user.");
     } finally {
-      setTogglingId(null);
+      setDeleteSavingId(null);
     }
+  }
+
+  function openPasswordModal(user) {
+    setModalUser(user);
+    setModalMode("password");
+    setPasswordValue("");
+    setError("");
+  }
+
+  function openDeleteModal(user) {
+    setModalUser(user);
+    setModalMode("delete");
+    setDeleteConfirmStep(false);
+    setError("");
+  }
+
+  function closeModal() {
+    setModalUser(null);
+    setModalMode(null);
+    setPasswordValue("");
+    setDeleteConfirmStep(false);
   }
 
   async function handleRoleChange(userId, role) {
@@ -306,82 +365,110 @@ export default function AdminUsers() {
   const columns = useMemo(() => {
     const base = [
       {
-        header: "Email",
+        header: () => <div className="min-w-[240px]">Email</div>,
         accessorKey: "email",
-        cell: ({ row }) => row.original.email
+        meta: { align: "center" },
+        cell: ({ row }) => <div className="min-w-[240px]">{row.original.email}</div>
       },
       {
-        header: "Role",
-        accessorKey: "role",
+        header: () => <div className="min-w-[160px]">Phone</div>,
+        accessorKey: "phone_number",
+        meta: { align: "left" },
         cell: ({ row }) => (
-          <select
-            value={row.original.role}
-            onChange={(e) => handleRoleChange(row.original.id, e.target.value)}
-            disabled={roleUpdatingId === row.original.id}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs"
-          >
-            {["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN", "DRIVER", "BRAND", "RETAILER"].map((role) => (
-              <option key={role} value={role}>
-                {toTitleCase(role)}
-              </option>
-            ))}
-          </select>
+          <div className="min-w-[160px] text-slate-600">
+            {row.original.phone_number || "—"}
+          </div>
         )
       },
       {
-        header: "Group",
-        accessorKey: "group_name",
-        cell: ({ row }) => {
-          const user = row.original;
-          return (
-            <select
-              value={user.group_id || ""}
-              onChange={(e) =>
-                handleUserGroupChange(user.id, e.target.value ? Number(e.target.value) : null)
-              }
-              disabled={groupUpdatingId === user.id}
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs"
+        header: () => <div className="min-w-[180px]">Role</div>,
+        accessorKey: "role",
+        meta: { align: "left" },
+        cell: ({ row }) => (
+          <div className="min-w-[180px] flex items-center justify-start">
+            <SelectBar
+              value={normalizeRoleValue(row.original.role)}
+              onChange={(e) => handleRoleChange(row.original.id, e.target.value)}
+              disabled={roleUpdatingId === row.original.id}
+              size="sm"
+              className="w-full pr-8 text-left"
             >
-              <option value="">No group</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
+              {roleOptions.map((role) => (
+                <option key={role} value={role}>
+                  {toTitleCase(role)}
                 </option>
               ))}
-            </select>
-          );
-        }
+            </SelectBar>
+          </div>
+        )
       },
       {
-        header: "Status",
-        accessorKey: "is_active",
+        header: () => <div className="min-w-[220px]">Group</div>,
+        accessorKey: "group_name",
+        meta: { align: "left" },
         cell: ({ row }) => {
           const user = row.original;
-          const next = !user.is_active;
           return (
-            <label className="flex items-center gap-2 font-medium text-slate-600">
-              <span>{user.is_active ? "Enabled" : "Disabled"}</span>
-              <input
-                type="checkbox"
-                checked={user.is_active}
-                onChange={() => handleToggleActive(user.id, next)}
-                disabled={togglingId === user.id}
-                className="peer sr-only"
-              />
-              <span
-                className="relative inline-flex h-5 w-10 items-center rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 peer-disabled:opacity-60"
-                aria-hidden="true"
+            <div className="min-w-[220px] flex items-center justify-start">
+              <SelectBar
+                value={user.group_id ? String(user.group_id) : ""}
+                onChange={(e) =>
+                  handleUserGroupChange(user.id, e.target.value ? Number(e.target.value) : null)
+                }
+                disabled={groupUpdatingId === user.id}
+                size="sm"
+                className="w-full pr-8 text-left"
               >
-                <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white transition peer-checked:translate-x-5" />
-              </span>
-            </label>
+                <option value="">No group</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={String(group.id)}>
+                    {group.name}
+                  </option>
+                ))}
+              </SelectBar>
+            </div>
           );
         }
       },
       {
-        header: "Created",
-        accessorKey: "created_at",
-        cell: ({ row }) => formatDate(row.original.created_at)
+        header: () => <div className="min-w-[120px]">Actions</div>,
+        id: "actions",
+        meta: { align: "center" },
+        cell: ({ row }) => {
+          const user = row.original;
+          const isCurrentUser = currentUserId === user.id;
+          return (
+            <div className="flex min-w-[120px] items-center gap-2 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => openPasswordModal(user)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+                title="Reset password"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    fill="currentColor"
+                    d="M7 14a4 4 0 1 1 3.46-6H21v4h-2v2h-2v-2h-2v2h-2.46A4 4 0 0 1 7 14Zm0-2a2 2 0 1 0-1.41-.59A2 2 0 0 0 7 12Z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => openDeleteModal(user)}
+                disabled={isCurrentUser}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 text-rose-500 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                title={isCurrentUser ? "You cannot delete yourself" : "Delete user"}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+                  <path
+                    fill="currentColor"
+                    d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Z"
+                  />
+                </svg>
+              </button>
+            </div>
+          );
+        }
       }
     ];
 
@@ -409,14 +496,13 @@ export default function AdminUsers() {
     return [...base, ...permissionCols];
   }, [
     allPermissionCodes,
+    currentUser,
     groupUpdatingId,
     groups,
-    roleUpdatingId,
-    togglingId,
     handlePermissionToggle,
     handleRoleChange,
-    handleToggleActive,
     handleUserGroupChange,
+    roleUpdatingId,
     userApplySaving
   ]);
 
@@ -486,7 +572,9 @@ export default function AdminUsers() {
           </div>
           <div className="flex-1 overflow-auto">
             <div className="max-w-full overflow-x-auto pb-2">
-              <DataTable columns={columns} data={filteredUsers} emptyLabel="No users in this group." />
+              <div className="min-w-[1450px]">
+                <DataTable columns={columns} data={filteredUsers} emptyLabel="No users in this group." />
+              </div>
             </div>
           </div>
           <div className="sticky bottom-0 flex flex-col gap-3 bg-white/95 pt-3 md:flex-row md:items-center md:justify-end">
@@ -502,6 +590,99 @@ export default function AdminUsers() {
           </div>
         </div>
       </SectionCard>
+
+      {modalMode && modalUser ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-slate-400">User action</p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                  {modalMode === "password" ? "Reset password" : "Delete user"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="text-sm text-slate-400 hover:text-slate-600"
+                aria-label="Close dialog"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              <p className="text-xs uppercase tracking-widest text-slate-400">Selected user</p>
+              <p className="mt-1 font-semibold text-slate-900">{modalUser.email}</p>
+            </div>
+
+            {modalMode === "password" ? (
+              <div className="mt-4 space-y-3">
+                <InputBar
+                  type="password"
+                  value={passwordValue}
+                  onChange={(event) => setPasswordValue(event.target.value)}
+                  placeholder="New password"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResetPassword(modalUser.id)}
+                    disabled={passwordSavingId === modalUser.id}
+                    className="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700"
+                  >
+                    {passwordSavingId === modalUser.id ? "Saving..." : "Update password"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <p>This is a soft delete and will immediately revoke access.</p>
+                {deleteConfirmStep ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+                    <p className="font-semibold">Are you absolutely sure?</p>
+                    <p className="mt-1 text-xs text-rose-600">This action cannot be undone.</p>
+                  </div>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600"
+                  >
+                    Cancel
+                  </button>
+                  {!deleteConfirmStep ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmStep(true)}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700"
+                    >
+                      Continue
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUser(modalUser.id)}
+                      disabled={deleteSavingId === modalUser.id}
+                      className="rounded-full border border-rose-200 bg-rose-600 px-4 py-2 text-xs font-semibold text-white"
+                    >
+                      {deleteSavingId === modalUser.id ? "Deleting..." : "Confirm delete"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <SectionCard title="Create" subtitle="Provision users or groups">
         <div className="mb-4 flex gap-2">

@@ -29,6 +29,7 @@ export default function AdminOrderCreate() {
     warehouses,
     salesmen,
     warehouseManagers,
+    brands,
     loading,
     error: lookupError,
     refreshLookups
@@ -252,9 +253,10 @@ export default function AdminOrderCreate() {
         </form>
       </SectionCard>
       <QuickCreatePanel
-        entities={["warehouse", "retailer", "sku"]}
+        entities={["warehouse", "retailer", "brand", "sku"]}
         salesmen={salesmen}
         warehouseManagers={warehouseManagers}
+        brands={brands}
         onCreated={refreshLookups}
       />
     </div>

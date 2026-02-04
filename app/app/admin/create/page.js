@@ -4,7 +4,7 @@ import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 
 export default function AdminCreate() {
-  const { salesmen, warehouseManagers, loading, error } = useAdminLookups({
+  const { salesmen, warehouseManagers, brands, loading, error, refreshLookups } = useAdminLookups({
     errorMessage: "Unable to load lookups."
   });
 
@@ -21,10 +21,12 @@ export default function AdminCreate() {
       <QuickCreatePanel
         title="Quick create"
         subtitle="Add entities without leaving this page."
-        entities={["warehouse", "retailer", "sku"]}
+        entities={["warehouse", "retailer", "brand", "sku"]}
         salesmen={salesmen}
         warehouseManagers={warehouseManagers}
+        brands={brands}
         headerError={error}
+        onCreated={refreshLookups}
       />
     </div>
   );

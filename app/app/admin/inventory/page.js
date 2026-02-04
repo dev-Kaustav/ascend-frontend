@@ -83,6 +83,7 @@ export default function AdminInventory() {
     return map;
   }, [warehouses]);
 
+
   const inventoryRows = useMemo(() => {
     return inventory.map((item) => ({
       ...item,
@@ -92,6 +93,7 @@ export default function AdminInventory() {
       days_to_expiry: daysToExpiry(getExpiry(item))
     }));
   }, [inventory, skuMap, warehouseMap]);
+
 
   const bySku = useMemo(() => {
     const grouped = new Map();
@@ -152,6 +154,7 @@ export default function AdminInventory() {
     ],
     []
   );
+
 
   if (loading) {
     return (
@@ -267,6 +270,7 @@ export default function AdminInventory() {
           </div>
         </div>
       </SectionCard>
+
     </div>
   );
 }
