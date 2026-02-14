@@ -2,6 +2,7 @@ import CTA from "@/components/CTA";
 import ContactForm from "@/components/ContactForm";
 import Hero from "@/components/Hero";
 import HowItWorks from "@/components/HowItWorks";
+import MeetFounders from "@/components/MeetFounders";
 import PageShell from "@/components/PageShell";
 import Problem from "@/components/Problem";
 import SectionReveal from "@/components/SectionReveal";
@@ -27,6 +28,9 @@ export default function Home() {
       </SectionReveal>
       <SectionReveal>
         <WhoItsFor />
+      </SectionReveal>
+      <SectionReveal>
+        <MeetFounders />
       </SectionReveal>
       <SectionReveal>
         <CTA />

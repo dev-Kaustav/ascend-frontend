@@ -4,23 +4,39 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { label: "Product", href: "/product" },
-  { label: "How It Works", href: "/how-it-works" },
-  { label: "Why Ascend", href: "/why-ascend" },
-  { label: "Who It's For", href: "/who-its-for" },
-  { label: "Contact", href: "/contact" }
+  { label: "Product", href: "/#product" },
+  { label: "How It Works", href: "/#how-it-works" },
+  { label: "Why Ascend", href: "/#why-ascend" },
+  { label: "Who It's For", href: "/#who-its-for" },
+  { label: "Contact", href: "/#contact" }
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const showLogin = pathname === "/";
+  const ctaHref = "/#contact";
+  const handleAnchorClick = (event, href) => {
+    if (!href.startsWith("/#")) return;
+
+    event.preventDefault();
+    const targetId = href.split("#")[1];
+    const target = document.getElementById(targetId);
+
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+
+    window.location.href = href;
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-night/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between section-pad md:grid md:grid-cols-[1fr_auto_1fr]">
         <Link
-          href="/"
+          href="/#main"
           className="text-base font-semibold tracking-tight text-white md:justify-self-start"
+          onClick={(event) => handleAnchorClick(event, "/#main")}
         >
           Ascend
         </Link>
@@ -29,6 +45,7 @@ export default function Navbar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={(event) => handleAnchorClick(event, item.href)}
               className="transition hover:text-white"
             >
               {item.label}
@@ -45,7 +62,8 @@ export default function Navbar() {
             </Link>
           ) : null}
           <Link
-            href="/contact"
+            href={ctaHref}
+            onClick={(event) => handleAnchorClick(event, ctaHref)}
             className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-[#6b3df0]"
           >
             Talk to Us
@@ -61,6 +79,7 @@ export default function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={(event) => handleAnchorClick(event, item.href)}
                   className="rounded-lg px-2 py-1 transition hover:bg-white/10 hover:text-white"
                 >
                   {item.label}
@@ -75,7 +94,8 @@ export default function Navbar() {
                 </Link>
               ) : null}
               <Link
-                href="/contact"
+                href={ctaHref}
+                onClick={(event) => handleAnchorClick(event, ctaHref)}
                 className="rounded-lg bg-accent px-3 py-2 text-center font-semibold text-white"
               >
                 Talk to Us

@@ -28,23 +28,30 @@ Role-based dashboards for the Ascend Foods GTM Distribution Platform.
 
 ## Routes
 
-- `/app/admin/dashboard`
-- `/app/admin/orders`
-- `/app/admin/inventory`
-- `/app/admin/accounting`
-- `/app/admin/retail-coverage`
-- `/app/admin/cash-collection`
-- `/app/admin/salesmen`
-- `/app/admin/invoices`
-- `/app/admin/credit-notes`
-- `/app/brand/dashboard`
-- `/app/retailer/dashboard`
+- `/app/dashboard`
+- `/app/orders`
+- `/app/orders/new`
+- `/app/orders/{id}`
+- `/app/inventory`
+- `/app/inventory/add`
+- `/app/accounting`
+- `/app/users`
+- `/app/profile`
+- `/app/catalog`
+- `/app/create`
+- `/app/retail-coverage`
+- `/app/cash-collection`
+- `/app/salesmen`
+- `/app/drivers`
+- `/app/invoices`
+- `/app/credit-notes`
 
 ## API Expectations
 
 The UI expects these endpoints to exist:
 
 - `POST /auth/login`
+- `GET /auth/access-rules`
 - `GET /admin/orders`
 - `GET /admin/inventory`
 - `GET /admin/retailers`

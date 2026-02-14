@@ -4,7 +4,7 @@ export default function PageHero({
   title,
   description,
   ctaLabel = "Talk to Us",
-  ctaHref = "/contact"
+  ctaHref = "/#contact"
 }) {
   return (
     <section className="relative overflow-hidden bg-night text-white">
