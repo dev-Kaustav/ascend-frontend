@@ -19,6 +19,17 @@ body {
   background-color: var(--color-bg);
 }
 
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 ::selection {
   background: #cbb8ff;
   color: #0f172a;

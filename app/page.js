@@ -1,4 +1,3 @@
-import CTA from "@/components/CTA";
 import ContactForm from "@/components/ContactForm";
 import Hero from "@/components/Hero";
 import HowItWorks from "@/components/HowItWorks";
@@ -31,9 +30,6 @@ export default function Home() {
       </SectionReveal>
       <SectionReveal>
         <MeetFounders />
-      </SectionReveal>
-      <SectionReveal>
-        <CTA />
       </SectionReveal>
       <SectionReveal>
         <ContactForm />

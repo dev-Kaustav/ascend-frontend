@@ -27,6 +27,7 @@ export default function WarehouseInventory() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("ALL");
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,6 +42,9 @@ export default function WarehouseInventory() {
         const params = new URLSearchParams();
         params.set("limit", String(pageSize));
         params.set("offset", String((page - 1) * pageSize));
+        if (selectedWarehouseId !== "ALL") {
+          params.set("warehouse_id", String(selectedWarehouseId));
+        }
 
         const lookupsPromise = lookupsLoaded ? Promise.resolve(null) : apiFetchCached(apiEndpoints.admin.lookups);
         const [inventoryResponse, lookupsResponse] = await Promise.all([
@@ -68,7 +72,7 @@ export default function WarehouseInventory() {
     return () => {
       active = false;
     };
-  }, [page, pageSize, lookupsLoaded]);
+  }, [page, pageSize, lookupsLoaded, selectedWarehouseId]);
 
   const skuMap = useMemo(() => {
     const map = new Map();
@@ -84,6 +88,13 @@ export default function WarehouseInventory() {
       map.set(warehouse.id, warehouse.name);
     });
     return map;
+  }, [warehouses]);
+
+  const warehouseFilters = useMemo(() => {
+    const base = (warehouses || [])
+      .map((warehouse) => ({ id: warehouse.id, label: warehouse.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ id: "ALL", label: "All warehouses" }, ...base];
   }, [warehouses]);
 
   const inventoryRows = useMemo(() => {
@@ -130,16 +141,19 @@ export default function WarehouseInventory() {
       {
         header: "Available",
         accessorKey: "total_quantity",
+        meta: { type: "number" },
         cell: ({ row }) => formatNumber(row.original.total_quantity)
       },
       {
         header: "Reserved",
         accessorKey: "quantity_reserved",
+        meta: { type: "number" },
         cell: ({ row }) => formatNumber(row.original.quantity_reserved)
       },
       {
         header: "Damaged",
         accessorKey: "quantity_damaged",
+        meta: { type: "number" },
         cell: ({ row }) => formatNumber(row.original.quantity_damaged)
       },
       {
@@ -155,6 +169,7 @@ export default function WarehouseInventory() {
     ],
     []
   );
+  const pillButtonClass = "rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-widest";
 
   if (loading) {
     return (
@@ -253,6 +268,26 @@ export default function WarehouseInventory() {
           </div>
         }
       >
+        <div className="mb-3 flex flex-wrap gap-2">
+          {warehouseFilters.map((option) => {
+            const isActive = selectedWarehouseId === option.id;
+            return (
+              <button
+                key={`${option.label}-${option.id}`}
+                type="button"
+                onClick={() => {
+                  setSelectedWarehouseId(option.id);
+                  setPage(1);
+                }}
+                className={`${pillButtonClass} transition ${
+                  isActive ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         <DataTable columns={columns} data={inventoryRows} emptyLabel="Inventory data is empty." />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>

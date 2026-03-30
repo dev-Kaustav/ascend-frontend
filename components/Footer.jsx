@@ -12,10 +12,10 @@ export default function Footer() {
         </div>
         <div className="flex flex-col gap-2 text-xs text-slate-500 sm:items-end">
           <a
-            href="mailto:partnerships@ascendfoods.in"
+            href="mailto:admin@ascendfoods.in"
             className="text-sm font-semibold text-slate-700 hover:text-slate-900"
           >
-            partnerships@ascendfoods.in
+            admin@ascendfoods.in
           </a>
           <div className="flex items-center gap-4">
             <a

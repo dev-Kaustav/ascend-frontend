@@ -8,27 +8,10 @@ const ALIGN_CLASS = {
   right: "text-right"
 };
 
-function inferValueForColumn(columnDef, data) {
-  const key = columnDef.accessorKey;
-  if (!key || typeof key !== "string") return undefined;
-  if (!Array.isArray(data)) return undefined;
-  for (const row of data) {
-    if (!row) continue;
-    const value = row[key];
-    if (value !== null && value !== undefined) return value;
-  }
-  return undefined;
-}
-
-function resolveAlign(columnDef, value) {
+function resolveAlign(columnDef) {
   const meta = columnDef?.meta || {};
   if (meta.align) return meta.align;
   if (meta.type === "number") return "right";
-  if (meta.type === "string") return "center";
-  if (meta.type === "boolean") return "center";
-  if (typeof value === "number") return "right";
-  if (typeof value === "string") return "center";
-  if (typeof value === "boolean") return "center";
   return "left";
 }
 
@@ -46,12 +29,6 @@ export default function DataTable({
     getCoreRowModel: getCoreRowModel()
   });
 
-  const headerAlignMap = new Map();
-  columns.forEach((columnDef) => {
-    const inferred = inferValueForColumn(columnDef, data);
-    headerAlignMap.set(columnDef, resolveAlign(columnDef, inferred));
-  });
-
   return (
     <div className={`overflow-x-auto max-w-full ${containerClassName}`}>
       <table className={`w-full min-w-[720px] border-separate border-spacing-y-2 text-sm ${tableClassName}`}>
@@ -59,7 +36,7 @@ export default function DataTable({
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
-                const align = headerAlignMap.get(header.column.columnDef) || "left";
+                const align = resolveAlign(header.column.columnDef);
                 return (
                   <th
                     key={header.id}
@@ -89,7 +66,7 @@ export default function DataTable({
                 }`}
               >
                 {row.getVisibleCells().map((cell) => {
-                  const align = resolveAlign(cell.column.columnDef, cell.getValue());
+                  const align = resolveAlign(cell.column.columnDef);
                   return (
                     <td key={cell.id} className={`px-4 py-3 text-slate-600 ${ALIGN_CLASS[align]}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

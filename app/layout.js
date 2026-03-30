@@ -14,7 +14,7 @@ const organizationSchema = {
   name: siteName,
   url: siteUrl,
   description: defaultDescription,
-  email: "partnerships@ascendfoods.in"
+  email: "admin@ascendfoods.in"
 };
 
 export const metadata = {

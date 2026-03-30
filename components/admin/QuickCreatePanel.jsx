@@ -452,8 +452,7 @@ export default function QuickCreatePanel({
           name: newBrand.name,
           poc_name: newBrand.poc_name,
           poc_phone_number: Number(newBrand.poc_phone_number),
-          poc_email: newBrand.poc_email || null,
-          contact_info: null
+          poc_email: newBrand.poc_email || null
         })
       });
       setNewBrand({

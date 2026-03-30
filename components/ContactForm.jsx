@@ -19,7 +19,7 @@ export default function ContactForm() {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
             Reach us directly at
             <span className="font-semibold text-slate-900">
-              {" "}partnerships@ascendfoods.in
+              {" "}admin@ascendfoods.in
             </span>
             .
           </div>
