@@ -40,7 +40,7 @@ export default function DataTable({
                 return (
                   <th
                     key={header.id}
-                    className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400 whitespace-normal break-words ${ALIGN_CLASS[align]}`}
+                    className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 whitespace-normal break-words ${ALIGN_CLASS[align]}`}
                   >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
@@ -52,7 +52,7 @@ export default function DataTable({
         <tbody>
           {table.getRowModel().rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-slate-400">
+              <td colSpan={columns.length} className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-slate-400">
                 {emptyLabel}
               </td>
             </tr>
@@ -61,14 +61,14 @@ export default function DataTable({
               <tr
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                className={`rounded-2xl border border-slate-200 bg-white/90 ${
-                  onRowClick ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg" : ""
+                className={`rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] ${
+                  onRowClick ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-24px_rgba(15,23,42,0.35)]" : ""
                 }`}
               >
                 {row.getVisibleCells().map((cell) => {
                   const align = resolveAlign(cell.column.columnDef);
                   return (
-                    <td key={cell.id} className={`px-4 py-3 text-slate-600 ${ALIGN_CLASS[align]}`}>
+                    <td key={cell.id} className={`px-4 py-3.5 text-slate-600 ${ALIGN_CLASS[align]}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   );

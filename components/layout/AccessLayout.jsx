@@ -8,6 +8,7 @@ import usePermissions from "@/lib/hooks/usePermissions";
 import { getAccessRuleForPath } from "@/lib/accessRules";
 import { filterNavByPermissions, getNavForRole, getRoleLabel } from "@/lib/navigation";
 import useAccessRules from "@/lib/hooks/useAccessRules";
+import { isRemovedLegacyPath } from "@/lib/workspaceRoutes";
 
 export default function AccessLayout({ children }) {
   const router = useRouter();
@@ -22,14 +23,16 @@ export default function AccessLayout({ children }) {
   }, [role, hasPermission, loading]);
   const roleLabel = getRoleLabel(role);
   const accessRule = useMemo(() => getAccessRuleForPath(rules, pathname), [rules, pathname]);
+  const removedLegacyPath = useMemo(() => isRemovedLegacyPath(pathname), [pathname]);
 
   const allowed = useMemo(() => {
+    if (removedLegacyPath) return true;
     if (!accessRule) return false;
     if (accessRule.roles?.length && !accessRule.roles.includes(role)) return false;
     if (!accessRule.permissions?.length) return true;
     if (loading) return false;
     return accessRule.permissions.every((code) => hasPermission(code));
-  }, [accessRule, role, loading, hasPermission]);
+  }, [accessRule, removedLegacyPath, role, loading, hasPermission]);
 
   useEffect(() => {
     if (!token) {
@@ -37,10 +40,11 @@ export default function AccessLayout({ children }) {
       return;
     }
     if (loading || rulesLoading || rulesError) return;
+    if (removedLegacyPath) return;
     if (!allowed) {
       router.replace(getDashboardPathForRole(role));
     }
-  }, [token, role, loading, rulesLoading, allowed, router]);
+  }, [token, role, loading, rulesLoading, rulesError, allowed, removedLegacyPath, router]);
 
   if (!token || loading || rulesLoading) {
     return (

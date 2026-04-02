@@ -1,19 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
-import AdminDrivers from "@/components/drivers/AdminDrivers";
-import WarehouseDrivers from "@/components/drivers/WarehouseDrivers";
+import RemovedRouteNotice from "@/components/layout/RemovedRouteNotice";
 
-export default function DriversPage() {
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
-
-  if (role === "ADMIN") return <AdminDrivers />;
-  if (role === "WAREHOUSE_MANAGER") return <WarehouseDrivers />;
-
+export default function RemovedDriversPage() {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
-      Drivers not available for this role.
-    </div>
+    <RemovedRouteNotice
+      title="Drivers moved into Operations"
+      description="Driver management now lives inside the Operations workspace."
+      href="/app/operations?tab=drivers"
+      ctaLabel="Open Operations"
+    />
   );
 }

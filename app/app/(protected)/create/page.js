@@ -1,33 +1,14 @@
 "use client";
 
-import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
-import useAdminLookups from "@/lib/hooks/useAdminLookups";
+import RemovedRouteNotice from "@/components/layout/RemovedRouteNotice";
 
-export default function AdminCreate() {
-  const { salesmen, warehouseManagers, brands, loading, error, refreshLookups } = useAdminLookups({
-    errorMessage: "Unable to load lookups."
-  });
-
-  if (loading) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
-        Loading…
-      </div>
-    );
-  }
-
+export default function RemovedCreatePage() {
   return (
-    <div className="space-y-6">
-      <QuickCreatePanel
-        title="Quick create"
-        subtitle="Add entities without leaving this page."
-        entities={["warehouse", "retailer", "brand", "sku"]}
-        salesmen={salesmen}
-        warehouseManagers={warehouseManagers}
-        brands={brands}
-        headerError={error}
-        onCreated={refreshLookups}
-      />
-    </div>
+    <RemovedRouteNotice
+      title="Quick Create moved into Admin"
+      description="The standalone create page has been retired. Use the Quick Create tab inside Admin."
+      href="/app/admin?tab=quick-create"
+      ctaLabel="Open Admin"
+    />
   );
 }

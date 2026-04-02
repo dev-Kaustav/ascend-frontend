@@ -1,11 +1,11 @@
 const BASE_BAR_CLASSNAME =
-  "w-full rounded-2xl border border-slate-200 bg-white text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none";
+  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#7c3aed] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30";
 const SELECT_ICON_CLASSNAME =
-  "appearance-none bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2394a3b8' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E\")] bg-no-repeat bg-[right_0.75rem_center] bg-[length:0.9rem_0.9rem] pr-10";
+  "appearance-none bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E\")] bg-no-repeat bg-[right_0.85rem_center] bg-[length:0.9rem_0.9rem] pr-10";
 
 const SIZE_CLASSNAME = {
-  sm: "px-3 py-1.5",
-  md: "px-4 py-2",
+  sm: "px-3 py-2",
+  md: "",
   lg: "px-4 py-3"
 };
 

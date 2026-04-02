@@ -3,20 +3,34 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #f7f5ff;
-  --color-ink: #0f172a;
-  --color-accent: #7c4dff;
-  --color-accent-soft: #e6ddff;
-  --color-border: #e4ddf5;
+  --color-bg: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8fafc;
+  --color-ink: #1d1d1f;
+  --color-muted: #6b7280;
+  --color-accent: #7c3aed;
+  --color-accent-strong: #5b21b6;
+  --color-accent-soft: #f3e8ff;
+  --color-border: rgba(15, 23, 42, 0.08);
+  --color-sidebar: #0f0f0f;
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-ink: #ffffff;
+  --font-body: "DM Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "DM Sans", "Avenir Next", "Segoe UI", sans-serif;
 }
 
 html {
+  font-size: 14px;
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
 
 body {
+  min-height: 100vh;
   color: var(--color-ink);
   background-color: var(--color-bg);
+  font-family: var(--font-body);
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -31,8 +45,8 @@ input[type="number"] {
 }
 
 ::selection {
-  background: #cbb8ff;
-  color: #0f172a;
+  background: rgba(124, 58, 237, 0.24);
+  color: #1d1d1f;
 }
 
 @layer utilities {
@@ -50,6 +64,41 @@ input[type="number"] {
 .reveal.is-visible .reveal-text {
   opacity: 1;
   transform: translateY(0);
+}
+
+html,
+.hover-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+}
+
+html:hover,
+.hover-scrollbar:hover {
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+html::-webkit-scrollbar,
+.hover-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html::-webkit-scrollbar-track,
+.hover-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb,
+.hover-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+  transition: background-color 0.2s ease;
+}
+
+html:hover::-webkit-scrollbar-thumb,
+.hover-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

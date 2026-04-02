@@ -66,7 +66,7 @@ export default function WarehouseDashboard() {
             Manage Orders
           </Link>
           <Link
-            href="/app/drivers"
+            href="/app/operations?tab=drivers"
             className="rounded-full border border-slate-200 px-5 py-3 text-xs font-semibold uppercase tracking-widest text-slate-500"
           >
             View Drivers

@@ -1,11 +1,13 @@
 :root {
-  --app-ink: #0f172a;
-  --app-muted: #64748b;
-  --app-accent: #0f766e;
+  --app-ink: #1d1d1f;
+  --app-muted: #6b7280;
+  --app-accent: #7c3aed;
+  --app-accent-strong: #5b21b6;
+  --app-sidebar: #0f0f0f;
 }
 
 .app-shell {
-  font-family: var(--font-body), "Inter", system-ui, sans-serif;
+  font-family: var(--font-body), "DM Sans", "Avenir Next", sans-serif;
   color: var(--app-ink);
 }
 
@@ -13,6 +15,6 @@
 .app-shell h2,
 .app-shell h3,
 .app-shell h4 {
-  font-family: var(--font-display), "Inter", system-ui, sans-serif;
+  font-family: var(--font-display), "DM Sans", "Avenir Next", sans-serif;
   letter-spacing: -0.02em;
 }
