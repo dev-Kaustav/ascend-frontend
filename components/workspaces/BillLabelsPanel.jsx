@@ -19,6 +19,21 @@ function normalizeGstNo(value) {
   return normalizeText(value).replace(/[^0-9A-Z]/gi, "").toUpperCase();
 }
 
+function normalizePageSearchText(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function isLikelyBillStartPage(rawText) {
+  const text = normalizePageSearchText(rawText);
+  if (!text) return false;
+
+  const hasInvoiceHeading = text.includes("tax invoice");
+  const hasPageOneMarker = /\bpage\s*1\s*of\s*\d+\b/i.test(text);
+  const hasBillIdentity = /\bbill\s*no\b/i.test(text) || /\binvoice\s*date\b/i.test(text) || /\border\s*id\b/i.test(text);
+
+  return (hasInvoiceHeading && hasBillIdentity) || (hasPageOneMarker && hasBillIdentity);
+}
+
 function extractField(text, ...patterns) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -240,15 +255,37 @@ async function createLabelsPdf(rawBills) {
   return pdfDoc.save();
 }
 
-async function pdfToPageImages(file, scale = 3.2, onProgress) {
+async function pdfToBillStartImages(file, scale = 3.2, onProgress) {
   const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const pages = [];
+  const startPages = [];
 
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ");
+
+    if (isLikelyBillStartPage(pageText)) {
+      startPages.push(i);
+    }
+
+    onProgress?.({
+      phase: "scan",
+      current: i,
+      total: pdf.numPages,
+      selected: startPages.length,
+    });
+  }
+
+  const pageNumbers = startPages.length ? startPages : [1];
+  const pages = [];
+
+  for (const [index, pageNum] of pageNumbers.entries()) {
+    const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
@@ -257,8 +294,15 @@ async function pdfToPageImages(file, scale = 3.2, onProgress) {
     await page.render({ canvasContext: ctx, viewport }).promise;
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     const previewUrl = URL.createObjectURL(blob);
-    pages.push({ blob, previewUrl, pageNum: i });
-    onProgress?.({ current: i, total: pdf.numPages });
+    pages.push({ blob, previewUrl, pageNum });
+    onProgress?.({
+      phase: "render",
+      current: index + 1,
+      total: pageNumbers.length,
+      selected: pageNumbers.length,
+      sourcePage: pageNum,
+      usedFallback: !startPages.length,
+    });
   }
 
   return pages;
@@ -767,19 +811,26 @@ export default function BillLabelsPanel() {
     setUploadProgress({
       active: true,
       title: `Preparing ${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""}`,
-      detail: "Reading uploads and splitting PDF pages before OCR starts.",
+      detail: "Reading uploads and identifying the first page of each invoice before OCR starts.",
       progress: 2,
     });
 
     for (const [fileIndex, file] of selectedFiles.entries()) {
       if (file.type === "application/pdf") {
         try {
-          const pages = await pdfToPageImages(file, 3.2, ({ current, total }) => {
-            const progress = Math.round(((fileIndex + current / total) / selectedFiles.length) * 100);
+          const pages = await pdfToBillStartImages(file, 3.2, ({ phase, current, total, selected, sourcePage, usedFallback }) => {
+            const phaseProgress = phase === "scan"
+              ? (current / Math.max(total, 1)) * 0.62
+              : 0.62 + ((current / Math.max(total, 1)) * 0.38);
+            const progress = Math.round(((fileIndex + phaseProgress) / selectedFiles.length) * 100);
             setUploadProgress({
               active: true,
               title: `Preparing ${file.name}`,
-              detail: `Rendering page ${current} of ${total}`,
+              detail: phase === "scan"
+                ? `Scanning page ${current} of ${total} for invoice starts${selected ? ` · ${selected} bill${selected > 1 ? "s" : ""} found` : ""}`
+                : usedFallback
+                  ? `No invoice marker found. Falling back to page ${sourcePage}.`
+                  : `Rendering bill start ${current} of ${total} from PDF page ${sourcePage}`,
               progress: Math.max(4, progress),
             });
           });
@@ -1071,7 +1122,7 @@ export default function BillLabelsPanel() {
               />
               <div className="mb-2 text-slate-400"><UploadIcon /></div>
               <p className="text-sm font-semibold text-slate-700">Drop bill files here, or click to browse</p>
-              <p className="mt-1 text-xs text-slate-400">Supports PDF, PNG, JPG. Files are prepared first, then OCR runs in parallel for faster batches.</p>
+              <p className="mt-1 text-xs text-slate-400">Supports PDF, PNG, JPG. PDFs are scanned for invoice-start pages first, then OCR runs in parallel on those pages only.</p>
             </div>
 
             {uploadProgress?.active && (
