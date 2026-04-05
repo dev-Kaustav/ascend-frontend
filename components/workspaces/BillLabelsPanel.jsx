@@ -8,7 +8,7 @@ const LABEL_PREVIEW_WIDTH = 372;
 const LABEL_PREVIEW_HEIGHT = 248;
 const LABEL_CANVAS_WIDTH = 900;
 const LABEL_CANVAS_HEIGHT = 600;
-const OCR_CONCURRENCY = Math.min(4, Math.max(2, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 2));
+const PROCESS_CONCURRENCY = Math.min(4, Math.max(2, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 2));
 const SUPPORT_MOBILE_NO = "+91 7891661335";
 
 function normalizeText(value) {
@@ -46,16 +46,42 @@ function cleanOutletCandidate(value) {
   return normalizeText(
     (value || "")
       .replace(/\bGST(?:IN)?\b.*$/i, "")
+      .replace(/\bAddress\b.*$/i, "")
+      .replace(/\bPhone\s*No\b.*$/i, "")
+      .replace(/\bState\b.*$/i, "")
+      .replace(/\bSalesman(?:\s*Name)?\b.*$/i, "")
       .replace(/\bBeat(?:\s*Name)?\b.*$/i, "")
       .replace(/^[^A-Za-z0-9(]+/, "")
   );
 }
 
+function extractSectionValue(text, patterns, terminators = []) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      let value = match[1];
+      if (terminators.length) {
+        const terminatorPattern = new RegExp(`\\b(?:${terminators.join("|")})\\b`, "i");
+        const terminatorMatch = value.match(terminatorPattern);
+        if (terminatorMatch?.index != null) {
+          value = value.slice(0, terminatorMatch.index);
+        }
+      }
+      const normalized = normalizeText(value);
+      if (normalized) return normalized;
+    }
+  }
+  return "";
+}
+
 function parseBillText(raw) {
   const text = raw.replace(/\r\n/g, "\n");
+  const inlineText = normalizeText(raw);
   const billNo = normalizeText(
     extractField(
       text,
+      /Bill\s*No\.?\s*[:\-]?\s*([A-Z0-9\/\-]+)/i,
+      /Bill\s*No\s*:\s*([A-Z0-9\/\-]+)/i,
       /Bill\s*No\.?\s*[:\-]?\s*([A-Z0-9\/\-]+)/i,
       /Invoice\s*No\.?\s*[:\-]?\s*([A-Z0-9\/\-]+)/i
     )
@@ -64,37 +90,46 @@ function parseBillText(raw) {
     extractField(
       text,
       /Invoice\s*Date\s*[:\-]?\s*([0-9\-\/]+)/i,
+      /Invoice\s*date\s*[:\-]?\s*([0-9\-\/]+)/i,
       /Date\s*[:\-]?\s*([0-9\-\/]+)/i
     )
   );
-  const salesmanName = normalizeText(
-    extractField(
-      text,
-      /Salesman\s*Name\s*[:\-]?\s*([^\n]+)/i,
-      /Salesman\s*[:\-]?\s*([^\n]+)/i
-    )
+  const salesmanName = extractSectionValue(
+    inlineText,
+    [
+      /\bSalesman\s*Name\s*[:\-]?\s*(.+)$/i,
+      /\bSalesman\b\s*[:\-]?\s*(.+)$/i,
+    ],
+    ["Beat(?:\\s*Name)?", "Outlet\\s*Id", "Order\\s*Id", "SR\\s*No\\.?"]
   );
-  const beat = normalizeText(
-    extractField(
-      text,
-      /Beat(?:\s*Name)?\s*[:\-]?\s*([^\n]+)/i,
-      /Route\s*[:\-]?\s*([^\n]+)/i
-    )
+  const beat = extractSectionValue(
+    inlineText,
+    [
+      /\bBeat(?:\s*Name)?\s*[:\-]?\s*(.+)$/i,
+      /\bRoute\s*[:\-]?\s*(.+)$/i,
+    ],
+    ["Outlet\\s*Id", "Order\\s*Id", "Order\\s*Date", "SR\\s*No\\.?"]
   );
   const gstNo = normalizeGstNo(
-    extractField(
-      text,
-      /GST(?:IN)?\s*(?:No\.?)?\s*[:\-]?\s*([0-9A-Z\s]{15,20})/i,
-      /GSTIN\s*[:\-]?\s*([0-9A-Z\s]{15,20})/i
+    extractSectionValue(
+      inlineText,
+      [
+        /\bTo\b\s*:?.*?\bGST(?:IN)?\s*(?:No\.?)?\s*[:\-]?\s*([0-9A-Z\s]{15,20})/i,
+        /\bPhone\s*No\b\s*:?.*?\bGST(?:IN)?\s*(?:No\.?)?\s*[:\-]?\s*([0-9A-Z\s]{15,20})/i,
+        /GST(?:IN)?\s*(?:No\.?)?\s*[:\-]?\s*([0-9A-Z\s]{15,20})/i,
+      ]
     )
   );
   const outletName = cleanOutletCandidate(
-    extractField(
-      text,
-      /^To\s*:?\s*(.+)$/im,
-      /^M\/s\.?\s*(.+)$/im,
-      /^Customer\s*:?\s*(.+)$/im,
-      /^Retailer\s*:?\s*(.+)$/im
+    extractSectionValue(
+      inlineText,
+      [
+        /\bTo\b\s*:?\s*(.+)$/i,
+        /\bM\/s\.?\s*(.+)$/i,
+        /\bCustomer\b\s*:?\s*(.+)$/i,
+        /\bRetailer\b\s*:?\s*(.+)$/i,
+      ],
+      ["Address", "Phone\\s*No", "GST(?:IN)?\\s*No", "State", "Salesman(?:\\s*Name)?", "Beat(?:\\s*Name)?"]
     )
   );
 
@@ -136,7 +171,19 @@ async function ensureQrDataUrl(bill) {
   };
 }
 
-function wrapTextByMeasure(text, measure, maxWidth, maxLines = 3) {
+function trimTextToWidth(text, measure, maxWidth) {
+  const compact = normalizeText(text);
+  if (!compact) return "";
+  if (measure(compact) <= maxWidth) return compact;
+
+  let trimmed = compact.replace(/…$/, "");
+  while (trimmed && measure(`${trimmed}…`) > maxWidth) {
+    trimmed = trimmed.slice(0, -1).trimEnd();
+  }
+  return trimmed ? `${trimmed}…` : "…";
+}
+
+function wrapTextByMeasure(text, measure, maxWidth, maxLines = 3, ellipsize = true) {
   const words = normalizeText(text).split(" ").filter(Boolean);
   const lines = [];
   let current = "";
@@ -155,8 +202,39 @@ function wrapTextByMeasure(text, measure, maxWidth, maxLines = 3) {
   if (lines.length <= maxLines) return lines;
 
   const visible = lines.slice(0, maxLines);
-  visible[maxLines - 1] = `${visible[maxLines - 1].replace(/\s+$/, "")}…`;
+  if (!ellipsize) return visible;
+  visible[maxLines - 1] = trimTextToWidth(visible[maxLines - 1], measure, maxWidth);
   return visible;
+}
+
+function fitTextBlock(text, { fontSize, minFontSize, lineHeight, maxWidth, maxLines, measureFactory }) {
+  const content = normalizeText(text) || "—";
+
+  for (let size = fontSize; size >= minFontSize; size -= 1) {
+    const measure = (value) => measureFactory(value, size);
+    const lines = wrapTextByMeasure(content, measure, maxWidth, maxLines, false);
+    if (lines.length <= maxLines && lines.every((line) => measure(line) <= maxWidth)) {
+      const ratio = size / fontSize;
+      return {
+        lines,
+        fontSize: size,
+        lineHeight: Math.max(size + 2, Math.round(lineHeight * ratio)),
+      };
+    }
+  }
+
+  const minSize = minFontSize;
+  const measure = (value) => measureFactory(value, minSize);
+  const lines = wrapTextByMeasure(content, measure, maxWidth, maxLines, false).slice(0, maxLines);
+  const visibleLines = lines.length ? [...lines] : [content];
+  const lastIndex = visibleLines.length - 1;
+  visibleLines[lastIndex] = trimTextToWidth(visibleLines[lastIndex], measure, maxWidth);
+
+  return {
+    lines: visibleLines,
+    fontSize: minSize,
+    lineHeight: Math.max(minSize + 2, Math.round(lineHeight * (minSize / fontSize))),
+  };
 }
 
 function getFooterCode(billNo) {
@@ -168,14 +246,50 @@ function getFooterCode(billNo) {
 }
 
 function getPreviewTextLines(bill) {
-  const measure = (fontSize, ratio = 0.56) => (value) => value.length * fontSize * ratio;
-  const outletLines = wrapTextByMeasure(bill.outletName || "Outlet Name", measure(42, 0.53), 560, 3);
-  const billNoLines = wrapTextByMeasure(bill.billNo || "—", measure(26, 0.54), 560, 1);
-  const beatLines = wrapTextByMeasure(bill.beat || "—", measure(26, 0.54), 560, 2);
-  const salesmanLines = wrapTextByMeasure(bill.salesmanName || "—", measure(26, 0.54), 240, 1);
-  const dateLines = wrapTextByMeasure(bill.invoiceDate || "—", measure(26, 0.54), 180, 1);
+  const measureFactory = (ratio) => (value, fontSize) => value.length * fontSize * ratio;
 
-  return { outletLines, billNoLines, beatLines, salesmanLines, dateLines };
+  return {
+    outlet: fitTextBlock(bill.outletName || "Outlet Name", {
+      fontSize: 42,
+      minFontSize: 24,
+      lineHeight: 46,
+      maxWidth: 560,
+      maxLines: 3,
+      measureFactory: measureFactory(0.53),
+    }),
+    billNo: fitTextBlock(bill.billNo || "—", {
+      fontSize: 26,
+      minFontSize: 16,
+      lineHeight: 30,
+      maxWidth: 560,
+      maxLines: 1,
+      measureFactory: measureFactory(0.54),
+    }),
+    beat: fitTextBlock(bill.beat || "—", {
+      fontSize: 26,
+      minFontSize: 16,
+      lineHeight: 30,
+      maxWidth: 560,
+      maxLines: 2,
+      measureFactory: measureFactory(0.54),
+    }),
+    salesman: fitTextBlock(bill.salesmanName || "—", {
+      fontSize: 26,
+      minFontSize: 15,
+      lineHeight: 28,
+      maxWidth: 240,
+      maxLines: 1,
+      measureFactory: measureFactory(0.54),
+    }),
+    date: fitTextBlock(bill.invoiceDate || "—", {
+      fontSize: 26,
+      minFontSize: 18,
+      lineHeight: 28,
+      maxWidth: 180,
+      maxLines: 1,
+      measureFactory: measureFactory(0.54),
+    }),
+  };
 }
 
 async function createLabelsPdf(rawBills) {
@@ -191,18 +305,21 @@ async function createLabelsPdf(rawBills) {
   const px = (value) => value * scale;
   const yFromTop = (top, fontSize) => pageHeight - px(top) - fontSize;
 
-  function drawWrapped(page, font, text, x, top, maxWidth, fontSize, lineHeight, maxLines = 3) {
-    const lines = wrapTextByMeasure(text, (value) => font.widthOfTextAtSize(value, fontSize), maxWidth, maxLines);
-    lines.forEach((line, index) => {
+  function drawFitted(page, font, text, x, top, options) {
+    const fitted = fitTextBlock(text, {
+      ...options,
+      measureFactory: (value, fontSize) => font.widthOfTextAtSize(value, fontSize),
+    });
+    fitted.lines.forEach((line, index) => {
       page.drawText(line, {
         x,
-        y: yFromTop(top + index * lineHeight, fontSize),
-        size: fontSize,
+        y: yFromTop(top + index * fitted.lineHeight, fitted.fontSize),
+        size: fitted.fontSize,
         font,
         color: rgb(0.07, 0.07, 0.07),
       });
     });
-    return lines.length;
+    return fitted;
   }
 
   for (const [index, bill] of labels.entries()) {
@@ -223,20 +340,50 @@ async function createLabelsPdf(rawBills) {
     page.drawLine({ start: { x: px(670), y: pageHeight - px(90) }, end: { x: px(670), y: px(90) }, thickness: px(3), color: rgb(0.45, 0.45, 0.45), dashArray: [px(10), px(10)] });
 
     page.drawText("DELIVER TO", { x: px(42), y: yFromTop(124, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    const outletLines = drawWrapped(page, boldFont, bill.outletName || "Outlet Name", px(42), 162, px(560), px(42), px(46), 3);
-    const metaStartY = 162 + outletLines * 46 + 24;
+    const outletBlock = drawFitted(page, boldFont, bill.outletName || "Outlet Name", px(42), 162, {
+      fontSize: px(42),
+      minFontSize: px(24),
+      lineHeight: px(46),
+      maxWidth: px(560),
+      maxLines: 3,
+    });
+    const metaStartY = 162 + outletBlock.lines.length * (outletBlock.lineHeight / scale) + 24;
 
     page.drawText("BILL NO.", { x: px(42), y: yFromTop(metaStartY, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawWrapped(page, boldFont, bill.billNo || "—", px(42), metaStartY + 34, px(560), px(26), px(30), 1);
+    drawFitted(page, boldFont, bill.billNo || "—", px(42), metaStartY + 34, {
+      fontSize: px(26),
+      minFontSize: px(16),
+      lineHeight: px(30),
+      maxWidth: px(560),
+      maxLines: 1,
+    });
 
     page.drawText("BEAT", { x: px(42), y: yFromTop(metaStartY + 86, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawWrapped(page, boldFont, bill.beat || "—", px(42), metaStartY + 120, px(560), px(26), px(30), 2);
+    drawFitted(page, boldFont, bill.beat || "—", px(42), metaStartY + 120, {
+      fontSize: px(26),
+      minFontSize: px(16),
+      lineHeight: px(30),
+      maxWidth: px(560),
+      maxLines: 2,
+    });
 
     page.drawLine({ start: { x: px(42), y: pageHeight - px(448) }, end: { x: px(646), y: pageHeight - px(448) }, thickness: px(2), color: rgb(0.67, 0.67, 0.67), dashArray: [px(8), px(8)] });
     page.drawText("SALESMAN", { x: px(42), y: yFromTop(474, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
     page.drawText("DATE", { x: px(330), y: yFromTop(474, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawWrapped(page, boldFont, bill.salesmanName || "—", px(42), 510, px(240), px(26), px(28), 1);
-    drawWrapped(page, boldFont, bill.invoiceDate || "—", px(330), 510, px(180), px(26), px(28), 1);
+    drawFitted(page, boldFont, bill.salesmanName || "—", px(42), 510, {
+      fontSize: px(26),
+      minFontSize: px(15),
+      lineHeight: px(28),
+      maxWidth: px(240),
+      maxLines: 1,
+    });
+    drawFitted(page, boldFont, bill.invoiceDate || "—", px(330), 510, {
+      fontSize: px(26),
+      minFontSize: px(18),
+      lineHeight: px(28),
+      maxWidth: px(180),
+      maxLines: 1,
+    });
 
     if (qrImage) {
       page.drawRectangle({ x: px(712), y: pageHeight - px(328), width: px(156), height: px(156), borderWidth: px(2), borderColor: rgb(0.07, 0.07, 0.07) });
@@ -255,12 +402,13 @@ async function createLabelsPdf(rawBills) {
   return pdfDoc.save();
 }
 
-async function pdfToBillStartImages(file, scale = 3.2, onProgress) {
+async function pdfToBillStartPages(file, onProgress) {
   const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const startPages = [];
+  const pageTextByNumber = new Map();
 
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
@@ -268,6 +416,7 @@ async function pdfToBillStartImages(file, scale = 3.2, onProgress) {
     const pageText = content.items
       .map((item) => ("str" in item ? item.str : ""))
       .join(" ");
+    pageTextByNumber.set(i, pageText);
 
     if (isLikelyBillStartPage(pageText)) {
       startPages.push(i);
@@ -282,40 +431,19 @@ async function pdfToBillStartImages(file, scale = 3.2, onProgress) {
   }
 
   const pageNumbers = startPages.length ? startPages : [1];
-  const pages = [];
-
-  for (const [index, pageNum] of pageNumbers.entries()) {
-    const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    const ctx = canvas.getContext("2d");
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-    const previewUrl = URL.createObjectURL(blob);
-    pages.push({ blob, previewUrl, pageNum });
+  const pages = pageNumbers.map((pageNum, index) => {
     onProgress?.({
-      phase: "render",
+      phase: "extract",
       current: index + 1,
       total: pageNumbers.length,
       selected: pageNumbers.length,
       sourcePage: pageNum,
       usedFallback: !startPages.length,
     });
-  }
+    return { pageNum, pageText: pageTextByNumber.get(pageNum) || "" };
+  });
 
   return pages;
-}
-
-async function runOCR(fileOrBlob) {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng");
-  const url = URL.createObjectURL(fileOrBlob);
-  const { data } = await worker.recognize(url);
-  await worker.terminate();
-  URL.revokeObjectURL(url);
-  return data.text;
 }
 
 function mapApiLabel(record) {
@@ -335,7 +463,7 @@ function mapApiLabel(record) {
   };
 }
 
-async function processWithConcurrency(items, worker, limit = OCR_CONCURRENCY) {
+async function processWithConcurrency(items, worker, limit = PROCESS_CONCURRENCY) {
   const queue = [...items];
   const runners = Array.from({ length: Math.min(limit, queue.length) }, async () => {
     while (queue.length) {
@@ -458,14 +586,14 @@ function getStatusMeta(status) {
     case "queued":
       return {
         label: "Queued",
-        detail: "Waiting to start OCR",
+        detail: "Waiting to extract PDF text",
         tone: "bg-slate-100 text-slate-600",
         step: 0,
       };
     case "processing":
       return {
         label: "Extracting",
-        detail: "OCR and label prep running",
+        detail: "PDF text scan and label prep running",
         tone: "bg-slate-100 text-slate-700",
         step: 1,
       };
@@ -572,8 +700,8 @@ function EditableField({ label, value, onChange }) {
 }
 
 function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
-  const { outletLines, billNoLines, beatLines, salesmanLines, dateLines } = getPreviewTextLines(bill);
-  const metaStartY = 162 + outletLines.length * 46 + 24;
+  const { outlet, billNo, beat, salesman, date } = getPreviewTextLines(bill);
+  const metaStartY = 162 + outlet.lines.length * outlet.lineHeight + 24;
 
   return (
     <div
@@ -605,8 +733,16 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
         <text x="42" y="142" fill="#666666" fontSize="18" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.4">
           DELIVER TO
         </text>
-        {outletLines.map((line, lineIndex) => (
-          <text key={`outlet-${lineIndex}`} x="42" y={190 + lineIndex * 46} fill="#111111" fontSize="42" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif">
+        {outlet.lines.map((line, lineIndex) => (
+          <text
+            key={`outlet-${lineIndex}`}
+            x="42"
+            y={190 + lineIndex * outlet.lineHeight}
+            fill="#111111"
+            fontSize={outlet.fontSize}
+            fontWeight="700"
+            fontFamily="'Helvetica Neue', Arial, sans-serif"
+          >
             {line}
           </text>
         ))}
@@ -614,8 +750,16 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
         <text x="42" y={metaStartY} fill="#666666" fontSize="18" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.4">
           BILL NO.
         </text>
-        {billNoLines.map((line, lineIndex) => (
-          <text key={`bill-no-${lineIndex}`} x="42" y={metaStartY + 34 + lineIndex * 30} fill="#111111" fontSize="26" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif">
+        {billNo.lines.map((line, lineIndex) => (
+          <text
+            key={`bill-no-${lineIndex}`}
+            x="42"
+            y={metaStartY + 34 + lineIndex * billNo.lineHeight}
+            fill="#111111"
+            fontSize={billNo.fontSize}
+            fontWeight="700"
+            fontFamily="'Helvetica Neue', Arial, sans-serif"
+          >
             {line}
           </text>
         ))}
@@ -623,8 +767,16 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
         <text x="42" y={metaStartY + 86} fill="#666666" fontSize="18" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.4">
           BEAT
         </text>
-        {beatLines.map((line, lineIndex) => (
-          <text key={`beat-${lineIndex}`} x="42" y={metaStartY + 120 + lineIndex * 30} fill="#111111" fontSize="26" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif">
+        {beat.lines.map((line, lineIndex) => (
+          <text
+            key={`beat-${lineIndex}`}
+            x="42"
+            y={metaStartY + 120 + lineIndex * beat.lineHeight}
+            fill="#111111"
+            fontSize={beat.fontSize}
+            fontWeight="700"
+            fontFamily="'Helvetica Neue', Arial, sans-serif"
+          >
             {line}
           </text>
         ))}
@@ -637,13 +789,29 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
         <text x="330" y="490" fill="#666666" fontSize="16" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.2">
           DATE
         </text>
-        {salesmanLines.map((line, lineIndex) => (
-          <text key={`salesman-${lineIndex}`} x="42" y={524 + lineIndex * 28} fill="#111111" fontSize="26" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif">
+        {salesman.lines.map((line, lineIndex) => (
+          <text
+            key={`salesman-${lineIndex}`}
+            x="42"
+            y={524 + lineIndex * salesman.lineHeight}
+            fill="#111111"
+            fontSize={salesman.fontSize}
+            fontWeight="700"
+            fontFamily="'Helvetica Neue', Arial, sans-serif"
+          >
             {line}
           </text>
         ))}
-        {dateLines.map((line, lineIndex) => (
-          <text key={`date-${lineIndex}`} x="330" y={524 + lineIndex * 28} fill="#111111" fontSize="26" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif">
+        {date.lines.map((line, lineIndex) => (
+          <text
+            key={`date-${lineIndex}`}
+            x="330"
+            y={524 + lineIndex * date.lineHeight}
+            fill="#111111"
+            fontSize={date.fontSize}
+            fontWeight="700"
+            fontFamily="'Helvetica Neue', Arial, sans-serif"
+          >
             {line}
           </text>
         ))}
@@ -811,14 +979,14 @@ export default function BillLabelsPanel() {
     setUploadProgress({
       active: true,
       title: `Preparing ${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""}`,
-      detail: "Reading uploads and identifying the first page of each invoice before OCR starts.",
+      detail: "Reading PDFs and identifying the first page of each invoice before extraction starts.",
       progress: 2,
     });
 
     for (const [fileIndex, file] of selectedFiles.entries()) {
       if (file.type === "application/pdf") {
         try {
-          const pages = await pdfToBillStartImages(file, 3.2, ({ phase, current, total, selected, sourcePage, usedFallback }) => {
+          const pages = await pdfToBillStartPages(file, ({ phase, current, total, selected, sourcePage, usedFallback }) => {
             const phaseProgress = phase === "scan"
               ? (current / Math.max(total, 1)) * 0.62
               : 0.62 + ((current / Math.max(total, 1)) * 0.38);
@@ -830,50 +998,32 @@ export default function BillLabelsPanel() {
                 ? `Scanning page ${current} of ${total} for invoice starts${selected ? ` · ${selected} bill${selected > 1 ? "s" : ""} found` : ""}`
                 : usedFallback
                   ? `No invoice marker found. Falling back to page ${sourcePage}.`
-                  : `Rendering bill start ${current} of ${total} from PDF page ${sourcePage}`,
+                  : `Extracting bill ${current} of ${total} from PDF page ${sourcePage}`,
               progress: Math.max(4, progress),
             });
           });
           for (const page of pages) {
             toProcess.push({
               id: `${Date.now()}-${Math.random()}`,
-              blob: page.blob,
               fileName: `${file.name} — page ${page.pageNum}`,
-              preview: page.previewUrl,
+              sourceText: page.pageText,
             });
           }
         } catch (error) {
           console.error("PDF parsing failed for", file.name, error);
           toProcess.push({
-            id: `${Date.now()}-${Math.random()}`,
-            blob: file,
-            fileName: file.name,
-            preview: null,
-            forceError: true,
-          });
+              id: `${Date.now()}-${Math.random()}`,
+              fileName: file.name,
+              forceError: true,
+            });
         }
-      } else {
-        const progress = Math.round(((fileIndex + 1) / selectedFiles.length) * 100);
-        setUploadProgress({
-          active: true,
-          title: `Preparing ${file.name}`,
-          detail: "Image is ready. Adding it to the extraction queue.",
-          progress: Math.max(4, progress),
-        });
-        toProcess.push({
-          id: `${Date.now()}-${Math.random()}`,
-          blob: file,
-          fileName: file.name,
-          preview: URL.createObjectURL(file),
-        });
       }
     }
 
     const newEntries = toProcess.map((item) => ({
       id: item.id,
-      blob: item.blob,
       fileName: item.fileName,
-      preview: item.preview,
+      sourceText: item.sourceText || "",
       status: item.forceError ? "error" : "queued",
       billNo: "",
       invoiceDate: "",
@@ -888,7 +1038,7 @@ export default function BillLabelsPanel() {
     setUploadProgress({
       active: true,
       title: `Queued ${newEntries.length} label${newEntries.length > 1 ? "s" : ""}`,
-      detail: "Starting OCR and generating live previews.",
+      detail: "Starting PDF text extraction and generating live previews.",
       progress: 100,
     });
     setBills((prev) => [...prev, ...newEntries]);
@@ -900,15 +1050,15 @@ export default function BillLabelsPanel() {
         setBills((prev) => prev.map((bill) => (bill.id === entry.id ? { ...bill, status: "processing" } : bill)));
 
         try {
-          const rawText = await runOCR(entry.blob);
-          const parsed = await ensureQrDataUrl({ ...entry, ...parseBillText(rawText) });
+          const parsedFields = parseBillText(entry.sourceText || "");
+          const parsed = await ensureQrDataUrl({ ...entry, ...parsedFields });
           const nextBill = { ...parsed, status: "saving" };
           setBills((prev) => prev.map((bill) => (
             bill.id === entry.id ? { ...bill, ...nextBill } : bill
           )));
           schedulePersistBill(nextBill, 80);
         } catch (error) {
-          console.error("OCR failed for", entry.fileName, error);
+          console.error("PDF text extraction failed for", entry.fileName, error);
           setBills((prev) => prev.map((bill) => (bill.id === entry.id ? { ...bill, status: "error" } : bill)));
         }
       }
@@ -919,13 +1069,13 @@ export default function BillLabelsPanel() {
     event.preventDefault();
     setDragging(false);
     const files = [...event.dataTransfer.files].filter(
-      (file) => file.type.startsWith("image/") || file.type === "application/pdf"
+      (file) => file.type === "application/pdf"
     );
     if (files.length) processFiles(files);
   }, [processFiles]);
 
   const onFileChange = useCallback((event) => {
-    const files = [...event.target.files];
+    const files = [...event.target.files].filter((file) => file.type === "application/pdf");
     if (files.length) processFiles(files);
     event.target.value = "";
   }, [processFiles]);
@@ -959,11 +1109,7 @@ export default function BillLabelsPanel() {
       clearTimeout(persistBillTimeoutsRef.current[id]);
       delete persistBillTimeoutsRef.current[id];
     }
-    setBills((prev) => {
-      const target = prev.find((bill) => bill.id === id);
-      if (target?.preview) URL.revokeObjectURL(target.preview);
-      return prev.filter((bill) => bill.id !== id);
-    });
+    setBills((prev) => prev.filter((bill) => bill.id !== id));
   };
 
   const deleteHistoryItem = async (id) => {
@@ -1020,14 +1166,14 @@ export default function BillLabelsPanel() {
   const extractedCount = totalBills - processingCount;
   const extractionProgress = totalBills ? Math.round((extractedCount / totalBills) * 100) : 0;
   const batchMessage = processingCount > 0
-    ? "Keep this tab open while OCR runs. Label previews update automatically as each bill finishes."
+    ? "Keep this tab open while PDF text extraction runs. Label previews update automatically as each bill finishes."
     : syncingCount > 0
       ? "Labels are being saved to history automatically as metadata settles."
       : failedCount > 0
         ? "Some labels need review. Any edits you make will sync to history automatically."
       : savedCount > 0
         ? "This batch is saved. You can reopen, print, or download labels from History for 7 days."
-        : "Upload bills to start OCR and generate label previews.";
+        : "Upload PDFs to extract label fields and generate label previews.";
 
   return (
     <>
@@ -1074,7 +1220,7 @@ export default function BillLabelsPanel() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Bill Labels</h1>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              Bills are processed in the browser for OCR, only label metadata is saved, and labels are generated as monochrome 3 × 2 inch PDFs at runtime.
+              PDFs are processed in the browser from embedded page text, only label metadata is saved, and labels are generated as monochrome 3 × 2 inch PDFs at runtime.
             </p>
           </div>
         </div>
@@ -1116,13 +1262,13 @@ export default function BillLabelsPanel() {
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept="image/*,application/pdf"
+                accept="application/pdf"
                 className="hidden"
                 onChange={onFileChange}
               />
               <div className="mb-2 text-slate-400"><UploadIcon /></div>
-              <p className="text-sm font-semibold text-slate-700">Drop bill files here, or click to browse</p>
-              <p className="mt-1 text-xs text-slate-400">Supports PDF, PNG, JPG. PDFs are scanned for invoice-start pages first, then OCR runs in parallel on those pages only.</p>
+              <p className="text-sm font-semibold text-slate-700">Drop bill PDFs here, or click to browse</p>
+              <p className="mt-1 text-xs text-slate-400">Supports PDF only. Each PDF is scanned for invoice-start pages, then label fields are parsed directly from embedded page text.</p>
             </div>
 
             {uploadProgress?.active && (
