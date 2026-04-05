@@ -403,19 +403,23 @@ async function createLabelsPdf(rawBills) {
 }
 
 async function pdfToBillStartPages(file, onProgress) {
-  const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pdf = await pdfjsLib.getDocument({
+    data: new Uint8Array(arrayBuffer),
+    disableWorker: true,
+    disableRange: true,
+    disableStream: true,
+    disableAutoFetch: true,
+    useWorkerFetch: false,
+  }).promise;
   const startPages = [];
   const pageTextByNumber = new Map();
 
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ");
+    const pageText = await extractPageText(page);
     pageTextByNumber.set(i, pageText);
 
     if (isLikelyBillStartPage(pageText)) {
@@ -444,6 +448,22 @@ async function pdfToBillStartPages(file, onProgress) {
   });
 
   return pages;
+}
+
+async function extractPageText(page) {
+  const stream = page.streamTextContent();
+  const reader = stream.getReader();
+  const items = [];
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value?.items?.length) items.push(...value.items);
+  }
+
+  return items
+    .map((item) => ("str" in item ? item.str : ""))
+    .join(" ");
 }
 
 function mapApiLabel(record) {
@@ -523,15 +543,6 @@ function PrintIcon() {
   );
 }
 
-function EditIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
-    </svg>
-  );
-}
-
 function HistoryIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -588,113 +599,45 @@ function getStatusMeta(status) {
         label: "Queued",
         detail: "Waiting to extract PDF text",
         tone: "bg-slate-100 text-slate-600",
-        step: 0,
       };
     case "processing":
       return {
         label: "Extracting",
         detail: "PDF text scan and label prep running",
         tone: "bg-slate-100 text-slate-700",
-        step: 1,
       };
     case "saving":
       return {
         label: "Saving",
         detail: "Automatically saving to history",
         tone: "bg-slate-100 text-slate-700",
-        step: 3,
-      };
-    case "done":
-      return {
-        label: "Ready",
-        detail: "Label is ready and will sync automatically",
-        tone: "bg-amber-100 text-amber-800",
-        step: 2,
       };
     case "saved":
       return {
         label: "Saved",
         detail: "Available in 7-day history",
         tone: "bg-slate-900 text-white",
-        step: 3,
       };
     case "save_error":
       return {
-        label: "Save Failed",
-        detail: "Metadata is ready. Retry save.",
+        label: "Error",
+        detail: "Could not save this label.",
         tone: "bg-red-100 text-red-700",
-        step: 2,
       };
     default:
       return {
-        label: "Needs Review",
-        detail: "Fill the fields and confirm the label",
+        label: "Error",
+        detail: "Could not extract this label from the PDF.",
         tone: "bg-red-100 text-red-700",
-        step: 2,
       };
   }
 }
 
-function StepRail({ step }) {
-  const steps = ["Upload", "Extract", "Review", "Saved"];
-
-  return (
-    <div className="flex items-center gap-2">
-      {steps.map((label, index) => (
-        <div key={label} className="flex min-w-0 flex-1 items-center gap-2">
-          <div className={`h-1.5 flex-1 rounded-full ${index <= step ? "bg-slate-900" : "bg-slate-200"}`} />
-          <span className={`hidden text-[10px] font-semibold uppercase tracking-[0.2em] lg:inline ${index <= step ? "text-slate-700" : "text-slate-400"}`}>
-            {label}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function BatchMetric({ label, value, tone = "text-slate-900" }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${tone}`}>{value}</div>
-    </div>
-  );
-}
-
-function EditableField({ label, value, onChange }) {
-  const [editing, setEditing] = useState(false);
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-
+function ReadOnlyField({ label, value }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">{label}</span>
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={() => setEditing(false)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") setEditing(false);
-          }}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-slate-500"
-        />
-      ) : (
-        <div className="group flex items-center gap-1">
-          <span className="text-sm font-medium leading-snug text-slate-800">{value || <span className="italic text-slate-400">—</span>}</span>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-600"
-          >
-            <EditIcon />
-          </button>
-        </div>
-      )}
+      <span className="text-sm font-medium leading-snug text-slate-800">{value || <span className="italic text-slate-400">—</span>}</span>
     </div>
   );
 }
@@ -1080,30 +1023,6 @@ export default function BillLabelsPanel() {
     event.target.value = "";
   }, [processFiles]);
 
-  const updateField = useCallback((id, field, value) => {
-    setBills((prev) => {
-      const nextBills = prev.map((bill) => (
-        bill.id === id ? {
-          ...bill,
-          [field]: value,
-          status: bill.status === "queued" || bill.status === "processing" ? bill.status : "saving",
-        } : bill
-      ));
-      const updatedBill = nextBills.find((bill) => bill.id === id);
-      if (updatedBill) {
-        if (updatedBill.status !== "queued" && updatedBill.status !== "processing") {
-          schedulePersistBill(updatedBill);
-        }
-        void ensureQrDataUrl({ ...updatedBill, qrDataUrl: null }).then((withQr) => {
-          setBills((current) => current.map((bill) => (
-            bill.id === id ? { ...bill, qrDataUrl: withQr.qrDataUrl } : bill
-          )));
-        });
-      }
-      return nextBills;
-    });
-  }, [schedulePersistBill]);
-
   const removeBill = (id) => {
     if (persistBillTimeoutsRef.current[id]) {
       clearTimeout(persistBillTimeoutsRef.current[id]);
@@ -1156,22 +1075,17 @@ export default function BillLabelsPanel() {
     setTimeout(() => window.print(), 60);
   };
 
-  const doneBills = bills.filter((bill) => bill.status === "done" || bill.status === "saving" || bill.status === "saved" || bill.status === "save_error");
+  const doneBills = bills.filter((bill) => bill.status === "saving" || bill.status === "saved" || bill.status === "save_error");
   const totalBills = bills.length;
   const processingCount = bills.filter((bill) => bill.status === "processing" || bill.status === "queued").length;
-  const syncingCount = bills.filter((bill) => bill.status === "saving").length;
-  const savedCount = bills.filter((bill) => bill.status === "saved").length;
-  const reviewCount = bills.filter((bill) => bill.status === "done" || bill.status === "save_error" || bill.status === "error").length;
   const failedCount = bills.filter((bill) => bill.status === "error" || bill.status === "save_error").length;
   const extractedCount = totalBills - processingCount;
   const extractionProgress = totalBills ? Math.round((extractedCount / totalBills) * 100) : 0;
   const batchMessage = processingCount > 0
     ? "Keep this tab open while PDF text extraction runs. Label previews update automatically as each bill finishes."
-    : syncingCount > 0
-      ? "Labels are being saved to history automatically as metadata settles."
-      : failedCount > 0
-        ? "Some labels need review. Any edits you make will sync to history automatically."
-      : savedCount > 0
+    : failedCount > 0
+      ? "Some labels could not be processed. Use the error flag to spot them."
+      : doneBills.length > 0
         ? "This batch is saved. You can reopen, print, or download labels from History for 7 days."
         : "Upload PDFs to extract label fields and generate label previews.";
 
@@ -1324,15 +1238,7 @@ export default function BillLabelsPanel() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                  <BatchMetric label="Processing" value={processingCount} tone="text-slate-700" />
-                  <BatchMetric label="Syncing" value={syncingCount} tone="text-slate-700" />
-                  <BatchMetric label="Needs Review" value={reviewCount} tone={failedCount > 0 ? "text-red-700" : "text-amber-700"} />
-                  <BatchMetric label="Saved" value={savedCount} tone="text-slate-900" />
-                  <BatchMetric label="Issues" value={failedCount} tone={failedCount > 0 ? "text-red-700" : "text-slate-500"} />
-                </div>
-
-                <div className="mt-5">
+                <div className="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                   <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
                     <span>Extraction Progress</span>
                     <span>{extractedCount}/{totalBills || 0}</span>
@@ -1361,8 +1267,6 @@ export default function BillLabelsPanel() {
                             <div className="flex flex-wrap items-center gap-2">
                               {bill.status === "processing" || bill.status === "queued" ? (
                                 <span className="text-slate-500"><SpinnerIcon /></span>
-                              ) : bill.status === "done" ? (
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><CheckIcon /></span>
                               ) : bill.status === "saved" ? (
                                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white"><CheckIcon /></span>
                               ) : (
@@ -1379,19 +1283,16 @@ export default function BillLabelsPanel() {
                             <TrashIcon />
                           </button>
                         </div>
-                        <div className="mt-3">
-                          <StepRail step={statusMeta.step} />
-                        </div>
                       </div>
 
                       <div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_440px]">
                         <div className="grid grid-cols-2 gap-x-8 gap-y-4 lg:grid-cols-2">
-                          <EditableField label="Bill No." value={bill.billNo} onChange={(value) => updateField(bill.id, "billNo", value)} />
-                          <EditableField label="Invoice Date" value={bill.invoiceDate} onChange={(value) => updateField(bill.id, "invoiceDate", value)} />
-                          <EditableField label="Outlet Name" value={bill.outletName} onChange={(value) => updateField(bill.id, "outletName", value)} />
-                          <EditableField label="GSTIN" value={bill.gstNo} onChange={(value) => updateField(bill.id, "gstNo", value)} />
-                          <EditableField label="Salesman" value={bill.salesmanName} onChange={(value) => updateField(bill.id, "salesmanName", value)} />
-                          <EditableField label="Beat" value={bill.beat} onChange={(value) => updateField(bill.id, "beat", value)} />
+                          <ReadOnlyField label="Bill No." value={bill.billNo} />
+                          <ReadOnlyField label="Invoice Date" value={bill.invoiceDate} />
+                          <ReadOnlyField label="Outlet Name" value={bill.outletName} />
+                          <ReadOnlyField label="GSTIN" value={bill.gstNo} />
+                          <ReadOnlyField label="Salesman" value={bill.salesmanName} />
+                          <ReadOnlyField label="Beat" value={bill.beat} />
                         </div>
 
                         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1460,7 +1361,7 @@ export default function BillLabelsPanel() {
                   </svg>
                 </div>
                 <p className="text-sm font-medium text-slate-500">No bills uploaded yet</p>
-                <p className="mt-1 text-xs text-slate-400">Upload bill images or PDFs to extract metadata and generate labels.</p>
+                <p className="mt-1 text-xs text-slate-400">Upload PDFs to extract label data and generate labels.</p>
               </div>
             )}
           </>
