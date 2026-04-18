@@ -4,10 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, apiEndpoints } from "@/lib/api";
 
 const HISTORY_WINDOW_DAYS = 7;
+const LABEL_WIDTH_IN = 3;
+const LABEL_HEIGHT_IN = 2.25;
+const PAGE_WIDTH_IN = 3;
+const PAGE_HEIGHT_IN = 5;
+const PAGE_VERTICAL_MARGIN_IN = 1 / 6;
+const PAGE_LABEL_GAP_IN = 1 / 6;
 const LABEL_PREVIEW_WIDTH = 372;
-const LABEL_PREVIEW_HEIGHT = 248;
 const LABEL_CANVAS_WIDTH = 900;
-const LABEL_CANVAS_HEIGHT = 600;
+const LABEL_CANVAS_HEIGHT = 675;
+const LABEL_BOTTOM_EXTRA = LABEL_CANVAS_HEIGHT - 600;
 const PROCESS_CONCURRENCY = Math.min(4, Math.max(2, (typeof navigator !== "undefined" && navigator.hardwareConcurrency) || 2));
 const SUPPORT_MOBILE_NO = "+91 7891661335";
 
@@ -183,6 +189,31 @@ function trimTextToWidth(text, measure, maxWidth) {
   return trimmed ? `${trimmed}…` : "…";
 }
 
+function splitTokenToWidth(token, measure, maxWidth) {
+  const compact = normalizeText(token);
+  if (!compact) return [];
+  if (measure(compact) <= maxWidth) return [compact];
+
+  const parts = [];
+  let remaining = compact;
+
+  while (remaining) {
+    let chunk = remaining;
+    while (chunk.length > 1 && measure(chunk) > maxWidth) {
+      chunk = chunk.slice(0, -1);
+    }
+
+    if (measure(chunk) > maxWidth) {
+      chunk = remaining[0];
+    }
+
+    parts.push(chunk);
+    remaining = remaining.slice(chunk.length);
+  }
+
+  return parts;
+}
+
 function wrapTextByMeasure(text, measure, maxWidth, maxLines = 3, ellipsize = true) {
   const words = normalizeText(text).split(" ").filter(Boolean);
   const lines = [];
@@ -190,21 +221,41 @@ function wrapTextByMeasure(text, measure, maxWidth, maxLines = 3, ellipsize = tr
 
   for (const word of words) {
     const candidate = current ? `${current} ${word}` : word;
-    if (measure(candidate) <= maxWidth || !current) {
+    if (measure(candidate) <= maxWidth) {
       current = candidate;
+    } else if (!current) {
+      const segments = splitTokenToWidth(word, measure, maxWidth);
+      if (segments.length > 1) {
+        lines.push(...segments.slice(0, -1));
+      }
+      current = segments.at(-1) || "";
     } else {
       lines.push(current);
-      current = word;
+      const segments = splitTokenToWidth(word, measure, maxWidth);
+      if (segments.length > 1) {
+        lines.push(...segments.slice(0, -1));
+      }
+      current = segments.at(-1) || "";
     }
   }
   if (current) lines.push(current);
 
-  if (lines.length <= maxLines) return lines;
+  if (lines.length <= maxLines) {
+    return lines.map((line) => trimTextToWidth(line, measure, maxWidth));
+  }
 
-  const visible = lines.slice(0, maxLines);
-  if (!ellipsize) return visible;
-  visible[maxLines - 1] = trimTextToWidth(visible[maxLines - 1], measure, maxWidth);
+  if (!ellipsize) {
+    return lines.map((line) => trimTextToWidth(line, measure, maxWidth));
+  }
+
+  const visible = lines.slice(0, maxLines).map((line) => trimTextToWidth(line, measure, maxWidth));
+  visible[maxLines - 1] = trimTextToWidth(`${visible[maxLines - 1]}…`, measure, maxWidth);
   return visible;
+}
+
+function getScaledLineHeight(size, baseFontSize, baseLineHeight) {
+  const ratio = size / baseFontSize;
+  return Math.max(size * 1.24, baseLineHeight * ratio);
 }
 
 function fitTextBlock(text, { fontSize, minFontSize, lineHeight, maxWidth, maxLines, measureFactory }) {
@@ -214,26 +265,26 @@ function fitTextBlock(text, { fontSize, minFontSize, lineHeight, maxWidth, maxLi
     const measure = (value) => measureFactory(value, size);
     const lines = wrapTextByMeasure(content, measure, maxWidth, maxLines, false);
     if (lines.length <= maxLines && lines.every((line) => measure(line) <= maxWidth)) {
-      const ratio = size / fontSize;
       return {
         lines,
         fontSize: size,
-        lineHeight: Math.max(size + 2, Math.round(lineHeight * ratio)),
+        lineHeight: getScaledLineHeight(size, fontSize, lineHeight),
       };
     }
   }
 
   const minSize = minFontSize;
   const measure = (value) => measureFactory(value, minSize);
-  const lines = wrapTextByMeasure(content, measure, maxWidth, maxLines, false).slice(0, maxLines);
-  const visibleLines = lines.length ? [...lines] : [content];
-  const lastIndex = visibleLines.length - 1;
-  visibleLines[lastIndex] = trimTextToWidth(visibleLines[lastIndex], measure, maxWidth);
+  const allLines = wrapTextByMeasure(content, measure, maxWidth, maxLines, false);
+  const lines = allLines.slice(0, maxLines);
+  const visibleLines = lines.length
+    ? lines.map((line, index) => trimTextToWidth(index === lines.length - 1 && allLines.length > maxLines ? `${line}…` : line, measure, maxWidth))
+    : [trimTextToWidth(content, measure, maxWidth)];
 
   return {
     lines: visibleLines,
     fontSize: minSize,
-    lineHeight: Math.max(minSize + 2, Math.round(lineHeight * (minSize / fontSize))),
+    lineHeight: getScaledLineHeight(minSize, fontSize, lineHeight),
   };
 }
 
@@ -289,6 +340,14 @@ function getPreviewTextLines(bill) {
       maxLines: 1,
       measureFactory: measureFactory(0.54),
     }),
+    qrBillNo: fitTextBlock(bill.billNo || "—", {
+      fontSize: 20,
+      minFontSize: 12,
+      lineHeight: 22,
+      maxWidth: 156,
+      maxLines: 1,
+      measureFactory: measureFactory(0.56),
+    }),
   };
 }
 
@@ -299,13 +358,16 @@ async function createLabelsPdf(rawBills) {
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const monoFont = await pdfDoc.embedFont(StandardFonts.CourierBold);
   const labels = await Promise.all(rawBills.map((bill) => ensureQrDataUrl(bill)));
-  const scale = 216 / LABEL_CANVAS_WIDTH;
-  const pageWidth = 216;
-  const pageHeight = 144;
+  const pageWidth = PAGE_WIDTH_IN * 72;
+  const pageHeight = PAGE_HEIGHT_IN * 72;
+  const labelHeight = LABEL_HEIGHT_IN * 72;
+  const pagePadding = PAGE_VERTICAL_MARGIN_IN * 72;
+  const labelGap = PAGE_LABEL_GAP_IN * 72;
+  const scale = pageWidth / LABEL_CANVAS_WIDTH;
   const px = (value) => value * scale;
-  const yFromTop = (top, fontSize) => pageHeight - px(top) - fontSize;
+  const yFromTop = (labelTop, top, fontSize) => pageHeight - labelTop - px(top) - fontSize;
 
-  function drawFitted(page, font, text, x, top, options) {
+  function drawFitted(page, font, text, x, labelTop, top, options) {
     const fitted = fitTextBlock(text, {
       ...options,
       measureFactory: (value, fontSize) => font.widthOfTextAtSize(value, fontSize),
@@ -313,7 +375,7 @@ async function createLabelsPdf(rawBills) {
     fitted.lines.forEach((line, index) => {
       page.drawText(line, {
         x,
-        y: yFromTop(top + index * fitted.lineHeight, fitted.fontSize),
+        y: yFromTop(labelTop, top + index * fitted.lineHeight, fitted.fontSize),
         size: fitted.fontSize,
         font,
         color: rgb(0.07, 0.07, 0.07),
@@ -322,81 +384,96 @@ async function createLabelsPdf(rawBills) {
     return fitted;
   }
 
-  for (const [index, bill] of labels.entries()) {
+  for (let index = 0; index < labels.length; index += 2) {
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
-    const qrImage = bill.qrDataUrl ? await pdfDoc.embedPng(bill.qrDataUrl) : null;
+    const pageBills = labels.slice(index, index + 2);
 
-    page.drawRectangle({ x: px(4), y: px(4), width: pageWidth - px(8), height: pageHeight - px(8), borderWidth: px(8), borderColor: rgb(0.07, 0.07, 0.07) });
-    page.drawRectangle({ x: 0, y: pageHeight - px(90), width: pageWidth, height: px(90), color: rgb(0.07, 0.07, 0.07) });
-    page.drawText("ASCEND FOODS", { x: px(40), y: yFromTop(36, px(28)), size: px(28), font: boldFont, color: rgb(1, 1, 1) });
-    page.drawText(`Mob No. ${SUPPORT_MOBILE_NO}`, {
-      x: pageWidth - px(34) - textFont.widthOfTextAtSize(`Mob No. ${SUPPORT_MOBILE_NO}`, px(16)),
-      y: yFromTop(40, px(16)),
-      size: px(16),
-      font: textFont,
-      color: rgb(1, 1, 1),
-    });
+    for (const [slotIndex, bill] of pageBills.entries()) {
+      const absoluteIndex = index + slotIndex;
+      const labelTop = pagePadding + slotIndex * (labelHeight + labelGap);
+      const labelBottomY = pageHeight - labelTop - labelHeight;
+      const qrTop = 172 + LABEL_BOTTOM_EXTRA / 2;
+      const qrLabelY = 344 + LABEL_BOTTOM_EXTRA / 2;
+      const qrImage = bill.qrDataUrl ? await pdfDoc.embedPng(bill.qrDataUrl) : null;
+      const outletBlock = drawFitted(page, boldFont, bill.outletName || "Outlet Name", px(42), labelTop, 162, {
+        fontSize: px(42),
+        minFontSize: px(24),
+        lineHeight: px(46),
+        maxWidth: px(560),
+        maxLines: 3,
+      });
+      const metaStartY = 162 + outletBlock.lines.length * (outletBlock.lineHeight / scale) + 24;
+      const qrBillNo = fitTextBlock(bill.billNo || "—", {
+        fontSize: px(20),
+        minFontSize: px(12),
+        lineHeight: px(22),
+        maxWidth: px(156),
+        maxLines: 1,
+        measureFactory: (value, fontSize) => monoFont.widthOfTextAtSize(value, fontSize),
+      });
 
-    page.drawLine({ start: { x: px(670), y: pageHeight - px(90) }, end: { x: px(670), y: px(90) }, thickness: px(3), color: rgb(0.45, 0.45, 0.45), dashArray: [px(10), px(10)] });
+      page.drawRectangle({ x: px(4), y: labelBottomY + px(4), width: pageWidth - px(8), height: labelHeight - px(8), borderWidth: px(8), borderColor: rgb(0.07, 0.07, 0.07) });
+      page.drawRectangle({ x: 0, y: pageHeight - labelTop - px(90), width: pageWidth, height: px(90), color: rgb(0.07, 0.07, 0.07) });
+      page.drawText("ASCEND FOODS", { x: px(40), y: yFromTop(labelTop, 36, px(28)), size: px(28), font: boldFont, color: rgb(1, 1, 1) });
+      page.drawText(`Mob No. ${SUPPORT_MOBILE_NO}`, {
+        x: pageWidth - px(34) - textFont.widthOfTextAtSize(`Mob No. ${SUPPORT_MOBILE_NO}`, px(16)),
+        y: yFromTop(labelTop, 40, px(16)),
+        size: px(16),
+        font: textFont,
+        color: rgb(1, 1, 1),
+      });
 
-    page.drawText("DELIVER TO", { x: px(42), y: yFromTop(124, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    const outletBlock = drawFitted(page, boldFont, bill.outletName || "Outlet Name", px(42), 162, {
-      fontSize: px(42),
-      minFontSize: px(24),
-      lineHeight: px(46),
-      maxWidth: px(560),
-      maxLines: 3,
-    });
-    const metaStartY = 162 + outletBlock.lines.length * (outletBlock.lineHeight / scale) + 24;
+      page.drawLine({ start: { x: px(670), y: pageHeight - labelTop - px(90) }, end: { x: px(670), y: labelBottomY + px(90 + LABEL_BOTTOM_EXTRA) }, thickness: px(3), color: rgb(0.45, 0.45, 0.45), dashArray: [px(10), px(10)] });
+      page.drawText("DELIVER TO", { x: px(42), y: yFromTop(labelTop, 124, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
+      page.drawText("BILL NO.", { x: px(42), y: yFromTop(labelTop, metaStartY, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
+      drawFitted(page, boldFont, bill.billNo || "—", px(42), labelTop, metaStartY + 34, {
+        fontSize: px(26),
+        minFontSize: px(16),
+        lineHeight: px(30),
+        maxWidth: px(560),
+        maxLines: 1,
+      });
 
-    page.drawText("BILL NO.", { x: px(42), y: yFromTop(metaStartY, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawFitted(page, boldFont, bill.billNo || "—", px(42), metaStartY + 34, {
-      fontSize: px(26),
-      minFontSize: px(16),
-      lineHeight: px(30),
-      maxWidth: px(560),
-      maxLines: 1,
-    });
+      page.drawText("BEAT", { x: px(42), y: yFromTop(labelTop, metaStartY + 86, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
+      drawFitted(page, boldFont, bill.beat || "—", px(42), labelTop, metaStartY + 120, {
+        fontSize: px(26),
+        minFontSize: px(16),
+        lineHeight: px(30),
+        maxWidth: px(560),
+        maxLines: 2,
+      });
 
-    page.drawText("BEAT", { x: px(42), y: yFromTop(metaStartY + 86, px(18)), size: px(18), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawFitted(page, boldFont, bill.beat || "—", px(42), metaStartY + 120, {
-      fontSize: px(26),
-      minFontSize: px(16),
-      lineHeight: px(30),
-      maxWidth: px(560),
-      maxLines: 2,
-    });
+      page.drawLine({ start: { x: px(42), y: labelBottomY + px(152) }, end: { x: px(646), y: labelBottomY + px(152) }, thickness: px(2), color: rgb(0.67, 0.67, 0.67), dashArray: [px(8), px(8)] });
+      page.drawText("SALESMAN", { x: px(42), y: yFromTop(labelTop, 474 + LABEL_BOTTOM_EXTRA, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
+      page.drawText("DATE", { x: px(330), y: yFromTop(labelTop, 474 + LABEL_BOTTOM_EXTRA, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
+      drawFitted(page, boldFont, bill.salesmanName || "—", px(42), labelTop, 510 + LABEL_BOTTOM_EXTRA, {
+        fontSize: px(26),
+        minFontSize: px(15),
+        lineHeight: px(28),
+        maxWidth: px(240),
+        maxLines: 1,
+      });
+      drawFitted(page, boldFont, bill.invoiceDate || "—", px(330), labelTop, 510 + LABEL_BOTTOM_EXTRA, {
+        fontSize: px(26),
+        minFontSize: px(18),
+        lineHeight: px(28),
+        maxWidth: px(180),
+        maxLines: 1,
+      });
 
-    page.drawLine({ start: { x: px(42), y: pageHeight - px(448) }, end: { x: px(646), y: pageHeight - px(448) }, thickness: px(2), color: rgb(0.67, 0.67, 0.67), dashArray: [px(8), px(8)] });
-    page.drawText("SALESMAN", { x: px(42), y: yFromTop(474, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    page.drawText("DATE", { x: px(330), y: yFromTop(474, px(16)), size: px(16), font: boldFont, color: rgb(0.38, 0.38, 0.38) });
-    drawFitted(page, boldFont, bill.salesmanName || "—", px(42), 510, {
-      fontSize: px(26),
-      minFontSize: px(15),
-      lineHeight: px(28),
-      maxWidth: px(240),
-      maxLines: 1,
-    });
-    drawFitted(page, boldFont, bill.invoiceDate || "—", px(330), 510, {
-      fontSize: px(26),
-      minFontSize: px(18),
-      lineHeight: px(28),
-      maxWidth: px(180),
-      maxLines: 1,
-    });
+      if (qrImage) {
+        page.drawRectangle({ x: px(712), y: yFromTop(labelTop, qrTop + 156, 0), width: px(156), height: px(156), borderWidth: px(2), borderColor: rgb(0.07, 0.07, 0.07) });
+        page.drawImage(qrImage, { x: px(720), y: yFromTop(labelTop, qrTop + 140, 0), width: px(140), height: px(140) });
+      } else {
+        page.drawRectangle({ x: px(720), y: yFromTop(labelTop, qrTop + 140, 0), width: px(140), height: px(140), borderWidth: px(2), borderColor: rgb(0.3, 0.3, 0.3) });
+      }
 
-    if (qrImage) {
-      page.drawRectangle({ x: px(712), y: pageHeight - px(328), width: px(156), height: px(156), borderWidth: px(2), borderColor: rgb(0.07, 0.07, 0.07) });
-      page.drawImage(qrImage, { x: px(720), y: pageHeight - px(320), width: px(140), height: px(140) });
-    } else {
-      page.drawRectangle({ x: px(720), y: pageHeight - px(320), width: px(140), height: px(140), borderWidth: px(2), borderColor: rgb(0.3, 0.3, 0.3) });
+      page.drawText(qrBillNo.lines[0], { x: px(790) - monoFont.widthOfTextAtSize(qrBillNo.lines[0], qrBillNo.fontSize) / 2, y: yFromTop(labelTop, qrLabelY, qrBillNo.fontSize), size: qrBillNo.fontSize, font: monoFont, color: rgb(0.07, 0.07, 0.07) });
+      page.drawRectangle({ x: 0, y: labelBottomY, width: pageWidth, height: px(60), color: rgb(0.94, 0.94, 0.94) });
+      page.drawLine({ start: { x: 0, y: labelBottomY + px(60) }, end: { x: pageWidth, y: labelBottomY + px(60) }, thickness: px(4), color: rgb(0.07, 0.07, 0.07) });
+      page.drawText(getFooterCode(bill.billNo), { x: px(40), y: yFromTop(labelTop, 560 + LABEL_BOTTOM_EXTRA, px(20)), size: px(20), font: monoFont, color: rgb(0.07, 0.07, 0.07) });
+      page.drawText(String(absoluteIndex + 1), { x: pageWidth - px(32), y: yFromTop(labelTop, 560 + LABEL_BOTTOM_EXTRA, px(18)), size: px(18), font: textFont, color: rgb(0.42, 0.42, 0.42) });
     }
-
-    page.drawText(bill.billNo || "—", { x: px(790) - monoFont.widthOfTextAtSize(bill.billNo || "—", px(20)) / 2, y: yFromTop(344, px(20)), size: px(20), font: monoFont, color: rgb(0.07, 0.07, 0.07) });
-    page.drawRectangle({ x: 0, y: 0, width: pageWidth, height: px(60), color: rgb(0.94, 0.94, 0.94) });
-    page.drawLine({ start: { x: 0, y: px(60) }, end: { x: pageWidth, y: px(60) }, thickness: px(4), color: rgb(0.07, 0.07, 0.07) });
-    page.drawText(getFooterCode(bill.billNo), { x: px(40), y: yFromTop(560, px(20)), size: px(20), font: monoFont, color: rgb(0.07, 0.07, 0.07) });
-    page.drawText(String(index + 1), { x: pageWidth - px(32), y: yFromTop(560, px(18)), size: px(18), font: textFont, color: rgb(0.42, 0.42, 0.42) });
   }
 
   return pdfDoc.save();
@@ -643,8 +720,15 @@ function ReadOnlyField({ label, value }) {
 }
 
 function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
-  const { outlet, billNo, beat, salesman, date } = getPreviewTextLines(bill);
+  const { outlet, billNo, beat, salesman, date, qrBillNo } = getPreviewTextLines(bill);
   const metaStartY = 162 + outlet.lines.length * outlet.lineHeight + 24;
+  const dividerY = 448 + LABEL_BOTTOM_EXTRA;
+  const lowerSectionTop = 490 + LABEL_BOTTOM_EXTRA;
+  const lowerValueTop = 524 + LABEL_BOTTOM_EXTRA;
+  const qrTop = 172 + LABEL_BOTTOM_EXTRA / 2;
+  const qrLabelY = 360 + LABEL_BOTTOM_EXTRA / 2;
+  const footerTop = 540 + LABEL_BOTTOM_EXTRA;
+  const footerTextY = 578 + LABEL_BOTTOM_EXTRA;
 
   return (
     <div
@@ -652,7 +736,7 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
       style={{
         width,
         maxWidth: "100%",
-        aspectRatio: "3 / 2",
+        aspectRatio: `${LABEL_WIDTH_IN} / ${LABEL_HEIGHT_IN}`,
       }}
     >
       <svg
@@ -671,7 +755,7 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
           Mob No. {SUPPORT_MOBILE_NO}
         </text>
 
-        <line x1="670" y1="90" x2="670" y2="510" stroke="#666666" strokeWidth="3" strokeDasharray="10 10" />
+        <line x1="670" y1="90" x2="670" y2={510 + LABEL_BOTTOM_EXTRA} stroke="#666666" strokeWidth="3" strokeDasharray="10 10" />
 
         <text x="42" y="142" fill="#666666" fontSize="18" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.4">
           DELIVER TO
@@ -724,19 +808,19 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
           </text>
         ))}
 
-        <line x1="42" y1="448" x2="646" y2="448" stroke="#aaaaaa" strokeWidth="2" strokeDasharray="8 8" />
+        <line x1="42" y1={dividerY} x2="646" y2={dividerY} stroke="#aaaaaa" strokeWidth="2" strokeDasharray="8 8" />
 
-        <text x="42" y="490" fill="#666666" fontSize="16" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.2">
+        <text x="42" y={lowerSectionTop} fill="#666666" fontSize="16" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.2">
           SALESMAN
         </text>
-        <text x="330" y="490" fill="#666666" fontSize="16" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.2">
+        <text x="330" y={lowerSectionTop} fill="#666666" fontSize="16" fontWeight="700" fontFamily="'Helvetica Neue', Arial, sans-serif" letterSpacing="1.2">
           DATE
         </text>
         {salesman.lines.map((line, lineIndex) => (
           <text
             key={`salesman-${lineIndex}`}
             x="42"
-            y={524 + lineIndex * salesman.lineHeight}
+            y={lowerValueTop + lineIndex * salesman.lineHeight}
             fill="#111111"
             fontSize={salesman.fontSize}
             fontWeight="700"
@@ -749,7 +833,7 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
           <text
             key={`date-${lineIndex}`}
             x="330"
-            y={524 + lineIndex * date.lineHeight}
+            y={lowerValueTop + lineIndex * date.lineHeight}
             fill="#111111"
             fontSize={date.fontSize}
             fontWeight="700"
@@ -759,24 +843,26 @@ function LabelCard({ bill, index = 0, width = LABEL_PREVIEW_WIDTH }) {
           </text>
         ))}
 
-        <rect x="712" y="172" width="156" height="156" fill="#ffffff" stroke="#111111" strokeWidth="2" />
+        <rect x="712" y={qrTop} width="156" height="156" fill="#ffffff" stroke="#111111" strokeWidth="2" />
         {bill.qrDataUrl ? (
-          <image href={bill.qrDataUrl} x="720" y="180" width="140" height="140" preserveAspectRatio="xMidYMid meet" />
+          <image href={bill.qrDataUrl} x="720" y={qrTop + 8} width="140" height="140" preserveAspectRatio="xMidYMid meet" />
         ) : (
-          <text x="790" y="258" fill="#666666" fontSize="18" fontWeight="700" textAnchor="middle" fontFamily="'Helvetica Neue', Arial, sans-serif">
+          <text x="790" y={qrTop + 86} fill="#666666" fontSize="18" fontWeight="700" textAnchor="middle" fontFamily="'Helvetica Neue', Arial, sans-serif">
             QR
           </text>
         )}
-        <text x="790" y="360" fill="#111111" fontSize="20" fontWeight="700" fontFamily="'Courier New', monospace" textAnchor="middle">
-          {bill.billNo || "—"}
-        </text>
+        {qrBillNo.lines.map((line, lineIndex) => (
+          <text key={`qr-bill-${lineIndex}`} x="790" y={qrLabelY + lineIndex * qrBillNo.lineHeight} fill="#111111" fontSize={qrBillNo.fontSize} fontWeight="700" fontFamily="'Courier New', monospace" textAnchor="middle">
+            {line}
+          </text>
+        ))}
 
-        <rect x="0" y="540" width={LABEL_CANVAS_WIDTH} height="60" fill="#efefef" />
-        <line x1="0" y1="540" x2={LABEL_CANVAS_WIDTH} y2="540" stroke="#111111" strokeWidth="4" />
-        <text x="40" y="578" fill="#111111" fontSize="20" fontWeight="700" fontFamily="'Courier New', monospace" letterSpacing="1.8">
+        <rect x="0" y={footerTop} width={LABEL_CANVAS_WIDTH} height="60" fill="#efefef" />
+        <line x1="0" y1={footerTop} x2={LABEL_CANVAS_WIDTH} y2={footerTop} stroke="#111111" strokeWidth="4" />
+        <text x="40" y={footerTextY} fill="#111111" fontSize="20" fontWeight="700" fontFamily="'Courier New', monospace" letterSpacing="1.8">
           {getFooterCode(bill.billNo)}
         </text>
-        <text x="868" y="578" fill="#666666" fontSize="18" fontFamily="'Helvetica Neue', Arial, sans-serif" textAnchor="end">
+        <text x="868" y={footerTextY} fill="#666666" fontSize="18" fontFamily="'Helvetica Neue', Arial, sans-serif" textAnchor="end">
           {index + 1}
         </text>
       </svg>
@@ -1076,6 +1162,12 @@ export default function BillLabelsPanel() {
   };
 
   const doneBills = bills.filter((bill) => bill.status === "saving" || bill.status === "saved" || bill.status === "save_error");
+  const visiblePrintBills = printBills || doneBills;
+  const printSheets = visiblePrintBills.reduce((groups, bill, index) => {
+    if (index % 2 === 0) groups.push([bill]);
+    else groups[groups.length - 1].push(bill);
+    return groups;
+  }, []);
   const totalBills = bills.length;
   const processingCount = bills.filter((bill) => bill.status === "processing" || bill.status === "queued").length;
   const failedCount = bills.filter((bill) => bill.status === "error" || bill.status === "save_error").length;
@@ -1093,7 +1185,8 @@ export default function BillLabelsPanel() {
     <>
       <style>{`
         @page {
-          margin: 0.12in;
+          size: ${PAGE_WIDTH_IN}in ${PAGE_HEIGHT_IN}in;
+          margin: 0;
         }
 
         @media print {
@@ -1110,16 +1203,27 @@ export default function BillLabelsPanel() {
             position: fixed !important;
             top: 0;
             left: 0;
-            width: 100vw;
-            padding: 0.12in;
+            width: ${PAGE_WIDTH_IN}in;
+            padding: 0;
+          }
+
+          .print-sheet {
+            display: flex !important;
+            width: ${PAGE_WIDTH_IN}in;
+            height: ${PAGE_HEIGHT_IN}in;
+            flex-direction: column;
+            gap: ${PAGE_LABEL_GAP_IN}in;
+            padding: ${PAGE_VERTICAL_MARGIN_IN}in 0;
+            break-after: page;
+            page-break-after: always;
           }
 
           .label-card {
-            width: 3in !important;
-            min-height: 2in !important;
-            height: 2in !important;
+            width: ${LABEL_WIDTH_IN}in !important;
+            min-height: ${LABEL_HEIGHT_IN}in !important;
+            height: ${LABEL_HEIGHT_IN}in !important;
             break-inside: avoid;
-            margin: 0 0 0.12in 0 !important;
+            margin: 0 !important;
             box-shadow: none !important;
           }
 
@@ -1134,7 +1238,7 @@ export default function BillLabelsPanel() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Bill Labels</h1>
             <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              PDFs are processed in the browser from embedded page text, only label metadata is saved, and labels are generated as monochrome 3 × 2 inch PDFs at runtime.
+              PDFs are processed in the browser from embedded page text, only label metadata is saved, and labels are generated as monochrome {LABEL_WIDTH_IN} × {LABEL_HEIGHT_IN} inch labels with two labels on each {PAGE_WIDTH_IN} × {PAGE_HEIGHT_IN} inch page.
             </p>
           </div>
         </div>
@@ -1299,7 +1403,7 @@ export default function BillLabelsPanel() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Label Preview</div>
-                              <div className="mt-1 text-xs text-slate-500">Monochrome 3 × 2 inch layout. This is the live output that will be printed.</div>
+                              <div className="mt-1 text-xs text-slate-500">Monochrome {LABEL_WIDTH_IN} × {LABEL_HEIGHT_IN} inch layout. Two labels are placed on each {PAGE_WIDTH_IN} × {PAGE_HEIGHT_IN} inch print page.</div>
                             </div>
                             {previewLocked && (
                               <div className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 shadow-sm">
@@ -1511,8 +1615,12 @@ export default function BillLabelsPanel() {
       )}
 
       <div id="print-area" className="hidden">
-        {(printBills || doneBills).map((bill, index) => (
-          <LabelCard key={`${bill.id}-${index}`} bill={bill} index={index} />
+        {printSheets.map((sheet, sheetIndex) => (
+          <div key={`print-sheet-${sheetIndex}`} className="print-sheet">
+            {sheet.map((bill, index) => (
+              <LabelCard key={`${bill.id}-${sheetIndex}-${index}`} bill={bill} index={sheetIndex * 2 + index} />
+            ))}
+          </div>
         ))}
       </div>
     </>

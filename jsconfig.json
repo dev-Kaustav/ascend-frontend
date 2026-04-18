@@ -1,9 +1,28 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["*"]
     }
   },
-  "exclude": ["node_modules"]
+  "include": [
+    "app/**/*.js",
+    "app/**/*.jsx",
+    "components/**/*.js",
+    "components/**/*.jsx",
+    "lib/**/*.js",
+    "lib/**/*.jsx",
+    "*.js",
+    "*.jsx",
+    "*.mjs"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next"
+  ]
 }
