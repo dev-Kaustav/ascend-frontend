@@ -47,7 +47,7 @@ export default function AccountantOrderCreate() {
   const formatRupee = (value) => `₹${currencyFormatter.format(Number(value) || 0)}`;
   const orderGrandTotal = useMemo(() => getOrderTotal(items, skuMap), [items, skuMap]);
   const paymentPending = useMemo(() => {
-    if (paymentMode === "CREDIT") return 0;
+    if (paymentMode === "CREDIT") return orderGrandTotal;
     const received = Number(paymentAmount);
     const safeReceived = Number.isFinite(received) ? received : 0;
     return roundToTwo(Math.max(orderGrandTotal - safeReceived, 0));
@@ -340,7 +340,7 @@ export default function AccountantOrderCreate() {
               </div>
             ) : (
               <span className="text-sm font-semibold text-slate-500">
-                Payment received not required for credit orders.
+                Credit order. Pending amount: {formatRupee(orderGrandTotal)}
               </span>
             )}
           </div>

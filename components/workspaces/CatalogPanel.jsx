@@ -56,6 +56,11 @@ export default function AdminCatalog() {
         cell: ({ row }) => formatCurrency(row.original.mrp)
       },
       {
+        header: "Distributor Landing",
+        accessorKey: "distributor_landing_price",
+        cell: ({ row }) => formatCurrency(row.original.distributor_landing_price)
+      },
+      {
         header: "Discount %",
         accessorKey: "discount_percent",
         cell: ({ row }) => formatPercent(row.original.discount_percent)

@@ -92,7 +92,7 @@ export default function AdminSalesmen() {
       }
       const total = getOrderTotal(order);
       entry.total += total;
-      if (String(order.payment_status || "UNPAID").toUpperCase() !== "PAID") {
+      if (String(order.payment_status || "CREDIT").toUpperCase() !== "PAID") {
         entry.outstanding += total;
       }
       if (order.to_entity_id) {

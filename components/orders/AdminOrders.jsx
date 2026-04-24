@@ -8,6 +8,7 @@ import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
+import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -24,6 +25,7 @@ export default function AdminOrders() {
   const [pageSize, setPageSize] = useState(20);
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
     status: "ALL",
@@ -125,9 +127,16 @@ export default function AdminOrders() {
         header: "Order ID",
         accessorKey: "id",
         cell: ({ row }) => (
-          <Link className="font-semibold text-slate-900 hover:underline" href={`/app/orders/${row.original.id}`}>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedOrderId(row.original.id);
+            }}
+            className="font-semibold text-slate-900 hover:underline"
+          >
             #{row.original.id}
-          </Link>
+          </button>
         )
       },
       {
@@ -143,7 +152,7 @@ export default function AdminOrders() {
       {
         header: "Payment Status",
         accessorKey: "payment_status",
-        cell: ({ row }) => toTitleCase(row.original.payment_status || "UNPAID")
+        cell: ({ row }) => toTitleCase(row.original.payment_status || "CREDIT")
       },
       {
         header: "Total amount",
@@ -248,7 +257,8 @@ export default function AdminOrders() {
             }}
           >
             <option value="ALL">Status</option>
-            <option value="PENDING">Pending</option>
+            <option value="BOOKED">Booked</option>
+            <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>
@@ -264,7 +274,7 @@ export default function AdminOrders() {
             <option value="ALL">Payment</option>
             <option value="PAID">Paid</option>
             <option value="PARTIAL">Partial</option>
-            <option value="UNPAID">Unpaid</option>
+            <option value="CREDIT">Credit</option>
           </SelectBar>
           <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <InputBar
@@ -312,7 +322,12 @@ export default function AdminOrders() {
         }
       >
         <div className="max-w-full overflow-x-auto pb-2">
-          <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filters." />
+          <DataTable
+            columns={columns}
+            data={orders}
+            emptyLabel="No orders match the selected filters."
+            onRowClick={(order) => setSelectedOrderId(order.id)}
+          />
         </div>
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
@@ -338,6 +353,19 @@ export default function AdminOrders() {
           </div>
         </div>
       </SectionCard>
+      {selectedOrderId ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
+          <button
+            type="button"
+            aria-label="Close order detail"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setSelectedOrderId(null)}
+          />
+          <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
+            <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

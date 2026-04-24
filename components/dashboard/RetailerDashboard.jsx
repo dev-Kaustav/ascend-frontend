@@ -56,7 +56,7 @@ export default function RetailerDashboard() {
 
   const totals = useMemo(() => {
     const outstanding = orders.reduce((sum, order) => {
-      const status = String(order.payment_status || "UNPAID").toUpperCase();
+      const status = String(order.payment_status || "CREDIT").toUpperCase();
       if (status === "PAID") return sum;
       return sum + getOrderTotal(order);
     }, 0);
@@ -91,7 +91,7 @@ export default function RetailerDashboard() {
       {
         header: "Payment",
         accessorKey: "payment_status",
-        cell: ({ row }) => toTitleCase(row.original.payment_status || "UNPAID")
+        cell: ({ row }) => toTitleCase(row.original.payment_status || "CREDIT")
       }
     ],
     []

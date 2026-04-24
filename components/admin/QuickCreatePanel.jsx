@@ -67,6 +67,7 @@ const emptySku = () => ({
   name: "",
   brand_id: "",
   hsn_code: "",
+  distributor_landing_price: "",
   mrp: "",
   discount_amount: "",
   discount_percent: "",
@@ -535,6 +536,7 @@ export default function QuickCreatePanel({
       "name",
       "brand_id",
       "hsn_code",
+      "distributor_landing_price",
       "mrp",
       "discount_amount",
       "discount_percent",
@@ -558,6 +560,7 @@ export default function QuickCreatePanel({
     }
     const numericFields = [
       "mrp",
+      "distributor_landing_price",
       "discount_amount",
       "discount_percent",
       "rate",
@@ -585,6 +588,7 @@ export default function QuickCreatePanel({
           name: newSku.name,
           brand_id: Number(newSku.brand_id),
           hsn_code: newSku.hsn_code,
+          distributor_landing_price: toNumber(newSku.distributor_landing_price),
           mrp: toNumber(newSku.mrp),
           discount_amount: toNumber(newSku.discount_amount),
           discount_percent: toNumber(newSku.discount_percent),
@@ -951,6 +955,18 @@ export default function QuickCreatePanel({
                     step="0.01"
                     value={newSku.mrp}
                     onChange={(event) => updateSkuField("mrp", event.target.value)}
+                  />
+                </FieldRow>
+                <FieldRow id="sku-distributor-landing-price" label="Distributor landing price">
+                  <InputBar
+                    id="sku-distributor-landing-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newSku.distributor_landing_price}
+                    onChange={(event) =>
+                      setNewSku((prev) => ({ ...prev, distributor_landing_price: event.target.value }))
+                    }
                   />
                 </FieldRow>
                 <FieldRow id="sku-discount-percent" label="Discount %">

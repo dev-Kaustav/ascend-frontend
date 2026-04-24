@@ -53,7 +53,7 @@ export default function AdminDashboard() {
   const paymentStatusData = [
     { label: "Paid", value: paymentStatusCounts.PAID || 0, color: "#34d399" },
     { label: "Partial", value: paymentStatusCounts.PARTIAL || 0, color: "#f59e0b" },
-    { label: "Unpaid", value: paymentStatusCounts.UNPAID || 0, color: "#f97316" }
+    { label: "Credit", value: paymentStatusCounts.CREDIT || paymentStatusCounts.UNPAID || 0, color: "#f97316" }
   ];
 
   if (loading) {

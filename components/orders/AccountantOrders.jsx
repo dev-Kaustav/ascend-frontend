@@ -25,7 +25,7 @@ export default function AccountantOrders() {
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
-    status: "PENDING"
+    status: "BOOKED"
   });
   const { notify } = useToast();
 
@@ -203,7 +203,8 @@ export default function AccountantOrders() {
             }}
           >
             <option value="ALL">All Statuses</option>
-            <option value="PENDING">Pending</option>
+            <option value="BOOKED">Booked</option>
+            <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>

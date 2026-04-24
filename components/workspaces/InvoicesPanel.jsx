@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
@@ -49,7 +49,6 @@ export default function AdminInvoices() {
         const params = new URLSearchParams();
         params.set("limit", String(pageSize));
         params.set("offset", String((page - 1) * pageSize));
-        params.set("has_invoice", "true");
         if (filters.search) params.set("search", filters.search);
         if (filters.status !== "ALL") params.set("status", filters.status);
         if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
@@ -92,7 +91,7 @@ export default function AdminInvoices() {
     const totalInvoices = total;
     const totalBilled = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
     const paidInvoices = orders.filter(
-      (order) => String(order.payment_status || "UNPAID").toUpperCase() === "PAID"
+      (order) => String(order.payment_status || "CREDIT").toUpperCase() === "PAID"
     ).length;
     return { totalInvoices, totalBilled, paidInvoices };
   }, [orders, total]);
@@ -104,7 +103,7 @@ export default function AdminInvoices() {
         accessorKey: "invoice_number",
         cell: ({ row }) => (
           <Link className="font-semibold text-slate-900 hover:underline" href={`/app/orders/${row.original.id}`}>
-            {row.original.invoice_number}
+            {row.original.invoice_number || `Order #${row.original.id}`}
           </Link>
         )
       },
@@ -124,7 +123,7 @@ export default function AdminInvoices() {
       {
         header: "Payment",
         accessorKey: "payment_status",
-        cell: ({ row }) => toTitleCase(row.original.payment_status || "UNPAID")
+        cell: ({ row }) => toTitleCase(row.original.payment_status || "CREDIT")
       },
       {
         header: "Amount",
@@ -135,6 +134,29 @@ export default function AdminInvoices() {
         header: "Date",
         accessorKey: "created_at",
         cell: ({ row }) => formatDate(getOrderDate(row.original))
+      },
+      {
+        header: "PDF",
+        accessorKey: "pdf",
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={async () => {
+              const { blob, filename } = await apiFetchBlob(apiEndpoints.orders.invoicePdf(row.original.id));
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = filename || `invoice-${row.original.id}.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              window.URL.revokeObjectURL(url);
+            }}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600"
+          >
+            Download
+          </button>
+        )
       }
     ],
     [retailerMap]
@@ -200,7 +222,8 @@ export default function AdminInvoices() {
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Status</option>
-            <option value="PENDING">Pending</option>
+            <option value="BOOKED">Booked</option>
+            <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="RETURNED">Returned</option>
@@ -217,7 +240,7 @@ export default function AdminInvoices() {
             <option value="ALL">Payment</option>
             <option value="PAID">Paid</option>
             <option value="PARTIAL">Partial</option>
-            <option value="UNPAID">Unpaid</option>
+            <option value="CREDIT">Credit</option>
           </select>
         </div>
       </SectionCard>

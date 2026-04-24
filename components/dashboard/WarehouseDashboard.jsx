@@ -18,7 +18,7 @@ export default function WarehouseDashboard() {
       try {
         const summary = await apiFetchCached(apiEndpoints.admin.orderStatusSummary, { ttl: 60000 });
         if (!active) return;
-        setPendingTotal(summary?.PENDING || 0);
+        setPendingTotal(summary?.BOOKED || summary?.PENDING || 0);
         setOutForDeliveryTotal(summary?.OUT_FOR_DELIVERY || 0);
         setError("");
       } catch (err) {

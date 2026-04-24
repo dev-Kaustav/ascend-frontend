@@ -221,7 +221,7 @@ export default function AdminAccounting() {
   const outstandingByRetailer = useMemo(() => {
     const grouped = new Map();
     orders.forEach((order) => {
-      const status = String(order.payment_status || "UNPAID").toUpperCase();
+      const status = String(order.payment_status || "CREDIT").toUpperCase();
       if (status === "PAID") return;
       const retailer = retailerMap.get(order.to_entity_id) || order.to_entity_name || order.to_entity_id || "Retailer";
       const label = typeof retailer === "string" ? retailer : `Retailer ${retailer}`;
