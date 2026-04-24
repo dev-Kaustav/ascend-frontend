@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
-import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 
@@ -13,7 +13,7 @@ function getOrderDate(order) {
 
 function formatTaxes(taxes) {
   if (!taxes || taxes.length === 0) return "—";
-  return taxes.map((tax) => `${tax.tax_type} ${tax.rate}%`).join(", ");
+  return taxes.map((tax) => `${tax.tax_type} ${formatPercent(tax.rate)}`).join(", ");
 }
 
 export default function AdminOrderDetail() {

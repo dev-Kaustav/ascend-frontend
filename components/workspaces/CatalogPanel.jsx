@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
-import { formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 
 export default function AdminCatalog() {
@@ -53,37 +53,37 @@ export default function AdminCatalog() {
       {
         header: "MRP",
         accessorKey: "mrp",
-        cell: ({ row }) => formatNumber(row.original.mrp)
+        cell: ({ row }) => formatCurrency(row.original.mrp)
       },
       {
         header: "Discount %",
         accessorKey: "discount_percent",
-        cell: ({ row }) => formatNumber(row.original.discount_percent)
+        cell: ({ row }) => formatPercent(row.original.discount_percent)
       },
       {
         header: "Rate",
         accessorKey: "rate",
-        cell: ({ row }) => formatNumber(row.original.rate)
+        cell: ({ row }) => formatCurrency(row.original.rate)
       },
       {
         header: "SGST %",
         accessorKey: "sgst_percent",
-        cell: ({ row }) => formatNumber(row.original.sgst_percent)
+        cell: ({ row }) => formatPercent(row.original.sgst_percent)
       },
       {
         header: "CGST %",
         accessorKey: "cgst_percent",
-        cell: ({ row }) => formatNumber(row.original.cgst_percent)
+        cell: ({ row }) => formatPercent(row.original.cgst_percent)
       },
       {
         header: "IGST %",
         accessorKey: "igst_percent",
-        cell: ({ row }) => formatNumber(row.original.igst_percent)
+        cell: ({ row }) => formatPercent(row.original.igst_percent)
       },
       {
         header: "Amount",
         accessorKey: "amount",
-        cell: ({ row }) => formatNumber(row.original.amount)
+        cell: ({ row }) => formatCurrency(row.original.amount)
       },
       {
         header: "Weight",

@@ -2,6 +2,7 @@
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import ChartCard from "@/components/charts/ChartCard";
+import { formatNumber } from "@/lib/format";
 
 export default function PieChartCard({ title, subtitle, data, height }) {
   const hasData = Array.isArray(data) && data.length > 0;
@@ -17,6 +18,7 @@ export default function PieChartCard({ title, subtitle, data, height }) {
               ))}
             </Pie>
             <Tooltip
+              formatter={(value) => formatNumber(value)}
               contentStyle={{ borderRadius: 12, borderColor: "#e2e8f0" }}
               labelStyle={{ fontSize: 12, color: "#475569" }}
             />

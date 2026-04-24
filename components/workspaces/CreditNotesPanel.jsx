@@ -15,7 +15,8 @@ function getCreditNoteAmount(note) {
     if (!Number.isNaN(parsed)) return parsed;
   }
   if (!note.items) return 0;
-  return note.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
+  const total = note.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
+  return Math.round((total + Number.EPSILON) * 100) / 100;
 }
 
 export default function AdminCreditNotes() {

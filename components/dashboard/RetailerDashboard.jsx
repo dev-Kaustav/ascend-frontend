@@ -8,12 +8,18 @@ import StatCard from "@/components/layout/StatCard";
 import DataTable from "@/components/tables/DataTable";
 
 function getOrderTotal(order) {
+  if (!order) return 0;
+  if (typeof order.total_amount === "number") return order.total_amount;
+  if (order.total_amount !== undefined && order.total_amount !== null) {
+    const parsed = Number(order.total_amount);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
   if (!order?.items?.length) return 0;
-  return order.items.reduce((sum, item) => {
+  const total = order.items.reduce((sum, item) => {
     const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
-    const taxes = (item.taxes || []).reduce((taxSum, tax) => taxSum + base * ((tax.rate || 0) / 100), 0);
-    return sum + base + taxes;
+    return sum + base;
   }, 0);
+  return Math.round((total + Number.EPSILON) * 100) / 100;
 }
 
 function getOrderDate(order) {
@@ -165,7 +171,7 @@ export default function RetailerDashboard() {
                 <div key={item.id || item.sku_id} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
                   <p className="text-sm font-semibold text-slate-900">SKU {item.sku_id}</p>
                   <p className="text-xs text-slate-500">
-                    Qty {item.quantity} • {formatCurrency(item.unit_price)} • Discount {formatCurrency(item.discount_amount || 0)}
+                    Qty {formatNumber(item.quantity)} • {formatCurrency(item.unit_price)} • Discount {formatCurrency(item.discount_amount || 0)}
                   </p>
                 </div>
               ))}

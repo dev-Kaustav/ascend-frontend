@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatNumber } from "@/lib/format";
 import {
   getLineTaxAmount,
-  getLineTotal
+  getLineTotal,
+  roundToTwo
 } from "@/lib/orders";
 
 const inputClassName =
@@ -89,7 +89,8 @@ export default function OrderLineItemsTable({
       ),
     [items, skuMap]
   );
-  const grandTotal = Math.max(orderBaseTotal - totalDiscount, 0) + taxTotal;
+  const grandTotal = roundToTwo(Math.max(orderBaseTotal - totalDiscount, 0));
+  const preGstTotal = roundToTwo(Math.max(grandTotal - taxTotal, 0));
   const resolveFromPercent = (percentValue, listPrice) => {
     const safePercent = Math.max(0, Math.min(100, parseNumber(percentValue)));
     const discount = roundTo((safePercent / 100) * listPrice, 2);
@@ -214,7 +215,7 @@ export default function OrderLineItemsTable({
           {items.map((item, index) => {
             const sku = skuMap.get(String(item.skuId));
             const mrpValue = getSkuListPrice(sku);
-            const lineTotalValue = sku ? formatNumber(getLineTotal(item, sku)) : "";
+            const lineTotalValue = sku ? currencyFormatter.format(getLineTotal(item, sku)) : "";
             return (
               <div key={`line-${index}`} className={`${gridClassName} items-center`}>
                 <div className="flex items-center text-xs font-semibold text-slate-500">
@@ -276,7 +277,7 @@ export default function OrderLineItemsTable({
                 />
                 <div className={currencyCellClass}>
                   {mrpValue ? <span className={currencySymbolClass}>₹</span> : null}
-                  <span>{mrpValue ? formatNumber(mrpValue) : "—"}</span>
+                  <span>{mrpValue ? currencyFormatter.format(Number(mrpValue) || 0) : "—"}</span>
                 </div>
                 <input
                   type="number"
@@ -379,6 +380,12 @@ export default function OrderLineItemsTable({
             <span className="md:col-span-7 text-right text-slate-500">(-) Total discount</span>
             <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(totalDiscount)}
+            </span>
+          </div>
+          <div className={totalsRowClassName}>
+            <span className="md:col-span-7 text-right text-slate-500">Pre-GST total</span>
+            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+              {formatRupee(preGstTotal)}
             </span>
           </div>
           <div className={totalsRowClassName}>

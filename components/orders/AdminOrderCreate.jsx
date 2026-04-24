@@ -11,7 +11,7 @@ import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { getAccessToken, getRoleFromToken } from "@/lib/auth";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
-import { createEmptyOrderItem, getOrderTotal, getSkuGstRate } from "@/lib/orders";
+import { createEmptyOrderItem, getOrderTotal, getSkuGstRate, roundToTwo } from "@/lib/orders";
 import { useToast } from "@/components/ui/ToastProvider";
 
 export default function AdminOrderCreate() {
@@ -63,7 +63,7 @@ export default function AdminOrderCreate() {
     if (paymentMode === "CREDIT") return 0;
     const received = Number(paymentAmount);
     const safeReceived = Number.isFinite(received) ? received : 0;
-    return Math.max(orderGrandTotal - safeReceived, 0);
+    return roundToTwo(Math.max(orderGrandTotal - safeReceived, 0));
   }, [paymentAmount, paymentMode, orderGrandTotal]);
 
   async function handleSubmit(event) {
@@ -104,7 +104,7 @@ export default function AdminOrderCreate() {
           sku_id: skuId,
           quantity,
           unit_price: unitPrice,
-          discount_amount: discountPerUnit * quantity,
+          discount_amount: roundToTwo(discountPerUnit * quantity),
           taxes: gstRate > 0 ? [{ tax_type: "GST", rate: gstRate }] : []
         };
       })

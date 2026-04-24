@@ -184,7 +184,7 @@ export default function QuickCreatePanel({
 
   const formatNumber = (value) => {
     if (value === null) return "";
-    return String(Math.round(value * 100) / 100);
+    return (Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2);
   };
 
   const getMrpBase = (sku) => {

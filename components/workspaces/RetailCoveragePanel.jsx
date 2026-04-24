@@ -28,11 +28,11 @@ function getOrderTotal(order) {
     if (!Number.isNaN(parsed)) return parsed;
   }
   if (!order?.items?.length) return 0;
-  return order.items.reduce((sum, item) => {
+  const total = order.items.reduce((sum, item) => {
     const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
-    const taxes = (item.taxes || []).reduce((taxSum, tax) => taxSum + base * ((tax.rate || 0) / 100), 0);
-    return sum + base + taxes;
+    return sum + base;
   }, 0);
+  return Math.round((total + Number.EPSILON) * 100) / 100;
 }
 
 export default function AdminRetailCoverage() {
