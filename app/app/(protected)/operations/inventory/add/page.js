@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiEndpoints, apiFetch } from "@/lib/api";
@@ -22,13 +22,30 @@ export default function WarehouseInventoryAdd() {
   const router = useRouter();
   const [brandId, setBrandId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
-  const { items, updateItem, addItem, removeItem } = useLineItems(emptyItem);
+  const { items, setItems, updateItem, addItem, removeItem } = useLineItems(emptyItem);
   const { brands, skus, warehouses, warehouseManagers, loading, error: lookupError, refreshLookups } = useAdminLookups({
     errorMessage: "Unable to load inventory form data."
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { notify } = useToast();
+
+  const filteredSkus = useMemo(() => {
+    if (!brandId) return [];
+    return skus.filter((sku) => String(sku.brand_id) === String(brandId));
+  }, [brandId, skus]);
+
+  useEffect(() => {
+    const validSkuIds = new Set(filteredSkus.map((sku) => String(sku.id)));
+    setItems((prev) =>
+      prev.map((item) => {
+        if (!item.skuId || validSkuIds.has(String(item.skuId))) {
+          return item;
+        }
+        return { ...item, skuId: "" };
+      })
+    );
+  }, [filteredSkus, setItems]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -60,6 +77,12 @@ export default function WarehouseInventoryAdd() {
 
     if (!payloadItems.length || payloadItems.length !== items.length) {
       setError("Each line item needs SKU and quantity.");
+      return;
+    }
+
+    const validSkuIds = new Set(filteredSkus.map((sku) => Number(sku.id)));
+    if (payloadItems.some((item) => !validSkuIds.has(item.sku_id))) {
+      setError("Each line item SKU must belong to the selected brand.");
       return;
     }
 
@@ -147,10 +170,11 @@ export default function WarehouseInventoryAdd() {
                   <SelectBar
                     value={item.skuId}
                     onChange={(event) => updateItem(index, { skuId: event.target.value })}
+                    disabled={!brandId}
                     size="sm"
                   >
-                    <option value="">Select SKU</option>
-                    {skus.map((sku) => (
+                    <option value="">{brandId ? "Select SKU" : "Select brand first"}</option>
+                    {filteredSkus.map((sku) => (
                       <option key={sku.id} value={sku.id}>
                         {sku.name}
                       </option>
