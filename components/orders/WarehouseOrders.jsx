@@ -5,6 +5,7 @@ import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -20,8 +21,9 @@ export default function WarehouseOrders() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [filters, setFilters] = useState({ status: "BOOKED" });
+  const [filters, setFilters] = useState({ status: "PENDING" });
   const [updates, setUpdates] = useState({});
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -146,32 +148,19 @@ export default function WarehouseOrders() {
         cell: ({ row }) => {
           const orderId = row.original.id;
           const rowUpdate = updates[orderId] || {};
+          const showDriverPicker = rowUpdate.status === "READY_TO_SHIP";
           return (
             <div className="flex flex-col gap-2 text-xs">
-              <select
-                value={rowUpdate.deliveryDriverId || ""}
-                onChange={(event) => updateRow(orderId, { deliveryDriverId: event.target.value })}
-                className="rounded-full border border-slate-200 bg-white px-2 py-1"
-              >
-                <option value="">Assign driver</option>
-                {drivers.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.name}
-                  </option>
-                ))}
-              </select>
               <div className="flex items-center gap-2">
                 <select
                   value={rowUpdate.status || ""}
-                  onChange={(event) => updateRow(orderId, { status: event.target.value })}
+                  onChange={(event) => updateRow(orderId, { status: event.target.value, deliveryDriverId: "" })}
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
                 >
                   <option value="">Set status</option>
                   <option value="READY_TO_SHIP">Ready to ship</option>
                   <option value="OUT_FOR_DELIVERY">Out for delivery</option>
-                  <option value="DELIVERED">Delivered</option>
                   <option value="RETURNED">Returned</option>
-                  <option value="CANCELLED">Cancelled</option>
                 </select>
                 <button
                   type="button"
@@ -182,41 +171,20 @@ export default function WarehouseOrders() {
                   {rowUpdate.saving ? "Saving" : "Update"}
                 </button>
               </div>
-              {rowUpdate.status === "DELIVERED" ? (
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <select
-                    value={rowUpdate.paymentStatus || ""}
-                    onChange={(event) => updateRow(orderId, { paymentStatus: event.target.value })}
-                    className="rounded-full border border-slate-200 bg-white px-2 py-1"
-                  >
-                    <option value="">Payment status</option>
-                    <option value="PAID">Paid</option>
-                    <option value="PARTIAL">Partial</option>
-                    <option value="CREDIT">Credit</option>
-                  </select>
-                  <select
-                    value={rowUpdate.paymentMode || ""}
-                    onChange={(event) => updateRow(orderId, { paymentMode: event.target.value })}
-                    className="rounded-full border border-slate-200 bg-white px-2 py-1"
-                    disabled={rowUpdate.paymentStatus === "CREDIT"}
-                  >
-                    <option value="">Mode</option>
-                    <option value="CASH">Cash</option>
-                    <option value="UPI">UPI</option>
-                    <option value="CHEQUE">Cheque</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={rowUpdate.paymentAmount || ""}
-                    onChange={(event) => updateRow(orderId, { paymentAmount: event.target.value })}
-                    className="rounded-full border border-slate-200 bg-white px-2 py-1"
-                    placeholder="Amount"
-                    disabled={rowUpdate.paymentStatus === "CREDIT"}
-                  />
-                </div>
-              ) : null}
+              {showDriverPicker && (
+                <select
+                  value={rowUpdate.deliveryDriverId || ""}
+                  onChange={(event) => updateRow(orderId, { deliveryDriverId: event.target.value })}
+                  className="rounded-full border border-slate-200 bg-white px-2 py-1"
+                >
+                  <option value="">Assign driver (required)</option>
+                  {drivers.map((driver) => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {rowUpdate.error ? <span className="text-rose-500">{rowUpdate.error}</span> : null}
             </div>
           );
@@ -267,7 +235,7 @@ export default function WarehouseOrders() {
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">All Statuses</option>
-            <option value="BOOKED">Booked</option>
+            <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
@@ -297,7 +265,7 @@ export default function WarehouseOrders() {
           </select>
         }
       >
-        <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filter." />
+        <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filter." onRowClick={(order) => setSelectedOrderId(order.id)} />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
             Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
@@ -322,6 +290,23 @@ export default function WarehouseOrders() {
           </div>
         </div>
       </SectionCard>
+      {selectedOrderId ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
+          <button
+            type="button"
+            aria-label="Close order detail"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setSelectedOrderId(null)}
+          />
+          <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
+            <OrderDetailPanel
+              orderId={selectedOrderId}
+              onClose={() => setSelectedOrderId(null)}
+              onOrderUpdate={() => loadOrders(false)}
+            />
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

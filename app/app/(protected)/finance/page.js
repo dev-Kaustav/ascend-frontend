@@ -1,48 +1,73 @@
 "use client";
 
+import { useState } from "react";
 import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
+import WarehouseSelector from "@/components/ui/WarehouseSelector";
 import AccountingPanel from "@/components/workspaces/AccountingPanel";
 import InvoicesPanel from "@/components/workspaces/InvoicesPanel";
 import CreditNotesPanel from "@/components/workspaces/CreditNotesPanel";
 import CashCollectionPanel from "@/components/workspaces/CashCollectionPanel";
+import OutstandingPanel from "@/components/workspaces/OutstandingPanel";
+import DailySalesPanel from "@/components/workspaces/DailySalesPanel";
 
 export default function FinanceWorkspacePage() {
+  const [warehouseId, setWarehouseId] = useState(null);
+
   const tabs = [
     {
       key: "overview",
       label: "Overview",
       description: "Accounting summary, payment status, and financial health at a glance.",
       roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <AccountingPanel />
+      render: () => <AccountingPanel warehouseId={warehouseId} />
     },
     {
       key: "invoices",
       label: "Invoices",
       description: "Invoice totals, payment state, and order-to-invoice tracking.",
       roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <InvoicesPanel />
+      render: () => <InvoicesPanel warehouseId={warehouseId} />
     },
     {
       key: "credit-notes",
       label: "Credit Notes",
       description: "Issued credits and adjustments grouped with finance operations.",
       roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <CreditNotesPanel />
+      render: () => <CreditNotesPanel warehouseId={warehouseId} />
     },
     {
-      key: "cash-collection",
-      label: "Cash Collection",
-      description: "Payment collection and receivables follow-through in one place.",
+      key: "outstanding",
+      label: "Outstanding",
+      description: "Per-order outstanding amounts, recovery tracking, and aging analysis.",
       roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <CashCollectionPanel />
+      render: () => <OutstandingPanel warehouseId={warehouseId} />
+    },
+    {
+      key: "collection",
+      label: "Collection",
+      description: "Payment collection by rider, mode breakdown, and recovery recording.",
+      roles: ["ADMIN", "ACCOUNTANT"],
+      render: () => <CashCollectionPanel warehouseId={warehouseId} />
+    },
+    {
+      key: "daily-sales",
+      label: "Daily Sales",
+      description: "Daily sales summary with salesman-level delivery and cancellation breakdown.",
+      roles: ["ADMIN", "ACCOUNTANT"],
+      render: () => <DailySalesPanel warehouseId={warehouseId} />
     }
   ];
 
   return (
-    <WorkspaceTabs
-      title="Finance"
-      subtitle="Accounting, invoices, credits, and collections organized into a single finance workspace."
-      tabs={tabs}
-    />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <WarehouseSelector value={warehouseId} onChange={setWarehouseId} />
+      </div>
+      <WorkspaceTabs
+        title="Finance"
+        subtitle="Accounting, invoices, credits, outstanding, collections, and daily sales."
+        tabs={tabs}
+      />
+    </div>
   );
 }

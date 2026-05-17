@@ -90,16 +90,18 @@ const ENTITY_LABELS = {
   warehouse: "Warehouse",
   retailer: "Retailer",
   brand: "Brand",
-  sku: "SKU"
+  sku: "SKU",
+  beat: "Beat"
 };
 
 export default function QuickCreatePanel({
   title = "Quick create",
   subtitle = "Add missing entities without leaving this form.",
-  entities = ["warehouse", "retailer", "brand", "sku"],
+  entities = ["warehouse", "retailer", "brand", "sku", "beat"],
   defaultEntity,
   salesmen = [],
   warehouseManagers = [],
+  warehouses = [],
   brands = [],
   onCreated,
   headerError
@@ -133,6 +135,7 @@ export default function QuickCreatePanel({
     salesman_id: ""
   });
   const [newSku, setNewSku] = useState(emptySku());
+  const [newBeat, setNewBeat] = useState({ name: "", warehouse_id: "" });
   const { notify } = useToast();
 
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
@@ -140,6 +143,7 @@ export default function QuickCreatePanel({
   const canManageBrand = useMemo(() => role === "ADMIN" || role === "ACCOUNTANT", [role]);
   const canManageRetailer = useMemo(() => role === "ADMIN", [role]);
   const canManageSku = useMemo(() => role === "ADMIN" || role === "WAREHOUSE_MANAGER" || role === "ACCOUNTANT", [role]);
+  const canManageBeat = useMemo(() => role === "ADMIN", [role]);
 
   const entityOptions = useMemo(() => {
     const options = [];
@@ -154,6 +158,9 @@ export default function QuickCreatePanel({
     }
     if (entities.includes("sku") && canManageSku) {
       options.push({ value: "sku", label: ENTITY_LABELS.sku });
+    }
+    if (entities.includes("beat") && canManageBeat) {
+      options.push({ value: "beat", label: ENTITY_LABELS.beat });
     }
     return options;
   }, [canManageBrand, canManageRetailer, canManageSku, canManageWarehouse, entities]);
@@ -613,6 +620,29 @@ export default function QuickCreatePanel({
       }
     } catch (err) {
       setCreateError(err?.payload?.detail || err?.message || "Unable to create SKU.");
+    }
+  }
+
+  async function handleCreateBeat(event) {
+    event.preventDefault();
+    setCreateError("");
+    if (!newBeat.name.trim()) {
+      setCreateError("Beat name is required.");
+      return;
+    }
+    try {
+      await apiFetch(apiEndpoints.admin.beats, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newBeat.name.trim(),
+          warehouse_id: newBeat.warehouse_id ? Number(newBeat.warehouse_id) : null,
+        }),
+      });
+      setNewBeat({ name: "", warehouse_id: "" });
+      notify("Beat created.");
+      if (onCreated) await onCreated();
+    } catch (err) {
+      setCreateError(err?.payload?.detail || err?.message || "Unable to create beat.");
     }
   }
 
@@ -1135,6 +1165,35 @@ export default function QuickCreatePanel({
                 className="w-full rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
               >
                 Create SKU
+              </button>
+            </form>
+          )}
+          {selectedEntity === "beat" && (
+            <form onSubmit={handleCreateBeat} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Beat</p>
+              <FieldRow id="beat-name" label="Beat name">
+                <InputBar
+                  id="beat-name"
+                  type="text"
+                  value={newBeat.name}
+                  onChange={(e) => setNewBeat((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="e.g. GGN GTM-13"
+                />
+              </FieldRow>
+              <FieldRow id="beat-warehouse" label="Warehouse (optional)">
+                <SelectBar
+                  id="beat-warehouse"
+                  value={newBeat.warehouse_id}
+                  onChange={(e) => setNewBeat((prev) => ({ ...prev, warehouse_id: e.target.value }))}
+                >
+                  <option value="">Select warehouse</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </SelectBar>
+              </FieldRow>
+              <button type="submit" className="w-full rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+                Create Beat
               </button>
             </form>
           )}

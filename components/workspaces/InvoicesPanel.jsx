@@ -222,7 +222,7 @@ export default function AdminInvoices() {
             className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
           >
             <option value="ALL">Status</option>
-            <option value="BOOKED">Booked</option>
+            <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>

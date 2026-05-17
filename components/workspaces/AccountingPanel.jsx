@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
+import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import StatCard from "@/components/layout/StatCard";
@@ -60,6 +61,8 @@ export default function AdminAccounting() {
   const [error, setError] = useState("");
   const [paymentsError, setPaymentsError] = useState("");
   const [creditsError, setCreditsError] = useState("");
+  const [paymentsDateRange, setPaymentsDateRange] = useState({ from: "", to: "" });
+  const [creditsDateRange, setCreditsDateRange] = useState({ from: "", to: "" });
 
   useEffect(() => {
     let active = true;
@@ -108,6 +111,8 @@ export default function AdminAccounting() {
         const params = new URLSearchParams();
         params.set("limit", String(paymentsPageSize));
         params.set("offset", String((paymentsPage - 1) * paymentsPageSize));
+        if (paymentsDateRange.from) params.set("from_date", paymentsDateRange.from);
+        if (paymentsDateRange.to) params.set("to_date", paymentsDateRange.to);
         const response = await apiFetch(`${apiEndpoints.admin.accountingPayments}?${params.toString()}`);
         if (!active) return;
         const items = response?.items || response || [];
@@ -127,7 +132,7 @@ export default function AdminAccounting() {
     return () => {
       active = false;
     };
-  }, [paymentsPage, paymentsPageSize]);
+  }, [paymentsPage, paymentsPageSize, paymentsDateRange]);
 
   useEffect(() => {
     let active = true;
@@ -137,6 +142,8 @@ export default function AdminAccounting() {
         const params = new URLSearchParams();
         params.set("limit", String(creditsPageSize));
         params.set("offset", String((creditsPage - 1) * creditsPageSize));
+        if (creditsDateRange.from) params.set("from_date", creditsDateRange.from);
+        if (creditsDateRange.to) params.set("to_date", creditsDateRange.to);
         const response = await apiFetch(`${apiEndpoints.admin.accountingCredits}?${params.toString()}`);
         if (!active) return;
         const items = response?.items || response || [];
@@ -155,7 +162,7 @@ export default function AdminAccounting() {
     return () => {
       active = false;
     };
-  }, [creditsPage, creditsPageSize]);
+  }, [creditsPage, creditsPageSize, creditsDateRange]);
 
   const totals = useMemo(() => {
     const receivables = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
@@ -352,20 +359,27 @@ export default function AdminAccounting() {
         title="Payments"
         subtitle="Captured collections"
         actions={
-          <select
-            value={paymentsPageSize}
-            onChange={(event) => {
-              setPaymentsPageSize(Number(event.target.value));
-              setPaymentsPage(1);
-            }}
-            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
-          >
-            {[10, 20, 50, 100].map((size) => (
-              <option key={size} value={size}>
-                {size} / page
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeFilter
+              from={paymentsDateRange.from}
+              to={paymentsDateRange.to}
+              onChange={(r) => { setPaymentsDateRange(r); setPaymentsPage(1); }}
+            />
+            <select
+              value={paymentsPageSize}
+              onChange={(event) => {
+                setPaymentsPageSize(Number(event.target.value));
+                setPaymentsPage(1);
+              }}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
         }
       >
         {paymentsError ? (
@@ -410,20 +424,27 @@ export default function AdminAccounting() {
         title="Credit Notes"
         subtitle="Issued credits"
         actions={
-          <select
-            value={creditsPageSize}
-            onChange={(event) => {
-              setCreditsPageSize(Number(event.target.value));
-              setCreditsPage(1);
-            }}
-            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
-          >
-            {[10, 20, 50, 100].map((size) => (
-              <option key={size} value={size}>
-                {size} / page
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeFilter
+              from={creditsDateRange.from}
+              to={creditsDateRange.to}
+              onChange={(r) => { setCreditsDateRange(r); setCreditsPage(1); }}
+            />
+            <select
+              value={creditsPageSize}
+              onChange={(event) => {
+                setCreditsPageSize(Number(event.target.value));
+                setCreditsPage(1);
+              }}
+              className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size} / page
+                </option>
+              ))}
+            </select>
+          </div>
         }
       >
         {creditsError ? (

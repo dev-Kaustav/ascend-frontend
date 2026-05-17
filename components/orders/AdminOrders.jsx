@@ -173,12 +173,9 @@ export default function AdminOrders() {
         }
       },
       {
-        header: "Salesman",
-        accessorKey: "salesman_id",
-        cell: ({ row }) => {
-          const salesman = salesmanMap.get(row.original.salesman_id);
-          return salesman?.name || row.original.salesman_name || "—";
-        }
+        header: "Beat",
+        accessorKey: "beat_name",
+        cell: ({ row }) => row.original.beat_name || "—"
       },
       {
         header: "Salesman Phone",
@@ -257,7 +254,7 @@ export default function AdminOrders() {
             }}
           >
             <option value="ALL">Status</option>
-            <option value="BOOKED">Booked</option>
+            <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
@@ -362,7 +359,7 @@ export default function AdminOrders() {
             onClick={() => setSelectedOrderId(null)}
           />
           <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
-            <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
+            <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onOrderUpdate={() => loadOrders(false)} />
           </aside>
         </div>
       ) : null}

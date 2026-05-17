@@ -211,15 +211,27 @@ function LabelIcon() {
   );
 }
 
+function UploadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 4v12M8 8l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const NAV_ICON_MAP = {
   Dashboard: DashboardIcon,
   Orders: OrdersIcon,
   Operations: PackageIcon,
   Finance: CalculatorIcon,
   "Master Data": LayersIcon,
+  Imports: UploadIcon,
   Admin: ShieldIcon,
   Profile: PersonIcon,
-  "Bill Labels": LabelIcon
+  "Bill Labels": LabelIcon,
+  "Outlet Finder": PinIcon,
+  "Tracking": PinIcon,
 };
 
 function NavGlyph({ label }) {
@@ -252,7 +264,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f7] text-slate-900 app-shell">
+    <div className="min-h-screen bg-canvas text-slate-900 app-shell">
       {sidebarOpen ? (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
@@ -261,7 +273,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-white/10 bg-[#101116] transition-[transform,width] duration-200 ease-out ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-white/10 bg-sidebar transition-[transform,width] duration-200 ease-out ${
           sidebarCollapsed ? "lg:w-[84px]" : "lg:w-56"
         } ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
@@ -269,7 +281,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
       >
         <div className={`flex items-center border-b border-white/10 py-4 ${sidebarCollapsed ? "justify-between px-4 lg:justify-center lg:px-2" : "justify-between px-4"}`}>
           <Link href="/" className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:justify-center lg:gap-0" : ""}`}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#7c3aed] to-[#5b21b6] text-sm font-semibold text-white shadow-lg shadow-[#7c3aed]/30">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-accent-strong text-sm font-semibold text-white shadow-lg shadow-accent/30">
               AF
             </div>
             <div className={sidebarCollapsed ? "lg:hidden" : ""}>
@@ -325,7 +337,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
               sidebarCollapsed ? "gap-3 px-2 lg:justify-center lg:px-0" : "gap-3 px-2"
             }`}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1a2150] text-sm font-semibold text-[#6f82ff]">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.1] text-sm font-semibold text-accent/80">
               {getInitials(user?.email)}
             </div>
             <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
@@ -377,7 +389,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
                 <div className="text-xs text-slate-500">{dayjs().format("dddd, MMMM D, YYYY")}</div>
                 <div className="mt-0.5 flex items-center gap-2">
                   <span className="text-base font-semibold text-slate-900">Welcome back</span>
-                  <span className="rounded-full bg-[#f3e8ff] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7c3aed]">
+                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent">
                     {roleLabel}
                   </span>
                 </div>
@@ -396,7 +408,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                   </div>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7c3aed] to-[#5b21b6] text-xs font-semibold text-white shadow-lg shadow-[#7c3aed]/20">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-strong text-xs font-semibold text-white shadow-lg shadow-accent/20">
                   {getInitials(user?.email)}
                 </div>
               </Link>

@@ -6,6 +6,7 @@ import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api"
 import { formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -23,9 +24,10 @@ export default function AccountantOrders() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [exporting, setExporting] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
-    status: "BOOKED"
+    status: "PENDING"
   });
   const { notify } = useToast();
 
@@ -203,7 +205,7 @@ export default function AccountantOrders() {
             }}
           >
             <option value="ALL">All Statuses</option>
-            <option value="BOOKED">Booked</option>
+            <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
@@ -233,7 +235,7 @@ export default function AccountantOrders() {
           </select>
         }
       >
-        <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filters." />
+        <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filters." onRowClick={(order) => setSelectedOrderId(order.id)} />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
             Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
@@ -258,6 +260,14 @@ export default function AccountantOrders() {
           </div>
         </div>
       </SectionCard>
+      {selectedOrderId ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
+          <button type="button" aria-label="Close" className="absolute inset-0 cursor-default" onClick={() => setSelectedOrderId(null)} />
+          <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
+            <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

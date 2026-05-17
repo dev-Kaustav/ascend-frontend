@@ -64,7 +64,7 @@ export default function Navbar() {
           <Link
             href={ctaHref}
             onClick={(event) => handleAnchorClick(event, ctaHref)}
-            className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-[#6b3df0]"
+            className="rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-soft transition hover:bg-accent-strong"
           >
             Talk to Us
           </Link>

@@ -1180,7 +1180,7 @@ export default function AdminUsers({
                                   type="checkbox"
                                   checked={checked}
                                   onChange={toggleFn}
-                                  className="h-5 w-5 rounded border-slate-300 accent-[#7c3aed]"
+                                  className="h-5 w-5 rounded border-slate-300 accent-accent"
                                 />
                                 <span className="text-sm font-medium text-slate-700">{code}</span>
                               </label>
@@ -1296,7 +1296,7 @@ export default function AdminUsers({
                           type="checkbox"
                           checked={(editingAccessRule.permissions || []).includes(code)}
                           onChange={() => toggleEditingAccessRulePermission(code)}
-                          className="h-5 w-5 rounded border-slate-300 accent-[#7c3aed]"
+                          className="h-5 w-5 rounded border-slate-300 accent-accent"
                         />
                         <span className="text-sm text-slate-700">{code}</span>
                       </label>
@@ -1383,7 +1383,7 @@ export default function AdminUsers({
                             type="checkbox"
                             checked={(accessRuleForm.permissions || []).includes(code)}
                             onChange={() => toggleAccessRuleFormPermission(code)}
-                            className="h-5 w-5 rounded border-slate-300 accent-[#7c3aed]"
+                            className="h-5 w-5 rounded border-slate-300 accent-accent"
                           />
                           <span className="text-sm text-slate-700">{code}</span>
                         </label>
@@ -1593,7 +1593,7 @@ export default function AdminUsers({
               </button>
             </div>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-[#f3e8ff] to-white px-4 py-3 text-sm text-slate-600">
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-r from-accent-soft to-white px-4 py-3 text-sm text-slate-600">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Selected User</p>
               <p className="mt-1 font-semibold text-slate-900">{modalUser.email}</p>
             </div>

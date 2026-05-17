@@ -4,7 +4,7 @@ export default function CTA() {
   return (
     <section className="bg-white py-16 sm:py-20">
       <div className="mx-auto max-w-6xl section-pad">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#130a24] px-8 py-12 text-white shadow-soft sm:px-12">
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-nightSoft px-8 py-12 text-white shadow-soft sm:px-12">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(124,77,255,0.35)_0,_rgba(19,10,36,0.85)_55%,_rgba(11,6,20,0.98)_100%)]" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="reveal-text">
@@ -22,7 +22,7 @@ export default function CTA() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/#contact"
-                className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#6b3df0]"
+                className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-strong"
               >
                 Get in Touch
               </Link>

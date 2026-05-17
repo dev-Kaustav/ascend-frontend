@@ -5,6 +5,8 @@ import { getAccessToken, getRoleFromToken } from "@/lib/auth";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import AccountantDashboard from "@/components/dashboard/AccountantDashboard";
 import WarehouseDashboard from "@/components/dashboard/WarehouseDashboard";
+import SalesmanDashboard from "@/components/dashboard/SalesmanDashboard";
+import DriverDashboard from "@/components/dashboard/DriverDashboard";
 import BrandDashboard from "@/components/dashboard/BrandDashboard";
 import RetailerDashboard from "@/components/dashboard/RetailerDashboard";
 
@@ -14,6 +16,8 @@ export default function DashboardPage() {
   if (role === "ADMIN") return <AdminDashboard />;
   if (role === "ACCOUNTANT") return <AccountantDashboard />;
   if (role === "WAREHOUSE_MANAGER") return <WarehouseDashboard />;
+  if (role === "SALESMAN") return <SalesmanDashboard />;
+  if (role === "DRIVER") return <DriverDashboard />;
   if (role === "BRAND") return <BrandDashboard />;
   if (role === "RETAILER") return <RetailerDashboard />;
 

@@ -22,7 +22,7 @@ export default function Hero() {
           <div className="flex w-full flex-col justify-center gap-3 sm:flex-row">
             <Link
               href="/#contact"
-              className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_-24px_rgba(124,77,255,0.6)] transition hover:bg-[#6b3df0]"
+              className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white shadow-[0_20px_40px_-24px_rgba(124,77,255,0.6)] transition hover:bg-accent-strong"
             >
               Talk to Us
             </Link>
