@@ -4,29 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { apiFetch, apiEndpoints } from "@/lib/api";
 import dynamic from "next/dynamic";
 import RouteLauncher from "@/components/outlet-finder/RouteLauncher";
+import RouteStops from "@/components/outlet-finder/RouteStops";
+import { haversineKm } from "@/lib/geo";
 
 const OutletMap = dynamic(() => import("@/components/outlet-finder/OutletMap"), { ssr: false });
 
 const MAPS_BATCH_SIZE = 9;
 const LEG_STORAGE_PREFIX = "outletFinder.legIndex.";
-
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+const DELIVERY_STORAGE_PREFIX = "outletFinder.deliveries.";
 
 function recomputeDistances(outlets, userLat, userLng) {
   let curLat = userLat;
   let curLng = userLng;
   return outlets.map((o) => {
-    const d = haversine(curLat, curLng, o.latitude, o.longitude);
+    const d = haversineKm(curLat, curLng, o.latitude, o.longitude);
     curLat = o.latitude;
     curLng = o.longitude;
     return { ...o, distFromPrev: d };
@@ -61,7 +52,7 @@ function greedyNearest(userLat, userLng, outlets) {
     let nearestIdx = 0;
     let minDist = Infinity;
     pool.forEach((o, i) => {
-      const d = haversine(curLat, curLng, o.latitude, o.longitude);
+      const d = haversineKm(curLat, curLng, o.latitude, o.longitude);
       if (d < minDist) { minDist = d; nearestIdx = i; }
     });
     const chosen = pool.splice(nearestIdx, 1)[0];
@@ -123,10 +114,12 @@ export default function OutletFinderPage() {
   const [showMap, setShowMap] = useState(false);
   const [userPos, setUserPos] = useState(null);
   const [currentLegIndex, setCurrentLegIndex] = useState(0);
+  const [deliveryStates, setDeliveryStates] = useState({});
 
   const legs = useMemo(() => buildLegs(userPos, outlets), [userPos, outlets]);
   const fingerprint = useMemo(() => fingerprintOutlets(outlets), [outlets]);
   const storageKey = fingerprint ? LEG_STORAGE_PREFIX + fingerprint : null;
+  const deliveryStorageKey = fingerprint ? DELIVERY_STORAGE_PREFIX + fingerprint : null;
 
   // Restore leg progress when the outlet set changes
   useEffect(() => {
@@ -135,6 +128,47 @@ export default function OutletFinderPage() {
     const parsed = stored ? parseInt(stored, 10) : 0;
     setCurrentLegIndex(Number.isFinite(parsed) ? Math.min(parsed, Math.max(0, legs.length - 1)) : 0);
   }, [storageKey, legs.length]);
+
+  // Restore delivery states when the outlet set changes
+  useEffect(() => {
+    if (!deliveryStorageKey || typeof window === "undefined") {
+      setDeliveryStates({});
+      return;
+    }
+    const stored = window.localStorage.getItem(deliveryStorageKey);
+    try {
+      setDeliveryStates(stored ? JSON.parse(stored) : {});
+    } catch {
+      setDeliveryStates({});
+    }
+  }, [deliveryStorageKey]);
+
+  function updateDeliveryState(externalId, next) {
+    setDeliveryStates((prev) => {
+      const updated = { ...prev };
+      if (next === null) {
+        delete updated[externalId];
+      } else {
+        updated[externalId] = next;
+      }
+      if (deliveryStorageKey && typeof window !== "undefined") {
+        if (Object.keys(updated).length === 0) {
+          window.localStorage.removeItem(deliveryStorageKey);
+        } else {
+          window.localStorage.setItem(deliveryStorageKey, JSON.stringify(updated));
+        }
+      }
+      return updated;
+    });
+  }
+
+  function handleCoordsUpdated(externalId, lat, lng) {
+    setOutlets((prev) =>
+      prev.map((o) =>
+        o.external_id === externalId ? { ...o, latitude: lat, longitude: lng } : o
+      )
+    );
+  }
 
   function persistLegIndex(idx) {
     if (!storageKey || typeof window === "undefined") return;
@@ -281,42 +315,14 @@ export default function OutletFinderPage() {
             {outlets.length} outlet{outlets.length !== 1 ? "s" : ""} — optimized route
           </p>
 
-          {outlets.map((outlet, index) => (
-            <div
-              key={outlet.external_id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex items-start gap-3"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold mt-0.5">
-                {index + 1}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-slate-900 truncate">{outlet.name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">ID: {outlet.external_id}</p>
-                {outlet.address && (
-                  <p className="text-xs text-slate-500 mt-0.5 truncate">{outlet.address}</p>
-                )}
-                <p className="text-xs text-slate-600 mt-1">
-                  <span className="font-medium">{index === 0 ? "From you" : "From last stop"}:</span>{" "}
-                  {outlet.distFromPrev.toFixed(2)} km
-                </p>
-                <a
-                  href={`https://www.google.com/maps?q=${outlet.latitude},${outlet.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block mt-1.5 text-xs font-medium text-indigo-600 hover:underline"
-                >
-                  Open in Maps →
-                </a>
-              </div>
-              <button
-                onClick={() => removeOutlet(index)}
-                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors text-lg leading-none cursor-pointer"
-                aria-label="Remove outlet"
-              >
-                ×
-              </button>
-            </div>
-          ))}
+          <RouteStops
+            outlets={outlets}
+            userPos={userPos}
+            deliveryStates={deliveryStates}
+            onDeliveryChange={updateDeliveryState}
+            onCoordsUpdated={handleCoordsUpdated}
+            onRemove={removeOutlet}
+          />
         </div>
       )}
 
