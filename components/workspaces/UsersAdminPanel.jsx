@@ -1476,7 +1476,18 @@ export default function AdminUsers({
                   </label>
                   <label className="block">
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Role</span>
-                    <SelectBar value={form.role} onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}>
+                    <SelectBar
+                      value={form.role}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const matchGroup = groups.find((g) => g.role === value);
+                        setForm((prev) => ({
+                          ...prev,
+                          role: value,
+                          groupId: matchGroup ? String(matchGroup.id) : prev.groupId,
+                        }));
+                      }}
+                    >
                       {roleOptions.map((role) => (
                         <option key={role} value={role}>
                           {toTitleCase(role)}

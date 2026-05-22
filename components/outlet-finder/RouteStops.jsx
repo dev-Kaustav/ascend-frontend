@@ -153,13 +153,15 @@ export default function RouteStops({
                 onCoordsUpdated={onCoordsUpdated}
               />
             </div>
-            <button
-              onClick={() => onRemove(index)}
-              className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors text-lg leading-none cursor-pointer"
-              aria-label="Remove outlet"
-            >
-              ×
-            </button>
+            {onRemove && (
+              <button
+                onClick={() => onRemove(index)}
+                className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors text-lg leading-none cursor-pointer"
+                aria-label="Remove outlet"
+              >
+                ×
+              </button>
+            )}
           </div>
         );
       })}
