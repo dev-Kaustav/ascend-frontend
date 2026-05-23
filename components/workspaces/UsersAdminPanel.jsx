@@ -19,6 +19,7 @@ export default function AdminUsers({
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [form, setForm] = useState({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
+  const [passwordEdited, setPasswordEdited] = useState(false);
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -213,6 +214,7 @@ export default function AdminUsers({
         })
       });
       setForm({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
+      setPasswordEdited(false);
       setShowCreateUserModal(false);
       notify("User created.");
       await loadData(false);
@@ -919,7 +921,7 @@ export default function AdminUsers({
             <h2 className="text-[1.55rem] font-bold tracking-[-0.03em] text-slate-900">Users</h2>
             <p className="mt-1 text-sm text-slate-600">{filteredUsers.length} active users</p>
           </div>
-          <button type="button" onClick={() => setShowCreateUserModal(true)} className={primaryButtonClass}>
+          <button type="button" onClick={() => { setPasswordEdited(false); setShowCreateUserModal(true); }} className={primaryButtonClass}>
             + Add User
           </button>
         </div>
@@ -1454,12 +1456,14 @@ export default function AdminUsers({
                       inputMode="numeric"
                       maxLength={10}
                       value={form.phoneNumber}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
                         setForm((prev) => ({
                           ...prev,
-                          phoneNumber: e.target.value.replace(/\D/g, "").slice(0, 10)
-                        }))
-                      }
+                          phoneNumber: digits,
+                          password: passwordEdited ? prev.password : digits
+                        }));
+                      }}
                       placeholder="1234567890"
                     />
                   </label>
@@ -1470,8 +1474,11 @@ export default function AdminUsers({
                     <InputBar
                       type="password"
                       value={form.password}
-                      onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder="••••••••"
+                      onChange={(e) => {
+                        setPasswordEdited(true);
+                        setForm((prev) => ({ ...prev, password: e.target.value }));
+                      }}
+                      placeholder="Defaults to mobile number"
                     />
                   </label>
                   <label className="block">

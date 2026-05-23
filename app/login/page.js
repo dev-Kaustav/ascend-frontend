@@ -7,7 +7,7 @@ import { getAccessToken, getDashboardPathForRole, getRoleFromToken, saveTokens }
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -25,6 +25,8 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
+      const raw = username.trim();
+      const email = raw.includes("@") ? raw : `${raw}@ascendfoods.in`;
       const response = await apiFetch(apiEndpoints.auth.login, {
         method: "POST",
         body: JSON.stringify({ email, password })
@@ -71,15 +73,20 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <div>
-                <label className="text-xs uppercase tracking-widest text-slate-400">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-accent focus:outline-none"
-                  placeholder="you@ascendfoods.in"
-                />
+                <label className="text-xs uppercase tracking-widest text-slate-400">Username</label>
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    required
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 pr-36 text-sm text-slate-900 placeholder:text-slate-400 focus:border-accent focus:outline-none"
+                    placeholder="pranshu"
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                    @ascendfoods.in
+                  </span>
+                </div>
               </div>
               <div>
                 <label className="text-xs uppercase tracking-widest text-slate-400">Password</label>
