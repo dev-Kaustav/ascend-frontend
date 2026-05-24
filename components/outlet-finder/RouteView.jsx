@@ -9,17 +9,20 @@ import { buildLegs, buildMapsUrl, fingerprintOutlets, recomputeDistances } from 
 const OutletMap = dynamic(() => import("@/components/outlet-finder/OutletMap"), { ssr: false });
 
 const LEG_STORAGE_PREFIX = "outletFinder.legIndex.";
+const LAUNCHED_STORAGE_PREFIX = "outletFinder.launchedLegs.";
 const DELIVERY_STORAGE_PREFIX = "outletFinder.deliveries.";
 
 export default function RouteView({ outlets: initialOutlets, userPos, allowRemove = false }) {
   const [outlets, setOutlets] = useState(initialOutlets);
   const [showMap, setShowMap] = useState(false);
   const [currentLegIndex, setCurrentLegIndex] = useState(0);
+  const [launchedLegs, setLaunchedLegs] = useState([]);
   const [deliveryStates, setDeliveryStates] = useState({});
 
   const legs = useMemo(() => buildLegs(userPos, outlets), [userPos, outlets]);
   const fingerprint = useMemo(() => fingerprintOutlets(outlets), [outlets]);
   const legStorageKey = fingerprint ? LEG_STORAGE_PREFIX + fingerprint : null;
+  const launchedStorageKey = fingerprint ? LAUNCHED_STORAGE_PREFIX + fingerprint : null;
   const deliveryStorageKey = fingerprint ? DELIVERY_STORAGE_PREFIX + fingerprint : null;
 
   useEffect(() => {
@@ -28,6 +31,20 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
     const parsed = stored ? parseInt(stored, 10) : 0;
     setCurrentLegIndex(Number.isFinite(parsed) ? Math.min(parsed, Math.max(0, legs.length - 1)) : 0);
   }, [legStorageKey, legs.length]);
+
+  useEffect(() => {
+    if (!launchedStorageKey || typeof window === "undefined") {
+      setLaunchedLegs([]);
+      return;
+    }
+    const stored = window.localStorage.getItem(launchedStorageKey);
+    try {
+      const parsed = stored ? JSON.parse(stored) : [];
+      setLaunchedLegs(Array.isArray(parsed) ? parsed.filter((i) => i < legs.length) : []);
+    } catch {
+      setLaunchedLegs([]);
+    }
+  }, [launchedStorageKey, legs.length]);
 
   useEffect(() => {
     if (!deliveryStorageKey || typeof window === "undefined") {
@@ -67,20 +84,40 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
     );
   }
 
-  function advanceLeg() {
-    setCurrentLegIndex((prev) => {
-      const next = Math.min(prev + 1, legs.length);
-      if (legStorageKey && typeof window !== "undefined") {
-        window.localStorage.setItem(legStorageKey, String(next));
+  function persistLegIndex(i) {
+    if (legStorageKey && typeof window !== "undefined") {
+      window.localStorage.setItem(legStorageKey, String(i));
+    }
+  }
+
+  function selectLeg(i) {
+    setCurrentLegIndex(i);
+    persistLegIndex(i);
+  }
+
+  function markLaunched(i) {
+    setLaunchedLegs((prev) => {
+      const next = prev.includes(i) ? prev : [...prev, i];
+      if (launchedStorageKey && typeof window !== "undefined") {
+        window.localStorage.setItem(launchedStorageKey, JSON.stringify(next));
       }
+      // Advance selection to the next leg not yet launched (fall back to i + 1).
+      const upcoming = legs.findIndex((_, idx) => idx > i && !next.includes(idx));
+      const target = upcoming !== -1 ? upcoming : Math.min(i + 1, legs.length - 1);
+      setCurrentLegIndex(target);
+      persistLegIndex(target);
       return next;
     });
   }
 
   function resetLegs() {
     setCurrentLegIndex(0);
+    setLaunchedLegs([]);
     if (legStorageKey && typeof window !== "undefined") {
       window.localStorage.removeItem(legStorageKey);
+    }
+    if (launchedStorageKey && typeof window !== "undefined") {
+      window.localStorage.removeItem(launchedStorageKey);
     }
   }
 
@@ -127,9 +164,11 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
       {legs.length > 0 && (
         <RouteLauncher
           legs={legs}
-          currentLegIndex={currentLegIndex}
+          selectedIndex={Math.min(currentLegIndex, legs.length - 1)}
+          launchedLegs={launchedLegs}
           buildMapsUrl={buildMapsUrl}
-          onAdvance={advanceLeg}
+          onSelect={selectLeg}
+          onLaunched={markLaunched}
           onReset={resetLegs}
         />
       )}

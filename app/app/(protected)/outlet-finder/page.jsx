@@ -12,15 +12,15 @@ export default function OutletFinderPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">My Jobs</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Accept a job, then deliver each outlet</p>
+          <h1 className="text-xl font-semibold text-slate-900">Outlet Finder</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Search by outlet IDs to plan an ad-hoc route</p>
         </div>
-        <DriverJobs />
+        <ManualFinder />
 
         <div className="pt-2 border-t border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900 mt-4">Find outlets yourself</h2>
-          <p className="text-sm text-slate-500 mt-0.5 mb-3">Search by outlet IDs to plan an ad-hoc route</p>
-          <ManualFinder />
+          <h2 className="text-lg font-semibold text-slate-900 mt-4">My Jobs</h2>
+          <p className="text-sm text-slate-500 mt-0.5 mb-3">Accept a job, then deliver each outlet</p>
+          <DriverJobs />
         </div>
       </div>
     );

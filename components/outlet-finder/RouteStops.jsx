@@ -106,7 +106,7 @@ export default function RouteStops({
                 <p className="text-xs text-slate-400 truncate">
                   {delivered
                     ? `Delivered ${formatTime(dstate.time)}`
-                    : `ID ${outlet.external_id} · ${outlet.distFromPrev.toFixed(1)} km`}
+                    : `ID ${outlet.external_id} · ${outlet.distFromOrigin.toFixed(1)} km`}
                 </p>
               </div>
               <span aria-hidden className="shrink-0 text-slate-300 text-lg">›</span>
@@ -134,8 +134,8 @@ export default function RouteStops({
               <p className="text-xs text-slate-400 mt-1">ID: {outlet.external_id}</p>
               {outlet.address && <p className="text-xs text-slate-500 mt-0.5">{outlet.address}</p>}
               <p className="text-xs text-slate-600 mt-1">
-                <span className="font-medium">{index === 0 ? "From you" : "From last stop"}:</span>{" "}
-                {outlet.distFromPrev.toFixed(2)} km
+                <span className="font-medium">From start:</span>{" "}
+                {outlet.distFromOrigin.toFixed(2)} km
               </p>
               <a
                 href={`https://www.google.com/maps?q=${outlet.latitude},${outlet.longitude}`}
