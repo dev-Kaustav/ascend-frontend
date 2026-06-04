@@ -1,7 +1,8 @@
 const siteUrl = "https://ascendfoods.in";
 
 const routes = [
-  { path: "", changeFrequency: "daily", priority: 1 }
+  { path: "", changeFrequency: "daily", priority: 1 },
+  { path: "/privacy-policy", changeFrequency: "yearly", priority: 0.3 }
 ];
 
 export default function sitemap() {
