@@ -20,8 +20,8 @@ const config = {
         steel:     "#475569",
       },
       boxShadow: {
-        soft: "0 20px 40px -24px rgba(15, 23, 42, 0.25)",
-        card: "0 18px 40px -28px rgba(15, 23, 42, 0.35)",
+        soft: "0 24px 60px -32px rgba(7, 19, 35, 0.32)",
+        card: "0 18px 45px -30px rgba(7, 19, 35, 0.28)",
       },
     },
   },

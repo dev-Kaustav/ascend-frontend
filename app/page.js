@@ -1,39 +1,28 @@
-import ContactForm from "@/components/ContactForm";
-import Hero from "@/components/Hero";
-import HowItWorks from "@/components/HowItWorks";
-import MeetFounders from "@/components/MeetFounders";
-import PageShell from "@/components/PageShell";
-import Problem from "@/components/Problem";
-import SectionReveal from "@/components/SectionReveal";
-import Solution from "@/components/Solution";
-import WhoItsFor from "@/components/WhoItsFor";
-import WhyAscend from "@/components/WhyAscend";
+import BrandSection from "@/components/landing/BrandSection";
+import BrandStrip from "@/components/landing/BrandStrip";
+import ConversionSection from "@/components/landing/ConversionSection";
+import Footer from "@/components/landing/Footer";
+import FoundersSection from "@/components/landing/FoundersSection";
+import Navbar from "@/components/landing/Navbar";
+import RetailerSection from "@/components/landing/RetailerSection";
+import SystemStory from "@/components/landing/SystemStory";
 
 export default function Home() {
   return (
-    <PageShell>
-      <Hero />
-      <SectionReveal>
-        <Problem />
-      </SectionReveal>
-      <SectionReveal>
-        <Solution />
-      </SectionReveal>
-      <SectionReveal>
-        <HowItWorks />
-      </SectionReveal>
-      <SectionReveal>
-        <WhyAscend />
-      </SectionReveal>
-      <SectionReveal>
-        <WhoItsFor />
-      </SectionReveal>
-      <SectionReveal>
-        <MeetFounders />
-      </SectionReveal>
-      <SectionReveal>
-        <ContactForm />
-      </SectionReveal>
-    </PageShell>
+    <div className="ascend-marketing">
+      <a className="marketing-skip" href="#main">
+        Skip to content
+      </a>
+      <Navbar />
+      <main id="main">
+        <SystemStory />
+        <RetailerSection />
+        <BrandStrip />
+        <BrandSection />
+        <FoundersSection />
+        <ConversionSection />
+      </main>
+      <Footer />
+    </div>
   );
 }

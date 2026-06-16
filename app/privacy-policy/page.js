@@ -1,4 +1,5 @@
-import PageShell from "@/components/PageShell";
+import Footer from "@/components/landing/Footer";
+import Navbar from "@/components/landing/Navbar";
 
 export const metadata = {
   title: "Privacy Policy",
@@ -13,26 +14,28 @@ const lastUpdated = "June 4, 2026";
 
 export default function PrivacyPolicy() {
   return (
-    <PageShell>
-      <section className="section-pad py-16 sm:py-20">
-        <div className="mx-auto max-w-3xl">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Privacy Policy
-          </h1>
-          <p className="mt-3 text-sm text-slate-500">
-            Last updated: {lastUpdated}
-          </p>
-
-          <div className="mt-10 space-y-10 text-base leading-relaxed text-slate-700">
-            <p>
-              This Privacy Policy explains how Ascend Foods, a proprietorship
-              firm (&quot;Ascend&quot;, &quot;we&quot;, &quot;us&quot;, or
-              &quot;our&quot;), collects, uses, shares, and protects information
-              when you use our website, platform, and services, including
-              communications you exchange with us over WhatsApp. By using our
-              services or messaging us on WhatsApp, you agree to the practices
-              described in this policy.
+    <div className="ascend-marketing privacy-page">
+      <Navbar />
+      <main id="main">
+        <section className="section-pad py-16 sm:py-20">
+          <div className="mx-auto max-w-3xl">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              Privacy Policy
+            </h1>
+            <p className="mt-3 text-sm text-slate-500">
+              Last updated: {lastUpdated}
             </p>
+
+            <div className="mt-10 space-y-10 text-base leading-relaxed text-slate-700">
+              <p>
+                This Privacy Policy explains how Ascend Foods, a proprietorship
+                firm (&quot;Ascend&quot;, &quot;we&quot;, &quot;us&quot;, or
+                &quot;our&quot;), collects, uses, shares, and protects information
+                when you use our website, platform, and services, including
+                communications you exchange with us over WhatsApp. By using our
+                services or messaging us on WhatsApp, you agree to the practices
+                described in this policy.
+              </p>
 
             <Section title="1. Who We Are">
               <p>
@@ -237,10 +240,12 @@ export default function PrivacyPolicy() {
                 </a>
               </p>
             </Section>
+            </div>
           </div>
-        </div>
-      </section>
-    </PageShell>
+        </section>
+      </main>
+      <Footer />
+    </div>
   );
 }
 

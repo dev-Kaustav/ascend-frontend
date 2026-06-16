@@ -1,0 +1,73 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#A4ACA5"/>
+      <stop offset=".22" stop-color="#353B36"/>
+      <stop offset=".57" stop-color="#111411"/>
+      <stop offset="1" stop-color="#59615A"/>
+    </linearGradient>
+    <linearGradient id="belt" x1="0" y1="0" x2="1" y2=".4">
+      <stop stop-color="#2B302C"/>
+      <stop offset=".5" stop-color="#101310"/>
+      <stop offset="1" stop-color="#242925"/>
+    </linearGradient>
+    <pattern id="ribs" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="skewX(-22)">
+      <rect width="26" height="26" fill="url(#belt)"/>
+      <rect width="8" height="26" fill="#343A35"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="#0B0D0C"/>
+  <path d="M0 530H1200M0 104H1200M115 0V630M1090 0V630" stroke="#F4F1E8" stroke-opacity=".08"/>
+  <g transform="translate(475 104) rotate(-3 350 230)">
+    <path d="M88 91H690L770 145L703 208H69L0 151L88 91Z" fill="url(#steel)" stroke="#7D867F" stroke-width="2"/>
+    <path d="M82 109H681L731 144L688 183H79L37 151L82 109Z" fill="url(#ribs)" stroke="#A6AEA7" stroke-opacity=".45"/>
+    <path d="M69 208H703L770 145V202L713 263H82L0 202V151L69 208Z" fill="#090B09" stroke="#4E564F" stroke-width="2"/>
+    <g>
+      <path d="M133 35h63l9 12v76h-81V47l9-12Z" fill="#687069" stroke="#D7DDD7" stroke-opacity=".5" stroke-width="2"/>
+      <path d="M137 62h55v36h-55Z" fill="#111411" stroke="#C8FF3D" stroke-opacity=".55"/>
+      <rect x="181" y="105" width="10" height="10" fill="#C8FF3D"/>
+    </g>
+    <g transform="translate(280 24)">
+      <path d="M17 0h24v18l8 10v75c0 8-7 15-15 15H24c-8 0-15-7-15-15V28l8-10V0Z" fill="#747C75" stroke="#D7DDD7" stroke-opacity=".45" stroke-width="2"/>
+      <path d="M14 42h30v47H14Z" fill="#111411" stroke="#C8FF3D" stroke-opacity=".5"/>
+    </g>
+    <g transform="translate(424 28)">
+      <path d="M8 0h57l8 95c1 11-7 20-18 20H18C7 115-1 106 0 95L8 0Z" fill="#59615A" stroke="#D0D6D1" stroke-opacity=".52" stroke-width="2"/>
+      <path d="M13 40h47v38H13Z" fill="#111411" stroke="#C8FF3D" stroke-opacity=".52"/>
+    </g>
+    <g transform="translate(574 -17)">
+      <path d="M0 0h141v250h-36V42H36v208H0Z" fill="url(#steel)" stroke="#89928B" stroke-width="2"/>
+      <path d="M43 54h55v64H43Z" fill="#090B09" stroke="#59615B"/>
+      <path d="M51 69h39M51 84h28M51 99h36" stroke="#778079" stroke-width="5"/>
+      <rect x="49" y="136" width="46" height="17" fill="#C8FF3D"/>
+      <rect x="47" y="178" width="51" height="3" fill="#C8FF3D"/>
+    </g>
+    <g fill="#222723" stroke="#858E87" stroke-width="2">
+      <ellipse cx="112" cy="229" rx="27" ry="14"/>
+      <ellipse cx="190" cy="229" rx="27" ry="14"/>
+      <ellipse cx="268" cy="229" rx="27" ry="14"/>
+      <ellipse cx="346" cy="229" rx="27" ry="14"/>
+      <ellipse cx="424" cy="229" rx="27" ry="14"/>
+      <ellipse cx="502" cy="229" rx="27" ry="14"/>
+      <ellipse cx="580" cy="229" rx="27" ry="14"/>
+      <ellipse cx="658" cy="229" rx="27" ry="14"/>
+    </g>
+    <path d="M92 263H690V294H92Z" fill="url(#steel)" stroke="#59615A"/>
+    <path d="M120 294h32l-14 220H99l-7-220h28ZM326 294h32l-14 220h-39l-7-220h28ZM548 294h32l-14 220h-39l-7-220h28Z" fill="#202521" stroke="#59615A" stroke-width="2"/>
+    <path d="M79 428H694" stroke="#565F57" stroke-width="14"/>
+  </g>
+  <g transform="translate(62 114)">
+    <rect width="78" height="78" fill="#C8FF3D"/>
+    <path d="M17 60 38 17l23 43H47l-9-19-8 19H17Z" fill="#151714"/>
+  </g>
+  <text x="62" y="248" fill="#C8FF3D" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="2">ASCEND FOODS</text>
+  <text x="62" y="308" fill="#F4F1E8" font-family="Arial, sans-serif" font-size="54" font-weight="700" letter-spacing="-2">
+    <tspan x="62" dy="0">Restock any shelf</tspan>
+    <tspan x="62" dy="58">in four hours.</tspan>
+  </text>
+  <text x="62" y="458" fill="#A7AEA8" font-family="Arial, sans-serif" font-size="18">
+    Demand, inventory, and fulfillment in one network.
+  </text>
+  <path d="M62 513H365" stroke="#C8FF3D" stroke-width="2"/>
+  <text x="62" y="543" fill="#929A94" font-family="monospace" font-size="11" letter-spacing="1.4">FMCG REPLENISHMENT INFRASTRUCTURE</text>
+</svg>

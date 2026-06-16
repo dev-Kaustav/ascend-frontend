@@ -1,12 +1,32 @@
 import Script from "next/script";
+import { DM_Mono, Manrope, Space_Grotesk } from "next/font/google";
 import "./globals.css";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-marketing-display",
+  display: "swap"
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-marketing-body",
+  display: "swap"
+});
+
+const dmMono = DM_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-marketing-mono",
+  display: "swap"
+});
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-const defaultTitle = "Ascend – Data-driven FMCG Distribution";
+const defaultTitle = "Ascend: Restock Any Shelf in Four Hours";
 const defaultDescription =
-  "Ascend helps FMCG brands scale across India using data-driven distribution and GTM intelligence.";
-const defaultImage = "/hero-dashboard.svg";
+  "Ascend connects store-level demand, nearby FMCG inventory, and four-hour fulfillment for India's kirana and convenience retailers.";
+const defaultImage = "/ascend-conveyor.svg";
 
 const organizationSchema = {
   "@context": "https://schema.org",
@@ -14,7 +34,7 @@ const organizationSchema = {
   name: siteName,
   url: siteUrl,
   description: defaultDescription,
-  email: "admin@ascendfoods.in"
+  email: "kaustav@ascendfoods.in"
 };
 
 export const metadata = {
@@ -26,12 +46,12 @@ export const metadata = {
   description: defaultDescription,
   applicationName: siteName,
   keywords: [
-    "FMCG distribution",
-    "GTM intelligence",
-    "distribution network",
-    "retail order capture",
-    "sales analytics",
-    "India FMCG"
+    "B2B quick commerce",
+    "kirana restocking",
+    "dark store delivery",
+    "FMCG B2B",
+    "retailer ordering",
+    "India FMCG distribution"
   ],
   alternates: {
     canonical: "/"
@@ -47,9 +67,9 @@ export const metadata = {
     images: [
       {
         url: defaultImage,
-        width: 640,
-        height: 480,
-        alt: "Ascend distribution intelligence dashboard"
+        width: 1200,
+        height: 630,
+        alt: "Ascend's industrial FMCG fulfillment system"
       }
     ]
   },
@@ -70,7 +90,10 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="scroll-smooth" data-scroll-behavior="smooth">
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${manrope.variable} ${dmMono.variable}`}
+    >
       <body className="antialiased font-sans">
         <Script
           id="organization-jsonld"
