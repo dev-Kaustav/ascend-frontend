@@ -13,6 +13,7 @@ const GROUP_ROW_CLASSNAME = "grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-cen
 const GROUP_LABEL_CLASSNAME = "text-xs font-semibold text-slate-500";
 const SECTION_LABEL_CLASSNAME = "pt-3 text-xs font-semibold uppercase tracking-widest text-slate-500";
 const TRIPLE_GROUP_CLASSNAME = "grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center";
+// Source of truth: ascend-backend/app/models/enums.py INDIAN_STATES — keep in sync.
 const INDIAN_STATES = [
   "Andaman and Nicobar Islands",
   "Andhra Pradesh",
