@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -99,12 +99,19 @@ export default function AdminInvoices() {
   const columns = useMemo(
     () => [
       {
+        header: "Order",
+        accessorKey: "id",
+        cell: ({ row }) => `#${row.original.id}`
+      },
+      {
         header: "Invoice #",
         accessorKey: "invoice_number",
         cell: ({ row }) => (
-          <Link className="font-semibold text-slate-900 hover:underline" href={`/app/orders/${row.original.id}`}>
-            {row.original.invoice_number || `Order #${row.original.id}`}
-          </Link>
+          <InvoiceCell
+            invoiceNumber={row.original.invoice_number}
+            status={row.original.status}
+            href={`/app/orders/${row.original.id}`}
+          />
         )
       },
       {

@@ -9,6 +9,7 @@ import StatCard from "@/components/layout/StatCard";
 import DataTable from "@/components/tables/DataTable";
 import LineChartCard from "@/components/charts/LineChartCard";
 import BarChartCard from "@/components/charts/BarChartCard";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderTotal(order) {
   if (!order) return 0;
@@ -278,9 +279,14 @@ export default function AdminAccounting() {
         cell: ({ row }) => row.original.credit_note_number || row.original.id
       },
       {
+        header: "Order",
+        accessorKey: "order_id",
+        cell: ({ row }) => `#${row.original.order_id}`
+      },
+      {
         header: "Invoice #",
         accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || row.original.order_id || "—"
+        cell: ({ row }) => <InvoiceCell invoiceNumber={row.original.original_invoice_number} />
       },
       {
         header: "Amount",

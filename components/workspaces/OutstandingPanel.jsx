@@ -7,6 +7,7 @@ import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
 import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import DataTable from "@/components/tables/DataTable";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 const PAGE_SIZE = 50;
 const VIEWS = ["Bill-wise", "Salesman Summary", "Outlet Summary"];
@@ -101,7 +102,12 @@ export default function OutstandingPanel({ warehouseId }) {
       {
         header: "Bill No",
         accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || `#${row.original.order_id}`,
+        cell: ({ row }) => <InvoiceCell invoiceNumber={row.original.invoice_number} />,
+      },
+      {
+        header: "Order",
+        accessorKey: "order_id",
+        cell: ({ row }) => `#${row.original.order_id}`,
       },
       {
         header: "Date",
