@@ -261,7 +261,6 @@ export default function AdminOrders() {
             <option value="READY_TO_SHIP">Ready to ship</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
-            <option value="RETURNED">Returned</option>
             <option value="CANCELLED">Cancelled</option>
           </SelectBar>
           <SelectBar
