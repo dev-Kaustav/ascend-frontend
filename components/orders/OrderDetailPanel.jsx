@@ -5,6 +5,7 @@ import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api"
 import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
 import { getAccessToken, getRoleFromToken } from "@/lib/auth";
 import DataTable from "@/components/tables/DataTable";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -383,7 +384,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
           <h2 className="mt-1 text-xl font-semibold text-slate-950 text-balance">Order #{order.id}</h2>
           <div className="mt-1.5 flex items-center gap-2">
             <StatusBadge status={order.status} />
-            <span className="text-sm text-slate-500">{order.invoice_number || "Invoice pending"}</span>
+            <InvoiceCell invoiceNumber={order.invoice_number} status={order.status} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/for
 import SectionCard from "@/components/layout/SectionCard";
 import StatCard from "@/components/layout/StatCard";
 import DataTable from "@/components/tables/DataTable";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderTotal(order) {
   if (!order) return 0;
@@ -71,7 +72,9 @@ export default function RetailerDashboard() {
       {
         header: "Invoice #",
         accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || "—"
+        cell: ({ row }) => (
+          <InvoiceCell invoiceNumber={row.original.invoice_number} status={row.original.status} />
+        )
       },
       {
         header: "Date",
@@ -103,7 +106,7 @@ export default function RetailerDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `invoice-${order.invoice_number || order.id}.json`;
+    link.download = order.invoice_number ? `invoice-${order.invoice_number}.json` : `order-${order.id}.json`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -156,7 +159,7 @@ export default function RetailerDashboard() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-widest text-slate-400">Invoice</p>
-                <p className="text-sm font-semibold text-slate-900">{selectedOrder.invoice_number || "—"}</p>
+                <InvoiceCell invoiceNumber={selectedOrder.invoice_number} status={selectedOrder.status} />
               </div>
               <button
                 type="button"
