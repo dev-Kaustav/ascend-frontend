@@ -96,10 +96,9 @@ const ACTION_CONFIG = {
   OUT_FOR_DELIVERY: {
     primary: { label: "Mark Delivered", nextStatus: "DELIVERED", showPayment: true },
     cancel: true,
-    returnOrder: true,
   },
   DELIVERED: {
-    returnOrder: true,
+    cancel: true,
   },
 };
 
@@ -113,8 +112,15 @@ const ROLE_ACTIONS = {
   BRAND: [],
 };
 
-const CANCEL_ROLES = new Set(["ADMIN", "RETAILER"]);
-const RETURN_ROLES = new Set(["ADMIN", "WAREHOUSE_MANAGER"]);
+// Mirrors the four cancel rows of _ALLOWED_TRANSITIONS in
+// ascend-backend/app/services/order.py — the backend stays authoritative,
+// this only shapes which button is offered.
+const CANCEL_ROLES_BY_STATUS = {
+  PENDING: new Set(["ADMIN", "RETAILER"]),
+  READY_TO_SHIP: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
+  OUT_FOR_DELIVERY: new Set(["ADMIN", "DRIVER"]),
+  DELIVERED: new Set(["ADMIN"]),
+};
 
 function OrderActionBar({ order, role, drivers, onUpdate }) {
   const [form, setForm] = useState({});
@@ -124,10 +130,9 @@ function OrderActionBar({ order, role, drivers, onUpdate }) {
   const config = ACTION_CONFIG[order.status] || {};
   const allowedStatuses = ROLE_ACTIONS[role] || [];
   const canPrimary = config.primary && allowedStatuses.includes(order.status);
-  const canCancel = config.cancel && CANCEL_ROLES.has(role);
-  const canReturn = config.returnOrder && RETURN_ROLES.has(role);
+  const canCancel = config.cancel && (CANCEL_ROLES_BY_STATUS[order.status]?.has(role) ?? false);
 
-  if (!canPrimary && !canCancel && !canReturn) return null;
+  if (!canPrimary && !canCancel) return null;
 
   async function submitAction(nextStatus) {
     setSaving(true);
@@ -225,16 +230,6 @@ function OrderActionBar({ order, role, drivers, onUpdate }) {
           </div>
         )}
         <div className="flex flex-wrap gap-2">
-          {canReturn && (
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => submitAction("RETURNED")}
-              className="cursor-pointer rounded-full border border-amber-200 px-4 py-2 text-xs font-semibold text-amber-600 disabled:opacity-60"
-            >
-              Return
-            </button>
-          )}
           {canCancel && (
             <button
               type="button"
@@ -242,7 +237,7 @@ function OrderActionBar({ order, role, drivers, onUpdate }) {
               onClick={() => submitAction("CANCELLED")}
               className="cursor-pointer rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-600 disabled:opacity-60"
             >
-              Cancel Order
+              {order.status === "OUT_FOR_DELIVERY" ? "Refused at Shop" : "Cancel Order"}
             </button>
           )}
         </div>
