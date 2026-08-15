@@ -12,7 +12,12 @@ function getOrderDate(order) {
   return order?.created_at || order?.order_date || null;
 }
 
-const CANCELLABLE = new Set(["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY"]);
+// Coordinator ruling (03-05): READY_TO_SHIP -> CANCELLED includes RETAILER
+// (03-CONTEXT.md D2, amended after planning; mirrors _ALLOWED_TRANSITIONS in
+// ascend-backend/app/services/order.py). A retailer may cancel until goods
+// leave the warehouse; once OUT_FOR_DELIVERY the correct event is a
+// driver-recorded doorstep refusal.
+const CANCELLABLE = new Set(["PENDING", "READY_TO_SHIP"]);
 
 export default function RetailerOrders() {
   const [orders, setOrders] = useState([]);
@@ -133,7 +138,6 @@ export default function RetailerOrders() {
           <option value="OUT_FOR_DELIVERY">Out for delivery</option>
           <option value="DELIVERED">Delivered</option>
           <option value="CANCELLED">Cancelled</option>
-          <option value="RETURNED">Returned</option>
         </select>
       </SectionCard>
 

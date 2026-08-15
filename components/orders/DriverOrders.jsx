@@ -166,6 +166,14 @@ export default function DriverOrders() {
               >
                 {rowUpdate.saving ? "Saving…" : "Mark Delivered"}
               </button>
+              <button
+                type="button"
+                disabled={rowUpdate.saving}
+                onClick={() => handleStatusUpdate(order.id, "CANCELLED")}
+                className="cursor-pointer rounded-full bg-rose-600 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
+              >
+                {rowUpdate.saving ? "Saving…" : "Refused"}
+              </button>
               {rowUpdate.error && <span className="text-rose-500">{rowUpdate.error}</span>}
             </div>
           );
@@ -198,6 +206,7 @@ export default function DriverOrders() {
           <option value="READY_TO_SHIP">Ready to ship</option>
           <option value="OUT_FOR_DELIVERY">Out for delivery</option>
           <option value="DELIVERED">Delivered</option>
+          <option value="CANCELLED">Cancelled</option>
         </select>
       </SectionCard>
 
