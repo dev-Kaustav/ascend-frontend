@@ -6,6 +6,7 @@ import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || null;
@@ -61,7 +62,11 @@ export default function RetailerOrders() {
       cell: ({ row }) => (
         <div>
           <p className="font-semibold text-slate-900">#{row.original.id}</p>
-          <p className="text-xs text-slate-400">{row.original.invoice_number || "—"}</p>
+          <InvoiceCell
+            invoiceNumber={row.original.invoice_number}
+            status={row.original.status}
+            className="text-xs"
+          />
         </div>
       ),
     },

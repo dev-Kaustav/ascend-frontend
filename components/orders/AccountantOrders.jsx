@@ -7,6 +7,7 @@ import { formatDate, toTitleCase } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -134,7 +135,9 @@ export default function AccountantOrders() {
       {
         header: "Invoice #",
         accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || "—"
+        cell: ({ row }) => (
+          <InvoiceCell invoiceNumber={row.original.invoice_number} status={row.original.status} />
+        )
       }
     ],
     [retailerMap, warehouseMap]

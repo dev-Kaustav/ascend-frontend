@@ -9,6 +9,7 @@ import DataTable from "@/components/tables/DataTable";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
+import InvoiceCell from "@/components/ui/InvoiceCell";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -142,7 +143,9 @@ export default function AdminOrders() {
       {
         header: "Invoice ID",
         accessorKey: "invoice_number",
-        cell: ({ row }) => row.original.invoice_number || "—"
+        cell: ({ row }) => (
+          <InvoiceCell invoiceNumber={row.original.invoice_number} status={row.original.status} />
+        )
       },
       {
         header: "Status",
