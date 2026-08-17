@@ -202,7 +202,7 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
-          <a href="/finance?tab=daily-sales" className="mt-3 inline-block text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
+          <a href="/app/finance?tab=daily-sales" className="mt-3 inline-block text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
             View Full Daily Sales →
           </a>
         </SectionCard>
