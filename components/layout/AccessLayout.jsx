@@ -22,6 +22,7 @@ export default function AccessLayout({ children }) {
   }, [role, hasPermission, loading]);
   const roleLabel = getRoleLabel(role);
   const accessRule = useMemo(() => getAccessRuleForPath(rules, pathname), [rules, pathname]);
+  const dashboardPath = getDashboardPathForRole(role);
 
   const allowed = useMemo(() => {
     if (!accessRule) return false;
@@ -31,16 +32,22 @@ export default function AccessLayout({ children }) {
     return accessRule.permissions.every((code) => hasPermission(code));
   }, [accessRule, role, loading, hasPermission]);
 
+  // A role with no reachable workspace would otherwise redirect to its own
+  // dashboard path and land right back here, never allowed — an infinite
+  // "Checking access..." loop. Once we're already at that path and still
+  // not allowed, stop redirecting and show a terminal state instead (D7).
+  const noWorkspaceAvailable = !allowed && pathname === dashboardPath;
+
   useEffect(() => {
     if (!token) {
       router.replace("/login");
       return;
     }
     if (loading || rulesLoading || rulesError) return;
-    if (!allowed) {
-      router.replace(getDashboardPathForRole(role));
+    if (!allowed && !noWorkspaceAvailable) {
+      router.replace(dashboardPath);
     }
-  }, [token, role, loading, rulesLoading, rulesError, allowed, router]);
+  }, [token, loading, rulesLoading, rulesError, allowed, noWorkspaceAvailable, dashboardPath, router]);
 
   if (!token || loading || rulesLoading) {
     return (
@@ -54,6 +61,14 @@ export default function AccessLayout({ children }) {
     return (
       <div className="min-h-screen flex items-center justify-center text-sm text-rose-600">
         {rulesError}
+      </div>
+    );
+  }
+
+  if (noWorkspaceAvailable) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-slate-500">
+        No workspace is available for this account yet.
       </div>
     );
   }
