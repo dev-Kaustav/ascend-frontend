@@ -7,7 +7,6 @@ import AccountantOrders from "@/components/orders/AccountantOrders";
 import WarehouseOrders from "@/components/orders/WarehouseOrders";
 import SalesmanOrders from "@/components/orders/SalesmanOrders";
 import DriverOrders from "@/components/orders/DriverOrders";
-import RetailerOrders from "@/components/orders/RetailerOrders";
 
 export default function OrdersPage() {
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
@@ -17,7 +16,6 @@ export default function OrdersPage() {
   if (role === "WAREHOUSE_MANAGER") return <WarehouseOrders />;
   if (role === "SALESMAN") return <SalesmanOrders />;
   if (role === "DRIVER") return <DriverOrders />;
-  if (role === "RETAILER") return <RetailerOrders />;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">

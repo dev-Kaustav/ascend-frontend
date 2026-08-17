@@ -8,7 +8,6 @@ import WarehouseDashboard from "@/components/dashboard/WarehouseDashboard";
 import SalesmanDashboard from "@/components/dashboard/SalesmanDashboard";
 import DriverDashboard from "@/components/dashboard/DriverDashboard";
 import BrandDashboard from "@/components/dashboard/BrandDashboard";
-import RetailerDashboard from "@/components/dashboard/RetailerDashboard";
 
 export default function DashboardPage() {
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
@@ -19,7 +18,6 @@ export default function DashboardPage() {
   if (role === "SALESMAN") return <SalesmanDashboard />;
   if (role === "DRIVER") return <DriverDashboard />;
   if (role === "BRAND") return <BrandDashboard />;
-  if (role === "RETAILER") return <RetailerDashboard />;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
