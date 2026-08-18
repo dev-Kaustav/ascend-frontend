@@ -145,10 +145,23 @@ export default function WarehouseInventory() {
         cell: ({ row }) => formatNumber(row.original.total_quantity)
       },
       {
-        header: "Reserved",
-        accessorKey: "quantity_reserved",
+        header: "Expired",
+        accessorKey: "expired_quantity",
         meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.quantity_reserved)
+        cell: ({ row }) => {
+          const expired = row.original.expired_quantity || 0;
+          return (
+            <span className={expired > 0 ? "font-semibold text-amber-700" : undefined}>
+              {formatNumber(expired)}
+            </span>
+          );
+        }
+      },
+      {
+        header: "Reserved",
+        accessorKey: "reserved_quantity",
+        meta: { type: "number" },
+        cell: ({ row }) => formatNumber(row.original.reserved_quantity)
       },
       {
         header: "Damaged",
