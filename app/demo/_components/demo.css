@@ -1,0 +1,21 @@
+/* Scoped styling for the Ascend demo so it stays independent of the marketing theme. */
+.ascend-demo {
+  --demo-border: rgba(21, 23, 20, 0.12);
+  --demo-card: #fffdf8;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* `bg-card` is used as a token class throughout the demo (not a Tailwind utility). */
+.ascend-demo .bg-card {
+  background: var(--demo-card);
+}
+
+.ascend-demo *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.ascend-demo *::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
