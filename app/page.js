@@ -3,9 +3,11 @@ import BrandStrip from "@/components/landing/BrandStrip";
 import ConversionSection from "@/components/landing/ConversionSection";
 import Footer from "@/components/landing/Footer";
 import FoundersSection from "@/components/landing/FoundersSection";
+import FulfillmentSection from "@/components/landing/FulfillmentSection";
+import HeroSection from "@/components/landing/HeroSection";
+import MerchandiseSection from "@/components/landing/MerchandiseSection";
 import Navbar from "@/components/landing/Navbar";
 import RetailerSection from "@/components/landing/RetailerSection";
-import SystemStory from "@/components/landing/SystemStory";
 
 export default function Home() {
   return (
@@ -15,7 +17,9 @@ export default function Home() {
       </a>
       <Navbar />
       <main id="main">
-        <SystemStory />
+        <HeroSection />
+        <MerchandiseSection />
+        <FulfillmentSection />
         <RetailerSection />
         <BrandStrip />
         <BrandSection />
