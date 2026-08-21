@@ -17,6 +17,7 @@ export default function HeroSection() {
         alt="A kirana owner restocking everyday products from an orange delivery crate"
         fill
         priority
+        unoptimized
         sizes="100vw"
         className="marketing-hero__image"
       />
