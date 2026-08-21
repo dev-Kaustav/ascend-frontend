@@ -238,26 +238,36 @@ export default function AdminRetailCoverage() {
           </select>
         }
       >
-        <div className="grid gap-4 lg:grid-cols-3">
-          <StatCard
-            title="Outlets on a beat"
-            value={formatNumber(coverage?.planned)}
-            subtitle={`${formatNumber(coverage?.retailers_without_beat)} retailers not on a beat`}
-            accent="sky"
-          />
-          <StatCard
-            title="Billed"
-            value={formatNumber(coverage?.billed)}
-            subtitle={`Within last ${windowDays} days`}
-            accent="emerald"
-          />
-          <StatCard
-            title="Coverage"
-            value={formatPercent(coverage?.coverage_percent)}
-            subtitle="Billed / outlets on a beat"
-            accent="amber"
-          />
-        </div>
+        {coverage?.planned === 0 ? (
+          <div className="py-5 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900 text-pretty">No outlets are assigned to a beat yet.</p>
+            <p className="mt-2 max-w-2xl text-pretty">
+              Coverage is measured against outlets on a beat rather than every retailer on file;{" "}
+              {formatNumber(coverage.retailers_without_beat)} retailers are currently not on any beat.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-3">
+            <StatCard
+              title="Outlets on a beat"
+              value={formatNumber(coverage?.planned)}
+              subtitle={`${formatNumber(coverage?.retailers_without_beat)} retailers not on a beat`}
+              accent="sky"
+            />
+            <StatCard
+              title="Billed"
+              value={formatNumber(coverage?.billed)}
+              subtitle={`Within last ${windowDays} days`}
+              accent="emerald"
+            />
+            <StatCard
+              title="Coverage"
+              value={formatPercent(coverage?.coverage_percent)}
+              subtitle="Billed / outlets on a beat"
+              accent="amber"
+            />
+          </div>
+        )}
       </SectionCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
