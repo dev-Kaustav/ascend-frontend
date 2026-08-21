@@ -35,12 +35,21 @@ function getOrderTotal(order) {
   return Math.round((total + Number.EPSILON) * 100) / 100;
 }
 
+function toLocalIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function AdminRetailCoverage() {
   const [orders, setOrders] = useState([]);
   const [retailers, setRetailers] = useState([]);
+  const [coverage, setCoverage] = useState(null);
   const [windowDays, setWindowDays] = useState(COVERAGE_WINDOWS[0].value);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [coverageError, setCoverageError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -50,7 +59,6 @@ export default function AdminRetailCoverage() {
         const limit = 200;
         let offset = 0;
         let combined = [];
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           const resp = await apiFetch(`${apiEndpoints.admin.orders}?limit=${limit}&offset=${offset}`);
           const items = resp?.items || [];
@@ -76,6 +84,33 @@ export default function AdminRetailCoverage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    async function loadCoverage() {
+      const toDate = new Date();
+      const fromDate = new Date(toDate);
+      fromDate.setDate(fromDate.getDate() - windowDays);
+      const params = new URLSearchParams({
+        from_date: toLocalIsoDate(fromDate),
+        to_date: toLocalIsoDate(toDate)
+      });
+      setCoverage(null);
+      try {
+        const response = await apiFetch(`${apiEndpoints.dashboard.coverage}?${params.toString()}`);
+        if (!active) return;
+        setCoverage(response);
+        setCoverageError("");
+      } catch (err) {
+        if (!active) return;
+        setCoverageError(err?.message || "Unable to load coverage figures.");
+      }
+    }
+    loadCoverage();
+    return () => {
+      active = false;
+    };
+  }, [windowDays]);
+
   const outgoingOrders = useMemo(() => {
     return orders;
   }, [orders]);
@@ -87,22 +122,6 @@ export default function AdminRetailCoverage() {
     });
     return map;
   }, [retailers]);
-
-  const coverageStats = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - windowDays);
-    const billedRetailerIds = new Set();
-    outgoingOrders.forEach((order) => {
-      const orderDate = getOrderDate(order);
-      if (!orderDate) return;
-      if (new Date(orderDate) < cutoff) return;
-      if (order.to_entity_id) billedRetailerIds.add(order.to_entity_id);
-    });
-    const billedRetailers = billedRetailerIds.size;
-    const totalRetailers = retailers.length;
-    const coverage = totalRetailers ? Math.round((billedRetailers / totalRetailers) * 100) : 0;
-    return { billedRetailers, totalRetailers, coverage };
-  }, [outgoingOrders, retailers.length, windowDays]);
 
   const monthlyCoverage = useMemo(() => {
     const points = [];
@@ -192,10 +211,10 @@ export default function AdminRetailCoverage() {
     );
   }
 
-  if (error) {
+  if (error || coverageError) {
     return (
       <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">
-        {error}
+        {error || coverageError}
       </div>
     );
   }
@@ -221,21 +240,21 @@ export default function AdminRetailCoverage() {
       >
         <div className="grid gap-4 lg:grid-cols-3">
           <StatCard
-            title="Billed Retailers"
-            value={formatNumber(coverageStats.billedRetailers)}
+            title="Outlets on a beat"
+            value={formatNumber(coverage?.planned)}
+            subtitle={`${formatNumber(coverage?.retailers_without_beat)} retailers not on a beat`}
+            accent="sky"
+          />
+          <StatCard
+            title="Billed"
+            value={formatNumber(coverage?.billed)}
             subtitle={`Within last ${windowDays} days`}
             accent="emerald"
           />
           <StatCard
-            title="Total Retailers"
-            value={formatNumber(coverageStats.totalRetailers)}
-            subtitle="Onboarded in system"
-            accent="sky"
-          />
-          <StatCard
             title="Coverage"
-            value={formatPercent(coverageStats.coverage)}
-            subtitle="Billed / total"
+            value={formatPercent(coverage?.coverage_percent)}
+            subtitle="Billed / outlets on a beat"
             accent="amber"
           />
         </div>
