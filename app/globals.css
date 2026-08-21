@@ -451,6 +451,12 @@ html:hover::-webkit-scrollbar-thumb,
 
 .marketing-band {
   padding-block: 64px;
+  scroll-margin-top: 96px;
+}
+
+.brand-strip,
+.conversion-section {
+  scroll-margin-top: 96px;
 }
 
 .marketing-section-heading {
