@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import Logo from "@/components/landing/Logo";
 
 const navItems = [
-  { label: "How it works", href: "/#system" },
-  { label: "For retailers", href: "/#retailers" },
+  { label: "Merchandise", href: "/#merchandise" },
+  { label: "How it works", href: "/#how-it-works" },
   { label: "For brands", href: "/#brands" },
   { label: "Founders", href: "/#founders" }
 ];
@@ -38,7 +39,7 @@ export default function Navbar() {
           <Link className="marketing-nav__login" href="/login">
             Login
           </Link>
-          <Link className="marketing-button marketing-button--lime marketing-button--small" href="/#contact">
+          <Link className="marketing-button marketing-button--primary marketing-button--small" href="/#contact">
             Stock my store
           </Link>
         </div>
@@ -50,8 +51,7 @@ export default function Navbar() {
           aria-controls="mobile-navigation"
           onClick={() => setOpen((value) => !value)}
         >
-          <span />
-          <span />
+          {open ? <X aria-hidden="true" size={22} /> : <Menu aria-hidden="true" size={22} />}
         </button>
       </div>
       <div
@@ -70,7 +70,7 @@ export default function Navbar() {
           </Link>
         </nav>
         <Link
-          className="marketing-button marketing-button--lime"
+          className="marketing-button marketing-button--primary"
           href="/#contact"
           onClick={() => setOpen(false)}
         >

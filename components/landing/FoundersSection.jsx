@@ -21,13 +21,11 @@ const founders = [
 
 export default function FoundersSection() {
   return (
-    <section id="founders" className="marketing-light-section founders-section">
+    <section id="founders" className="founders-section marketing-band">
       <div className="marketing-container">
         <div className="marketing-section-heading founders-section__heading">
           <div>
-            <p className="marketing-kicker marketing-kicker--dark">
-              <span /> The operators behind Ascend
-            </p>
+            <p className="marketing-eyebrow">THE OPERATORS BEHIND ASCEND</p>
             <h2>Meet the founders</h2>
           </div>
         </div>

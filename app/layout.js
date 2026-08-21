@@ -1,32 +1,34 @@
 import Script from "next/script";
-import { DM_Mono, Manrope, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Sora } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const sora = Sora({
   subsets: ["latin"],
+  weight: ["400", "600"],
   variable: "--font-marketing-display",
   display: "swap"
 });
 
-const manrope = Manrope({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
+  weight: ["400", "600"],
   variable: "--font-marketing-body",
   display: "swap"
 });
 
-const dmMono = DM_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "600"],
   variable: "--font-marketing-mono",
   display: "swap"
 });
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-const defaultTitle = "Ascend: Restock Any Shelf in Four Hours";
+const defaultTitle = "Ascend: FMCG Restocking in Four Hours";
 const defaultDescription =
-  "Ascend connects store-level demand, nearby FMCG inventory, and four-hour fulfillment for India's kirana and convenience retailers.";
-const defaultImage = "/ascend-conveyor.svg";
+  "Ascend helps India's kirana and convenience retailers restock everyday FMCG products from nearby inventory within a four-hour delivery window.";
+const defaultImage = "/ascend-kirana-restock.webp";
 
 const organizationSchema = {
   "@context": "https://schema.org",
@@ -67,9 +69,9 @@ export const metadata = {
     images: [
       {
         url: defaultImage,
-        width: 1200,
-        height: 630,
-        alt: "Ascend's industrial FMCG fulfillment system"
+        width: 1536,
+        height: 1024,
+        alt: "A kirana owner restocking everyday products with Ascend"
       }
     ]
   },
@@ -92,7 +94,7 @@ export default function RootLayout({ children }) {
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${manrope.variable} ${dmMono.variable}`}
+      className={`${sora.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}
     >
       <body className="antialiased font-sans">
         <Script

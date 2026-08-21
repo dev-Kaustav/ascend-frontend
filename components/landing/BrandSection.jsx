@@ -1,23 +1,23 @@
+import { ArrowRight } from "lucide-react";
+
 const benefits = [
-  ["Incremental urban sales", "Reach demand that traditional distributor routes often miss, especially smaller C-D category retailers."],
-  ["Deeper cluster penetration", "Ascend services dense urban pockets store by store, opening retailers the brand may not have served before."],
-  ["Visibility into replenishment", "Store-level movement shows where products are being pulled and where inventory should move next."]
+  ["More neighbourhood doors", "Reach dense urban retail pockets store by store, including outlets outside the usual distributor rhythm."],
+  ["Faster product movement", "Nearby inventory and short restock cycles help products return to active shelves with less delay."],
+  ["Clearer demand visibility", "Store-level replenishment shows where products move and where the next case should be positioned."]
 ];
 
 export default function BrandSection() {
   return (
-    <section id="brands" className="marketing-light-section brand-section">
+    <section id="brands" className="brand-section marketing-band">
       <div className="marketing-container">
         <div className="marketing-section-heading marketing-section-heading--brand">
           <div>
-            <p className="marketing-kicker marketing-kicker--dark">
-              <span /> For brands
-            </p>
-            <h2>Cleaner retail reach without losing shelf visibility.</h2>
+            <p className="marketing-eyebrow">FOR FMCG BRANDS</p>
+            <h2>Reach more neighbourhood shelves.</h2>
           </div>
           <p>
-            Ascend gives FMCG brands a faster route into urban convenience retail,
-            with owned execution and a clearer view of demand.
+            Put products closer to active demand with local execution and a
+            clearer replenishment trail.
           </p>
         </div>
 
@@ -30,6 +30,13 @@ export default function BrandSection() {
             </li>
           ))}
         </ol>
+        <a
+          className="marketing-inline-link"
+          href="mailto:kaustav@ascendfoods.in?subject=Partner%20with%20Ascend"
+        >
+          Partner as a brand
+          <ArrowRight aria-hidden="true" size={17} />
+        </a>
       </div>
     </section>
   );

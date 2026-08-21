@@ -1,35 +1,33 @@
 const benefits = [
   {
     number: "01",
-    title: "More sales from the same shelf",
-    body: "Fast replenishment helps retailers capture demand that would otherwise be lost when everyday products are unavailable."
+    title: "Keep the next sale on your shelf",
+    body: "Fast replenishment brings everyday products back before regular shoppers have to look elsewhere."
   },
   {
     number: "02",
-    title: "Fewer empty-shelf moments",
-    body: "Ascend keeps high-churn products moving back to the store quickly, reducing the risk of stock-outs on routine items."
+    title: "Restock around your store day",
+    body: "A four-hour service window means replenishment can fit the demand you see today, not next week."
   },
   {
     number: "03",
-    title: "A sharper fast-moving assortment",
-    body: "The catalogue stays focused on high-churn FMCG SKUs, so the retailer can stock what local shoppers already pull from the shelf."
+    title: "Focus cash on fast movers",
+    body: "A curated range keeps the basket practical, with less time spent searching through slow-moving assortment."
   }
 ];
 
 export default function RetailerSection() {
   return (
-    <section id="retailers" className="marketing-light-section retailer-section">
+    <section id="retailers" className="retailer-section marketing-band">
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>
-            <p className="marketing-kicker marketing-kicker--dark">
-              <span /> For retailers
-            </p>
-            <h2>A calmer way to keep shelves available.</h2>
+            <p className="marketing-eyebrow">FOR RETAILERS</p>
+            <h2>Keep everyday demand available.</h2>
           </div>
           <p>
-            Ascend gives kirana and convenience stores a faster, clearer way to
-            replenish everyday FMCG inventory.
+            Restock around the pace of your counter with nearby inventory and a
+            focused range of high-churn essentials.
           </p>
         </div>
 

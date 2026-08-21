@@ -1,10 +1,10 @@
 import {
   Blend,
-  Bubbles,
   Candy,
   CookingPot,
   CupSoda,
-  Sparkles
+  Sparkles,
+  SprayCan
 } from "lucide-react";
 
 const categories = [
@@ -31,7 +31,7 @@ const categories = [
   {
     name: "Home care",
     body: "Cleaning essentials for regular household demand.",
-    icon: Bubbles
+    icon: SprayCan
   },
   {
     name: "Impulse goods",
