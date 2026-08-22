@@ -1,15 +1,22 @@
 import Link from "next/link";
-import { ArrowRight, Clock3 } from "lucide-react";
+import { ArrowRight, Clock3, Layers, ShieldCheck } from "lucide-react";
 
-const catalogue = [
-  { brand: "Jabsons", name: "Tandoori Roasted Peanuts", pack: "23g", price: "8" },
-  { brand: "Jabsons", name: "Black Pepper Roasted Peanuts", pack: "23g", price: "8" },
-  { brand: "Jabsons", name: "Classic Salted Roasted Peanuts", pack: "27g", price: "8" },
-  { brand: "Jabsons", name: "Hing Jeera Roasted Peanuts", pack: "23g", price: "8" },
-  { brand: "Jabsons", name: "Hing Jeera Roasted Chana", pack: "25g", price: "8" },
-  { brand: "Jabsons", name: "Green Peas Onion & Garlic Namkeen", pack: "22g", price: "8" },
-  { brand: "Jabsons", name: "Tandoori Roasted Kaju", pack: "18g", price: "22.50" },
-  { brand: "Jabsons", name: "Salted Roasted Kaju", pack: "35g", price: "48" }
+const values = [
+  {
+    title: "Full range, one order",
+    body: "100+ curated FMCG SKUs across snacks, namkeen and everyday staples, sourced from onboarded brands.",
+    icon: Layers
+  },
+  {
+    title: "Picked from nearby stock",
+    body: "Every order is picked and checked from inventory already positioned in your cluster.",
+    icon: Clock3
+  },
+  {
+    title: "Shelves that stay full",
+    body: "Consistent fill rates on the fast movers that matter, run after run.",
+    icon: ShieldCheck
+  }
 ];
 
 export default function RetailerSection() {
@@ -22,8 +29,8 @@ export default function RetailerSection() {
             <h2>Stock what your counter actually sells.</h2>
           </div>
           <p>
-            Live SKUs from Jabsons and Crax, priced per pack, picked from
-            nearby inventory and restocked before the shelf runs empty.
+            A focused FMCG range, picked from nearby inventory and restocked
+            before the shelf runs empty.
           </p>
         </div>
 
@@ -32,22 +39,16 @@ export default function RetailerSection() {
           Restocked within 4 hours of order
         </p>
 
-        <ul className="storefront-grid">
-          {catalogue.map((item) => (
-            <li key={item.name} className="storefront-card">
-              <p className="storefront-card__brand">{item.brand.toUpperCase()}</p>
-              <h3 className="storefront-card__name">{item.name}</h3>
-              <div className="storefront-card__meta">
-                <span className="storefront-card__pack">{item.pack}</span>
-                <span className="storefront-card__price">₹{item.price}</span>
+        <ul className="retailer-value-grid">
+          {values.map(({ title, body, icon: Icon }) => (
+            <li key={title} className="retailer-value-card">
+              <div className="retailer-value-card__icon" aria-hidden="true">
+                <Icon size={24} strokeWidth={1.75} />
               </div>
+              <h3>{title}</h3>
+              <p>{body}</p>
             </li>
           ))}
-          <li className="storefront-card storefront-card--brand">
-            <p className="storefront-card__brand">ALSO LIVE</p>
-            <h3 className="storefront-card__name">Crax namkeen range</h3>
-            <p className="storefront-card__pack">Full assortment available on request</p>
-          </li>
         </ul>
 
         <div className="retailer-section__actions">

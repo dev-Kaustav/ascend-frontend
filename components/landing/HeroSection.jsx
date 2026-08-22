@@ -9,12 +9,6 @@ const metrics = [
   ["2", "dark stores live"]
 ];
 
-const heroSkus = [
-  { name: "Tandoori Roasted Peanuts", pack: "23g", price: "8" },
-  { name: "Roasted Kaju", pack: "35g", price: "48" },
-  { name: "Hing Jeera Roasted Chana", pack: "25g", price: "8" }
-];
-
 export default function HeroSection() {
   return (
     <section className="marketing-hero" aria-labelledby="hero-title">
@@ -37,14 +31,6 @@ export default function HeroSection() {
             Everyday fast movers, picked from nearby inventory and delivered
             before an empty shelf costs you the next sale.
           </p>
-          <ul className="marketing-hero__skus" aria-label="Sample of the live catalogue">
-            {heroSkus.map((sku) => (
-              <li key={sku.name} className="marketing-hero__sku-chip">
-                {sku.name} {sku.pack}
-                <strong>₹{sku.price}</strong>
-              </li>
-            ))}
-          </ul>
           <div className="marketing-hero__actions">
             <Link className="marketing-button marketing-button--primary" href="/#contact">
               Stock my store
