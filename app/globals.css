@@ -405,6 +405,35 @@ html:hover::-webkit-scrollbar-thumb,
   font-weight: 600;
 }
 
+.marketing-hero__skus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marketing-hero__sku-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--m-border-strong);
+  border-radius: 999px;
+  background: rgba(21, 21, 24, 0.72);
+  backdrop-filter: blur(12px);
+  color: var(--m-text);
+  font-family: var(--font-marketing-mono), monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.marketing-hero__sku-chip strong {
+  color: var(--m-orange);
+  font-weight: 600;
+}
+
 .marketing-proof {
   position: relative;
   z-index: 1;
@@ -608,6 +637,98 @@ html:hover::-webkit-scrollbar-thumb,
 
 .retailer-section {
   background: var(--m-bg);
+}
+
+.retailer-section__cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 106, 26, 0.44);
+  border-radius: 999px;
+  color: var(--m-orange);
+  font-family: var(--font-marketing-mono), monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.storefront-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storefront-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 176px;
+  padding: 20px;
+  border: 1px solid var(--m-border);
+  border-radius: 8px;
+  background: var(--m-surface);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.storefront-card:hover {
+  border-color: var(--m-border-strong);
+  background: var(--m-surface-raised);
+  transform: translateY(-2px);
+}
+
+.storefront-card__brand {
+  margin: 0;
+  color: var(--m-orange);
+  font-family: var(--font-marketing-mono), monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.storefront-card__name {
+  margin: 12px 0 0;
+  font-family: var(--font-marketing-display), sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.storefront-card__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.storefront-card__pack {
+  margin: 12px 0 0;
+  color: var(--m-muted);
+  font-size: 13px;
+}
+
+.storefront-card__price {
+  font-family: var(--font-marketing-mono), monospace;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.storefront-card--brand {
+  border-style: dashed;
+  background: transparent;
+}
+
+.storefront-card--brand .storefront-card__name {
+  font-size: 22px;
+}
+
+.retailer-section__actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-top: 40px;
 }
 
 .editorial-benefits {
@@ -944,6 +1065,10 @@ html:hover::-webkit-scrollbar-thumb,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .storefront-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .founder-card {
     grid-template-columns: 136px minmax(0, 1fr);
   }
@@ -1032,6 +1157,16 @@ html:hover::-webkit-scrollbar-thumb,
 
   .merchandise-card {
     min-height: 240px;
+  }
+
+  .storefront-grid {
+    grid-template-columns: 1fr;
+    margin-top: 24px;
+  }
+
+  .retailer-section__actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .fulfillment-steps,
@@ -1137,7 +1272,8 @@ html:hover::-webkit-scrollbar-thumb,
   }
 
   .marketing-button:hover,
-  .merchandise-card:hover {
+  .merchandise-card:hover,
+  .storefront-card:hover {
     transform: none;
   }
 }
