@@ -25,9 +25,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-const defaultTitle = "Ascend: FMCG Restocking in Four Hours";
+const defaultTitle = "Ascend: FMCG Restocking in 60 Minutes";
 const defaultDescription =
-  "Ascend helps India's kirana and convenience retailers restock everyday FMCG products from nearby inventory within a four-hour delivery window.";
+  "Ascend helps India's kirana and convenience retailers restock everyday FMCG products from nearby inventory within a 60-minute delivery window.";
 const defaultImage = "/ascend-kirana-restock.webp";
 
 const organizationSchema = {

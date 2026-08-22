@@ -16,7 +16,7 @@ const steps = [
   {
     number: "03",
     title: "Shelves restock fast",
-    body: "The order reaches your store inside the four-hour service window, subject to cluster availability.",
+    body: "The order reaches your store inside the 60-minute service window, subject to cluster availability.",
     icon: Truck
   }
 ];

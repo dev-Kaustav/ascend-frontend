@@ -36,7 +36,7 @@ export default function RetailerSection() {
 
         <p className="retailer-section__cue">
           <Clock3 aria-hidden="true" size={14} strokeWidth={2} />
-          Restocked within 4 hours of order
+          Restocked within 60 minutes of order
         </p>
 
         <ul className="retailer-value-grid">
