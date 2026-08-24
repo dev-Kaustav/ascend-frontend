@@ -3,14 +3,9 @@
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAccessToken, getRoleFromToken } from "@/lib/auth";
-import usePermissions from "@/lib/hooks/usePermissions";
 
-function isTabAllowed(tab, role, hasPermission) {
-  if (tab.roles?.length && !tab.roles.includes(role)) return false;
-  if (tab.permissions?.length) {
-    return tab.permissions.every((code) => hasPermission(code));
-  }
-  return true;
+function isTabAllowed(tab, role) {
+  return !tab.roles?.length || tab.roles.includes(role);
 }
 
 export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
@@ -18,12 +13,7 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
-  const { hasPermission, loading } = usePermissions();
-
-  const allowedTabs = useMemo(() => {
-    if (loading) return [];
-    return tabs.filter((tab) => isTabAllowed(tab, role, hasPermission));
-  }, [tabs, role, hasPermission, loading]);
+  const allowedTabs = useMemo(() => tabs.filter((tab) => isTabAllowed(tab, role)), [tabs, role]);
 
   const requestedTab = searchParams.get("tab");
   const activeTab = useMemo(() => {
@@ -32,20 +22,12 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
   }, [allowedTabs, requestedTab]);
 
   useEffect(() => {
-    if (loading || !activeTab) return;
+    if (!activeTab) return;
     if (requestedTab === activeTab.key) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", activeTab.key);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  }, [activeTab, loading, pathname, requestedTab, router, searchParams]);
-
-  if (loading) {
-    return (
-      <div className="rounded-[1.5rem] border border-slate-200 bg-white p-8 text-sm text-slate-500 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.35)]">
-        Loading workspace…
-      </div>
-    );
-  }
+  }, [activeTab, pathname, requestedTab, router, searchParams]);
 
   if (!activeTab) {
     return (

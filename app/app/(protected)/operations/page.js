@@ -13,7 +13,6 @@ export default function OperationsWorkspacePage() {
       label: "Inventory",
       description: "Stock visibility, receipts, and warehouse inventory management.",
       roles: ["ADMIN", "WAREHOUSE_MANAGER"],
-      permissions: ["inventory.view"],
       render: () => <InventoryPanel />
     },
     {

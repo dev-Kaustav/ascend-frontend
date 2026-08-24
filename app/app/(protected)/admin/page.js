@@ -16,21 +16,6 @@ export default function AdminWorkspacePage() {
           showHeader={false}
           showGroupsSection={true}
           showUsersSection={true}
-          showAccessRulesSection={false}
-        />
-      )
-    },
-    {
-      key: "access-rules",
-      label: "Access Rules",
-      description: "Route-level access control consolidated into the admin workspace.",
-      roles: ["ADMIN"],
-      render: () => (
-        <UsersAdminPanel
-          showHeader={false}
-          showGroupsSection={false}
-          showUsersSection={false}
-          showAccessRulesSection={true}
         />
       )
     },
