@@ -104,6 +104,20 @@ html:hover::-webkit-scrollbar-thumb,
   line-height: 1.55;
 }
 
+.marketing-band--light {
+  --m-bg: #f7f7f5;
+  --m-surface: #ffffff;
+  --m-surface-raised: #efede7;
+  --m-text: #1c1c1f;
+  --m-muted: #5b5b62;
+  --m-orange: #c2410c;
+  --m-orange-hover: #a3350a;
+  --m-border: rgba(10, 10, 12, 0.12);
+  --m-border-strong: rgba(10, 10, 12, 0.22);
+  background: var(--m-bg);
+  color: var(--m-text);
+}
+
 .ascend-marketing *,
 .ascend-marketing *::before,
 .ascend-marketing *::after {
