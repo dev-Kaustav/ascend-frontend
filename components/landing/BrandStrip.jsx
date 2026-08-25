@@ -2,7 +2,7 @@ const brands = ["myupchaar", "Crax", "Jabsons", "Lahori Jeera"];
 
 export default function BrandStrip() {
   return (
-    <section className="brand-strip" aria-labelledby="brand-strip-title">
+    <section className="brand-strip marketing-band--light" aria-labelledby="brand-strip-title">
       <div className="brand-strip__header marketing-container">
         <p id="brand-strip-title">Brands served through Ascend</p>
       </div>

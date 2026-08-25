@@ -3,7 +3,7 @@ import Logo from "@/components/landing/Logo";
 
 export default function Footer() {
   return (
-    <footer className="marketing-footer">
+    <footer className="marketing-footer marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-footer__top">
           <div>

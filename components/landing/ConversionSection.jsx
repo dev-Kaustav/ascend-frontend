@@ -1,6 +1,6 @@
 export default function ConversionSection() {
   return (
-    <section id="contact" className="conversion-section">
+    <section id="contact" className="conversion-section marketing-band--light">
       <div className="marketing-container conversion-section__inner">
         <p className="marketing-eyebrow">YOUR NEXT RESTOCK</p>
         <h2>Restock your store with Ascend.</h2>
