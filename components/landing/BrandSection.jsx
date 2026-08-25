@@ -15,7 +15,7 @@ export default function BrandSection() {
       <div className="marketing-container brand-section__inner">
         <div className="marketing-section-heading marketing-section-heading--brand brand-section__reveal">
           <div>
-            <p className="marketing-eyebrow">FOR FMCG BRANDS</p>
+            <p className="marketing-eyebrow">FOR SNACK BRANDS</p>
             <h2>Reach more neighbourhood shelves.</h2>
           </div>
           <p>

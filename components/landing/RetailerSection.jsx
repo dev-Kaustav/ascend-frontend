@@ -3,8 +3,8 @@ import { ArrowRight, Clock3, Layers, ShieldCheck } from "lucide-react";
 
 const values = [
   {
-    title: "Full range, one order",
-    body: "100+ curated FMCG SKUs across snacks, namkeen and everyday staples, sourced from onboarded brands.",
+    title: "Every snack SKU, one order",
+    body: "100+ curated snack SKUs across namkeen, roasted packs and wellness snacks, sourced from CRAX, JABSONS and MyUpchaar Ayurveda.",
     icon: Layers
   },
   {
@@ -29,7 +29,7 @@ export default function RetailerSection() {
             <h2>Stock what your counter actually sells.</h2>
           </div>
           <p>
-            A focused FMCG range, picked from nearby inventory and restocked
+            A focused snacks range, picked from nearby inventory and restocked
             before the shelf runs empty.
           </p>
         </div>

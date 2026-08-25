@@ -7,7 +7,7 @@ const founders = [
     image: "/pranshu.jpg",
     focus: "Distribution and city operations",
     linkedin: "https://www.linkedin.com/in/pranshubirlapb/",
-    body: "Leads Ascend's ground network, city execution, and the operating systems behind reliable FMCG distribution."
+    body: "Leads Ascend's ground network, city execution, and the operating systems behind reliable snack distribution."
   },
   {
     name: "Kaustav Mukherjee",

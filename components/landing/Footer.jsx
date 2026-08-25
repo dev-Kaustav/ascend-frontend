@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="marketing-footer__top">
           <div>
             <Logo />
-            <p>60-minute FMCG restocking for neighbourhood retail.</p>
+            <p>60-minute snack restocking for neighbourhood retail.</p>
           </div>
           <div className="marketing-footer__links">
             <a href="mailto:kaustav@ascendfoods.in">kaustav@ascendfoods.in</a>

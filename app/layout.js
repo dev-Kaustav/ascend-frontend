@@ -25,9 +25,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-const defaultTitle = "Ascend: FMCG Restocking in 60 Minutes";
+const defaultTitle = "Ascend: Snack Restocking in 60 Minutes";
 const defaultDescription =
-  "Ascend helps India's kirana and convenience retailers restock everyday FMCG products from nearby inventory within a 60-minute delivery window.";
+  "Ascend helps India's kirana and convenience retailers restock snacks and namkeen from nearby inventory within a 60-minute delivery window.";
 const defaultImage = "/ascend-kirana-restock.webp";
 
 const organizationSchema = {
@@ -36,7 +36,7 @@ const organizationSchema = {
   name: siteName,
   url: siteUrl,
   description: defaultDescription,
-  email: "kaustav@ascendfoods.in"
+  email: "pranshu@ascendfoods.in"
 };
 
 export const metadata = {
@@ -51,9 +51,9 @@ export const metadata = {
     "B2B quick commerce",
     "kirana restocking",
     "dark store delivery",
-    "FMCG B2B",
+    "Snacks B2B distribution",
     "retailer ordering",
-    "India FMCG distribution"
+    "India snacks distribution"
   ],
   alternates: {
     canonical: "/"
