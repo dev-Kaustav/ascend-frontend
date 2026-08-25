@@ -189,6 +189,7 @@ html:hover::-webkit-scrollbar-thumb,
   font-family: var(--font-marketing-display), sans-serif;
   font-size: 16px;
   font-weight: 600;
+  transition: transform 160ms ease;
 }
 
 .marketing-logo svg {
@@ -220,6 +221,19 @@ html:hover::-webkit-scrollbar-thumb,
   background: rgba(21, 21, 24, 0.86);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(16px);
+  transition: min-height 160ms ease, padding 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.marketing-nav.marketing-nav--scrolled {
+  min-height: 48px;
+  padding: 0 8px 0 12px;
+  background: rgba(21, 21, 24, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+}
+
+.marketing-nav.marketing-nav--scrolled .marketing-logo {
+  transform: scale(0.92);
+  transform-origin: left center;
 }
 
 .marketing-nav__links {
