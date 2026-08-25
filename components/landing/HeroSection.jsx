@@ -26,9 +26,9 @@ export default function HeroSection() {
       <div className="marketing-container marketing-hero__content">
         <div className="marketing-hero__copy">
           <p className="marketing-eyebrow">ASCEND FOR RETAILERS</p>
-          <h1 id="hero-title">FMCG restocking in 60 minutes.</h1>
+          <h1 id="hero-title"><span className="hero-emphasis">60 minutes</span> to a full shelf.</h1>
           <p className="marketing-hero__lead">
-            Everyday fast movers, picked from nearby inventory and delivered
+            Snacks and namkeen, picked from nearby inventory and delivered
             before an empty shelf costs you the next sale.
           </p>
           <div className="marketing-hero__actions">
