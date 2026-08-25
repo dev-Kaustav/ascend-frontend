@@ -14,6 +14,7 @@ const navItems = [
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -24,9 +25,32 @@ export default function Navbar() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [open]);
 
+  useEffect(() => {
+    let ticking = false;
+    let frame = 0;
+
+    const update = () => {
+      ticking = false;
+      setScrolled(window.scrollY > 32);
+    };
+
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      frame = window.requestAnimationFrame(update);
+    };
+
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
   return (
     <header className="marketing-nav-wrap">
-      <div className="marketing-nav">
+      <div className={`marketing-nav ${scrolled ? "marketing-nav--scrolled" : ""}`}>
         <Logo />
         <nav className="marketing-nav__links" aria-label="Primary navigation">
           {navItems.map((item) => (
