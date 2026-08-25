@@ -10,7 +10,7 @@ const benefits = [
 
 export default function BrandSection() {
   return (
-    <section id="brands" className="brand-section marketing-band">
+    <section id="brands" className="brand-section marketing-band marketing-band--light">
       <div className="brand-section__glow" aria-hidden="true" />
       <div className="marketing-container brand-section__inner">
         <div className="marketing-section-heading marketing-section-heading--brand brand-section__reveal">

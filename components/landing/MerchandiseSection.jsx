@@ -42,7 +42,7 @@ const categories = [
 
 export default function MerchandiseSection() {
   return (
-    <section id="merchandise" className="merchandise-section marketing-band">
+    <section id="merchandise" className="merchandise-section marketing-band marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>

@@ -21,7 +21,7 @@ const values = [
 
 export default function RetailerSection() {
   return (
-    <section id="retailers" className="retailer-section marketing-band">
+    <section id="retailers" className="retailer-section marketing-band marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>

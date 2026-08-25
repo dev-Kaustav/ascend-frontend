@@ -21,7 +21,7 @@ const founders = [
 
 export default function FoundersSection() {
   return (
-    <section id="founders" className="founders-section marketing-band">
+    <section id="founders" className="founders-section marketing-band marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-section-heading founders-section__heading">
           <div>

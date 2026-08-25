@@ -23,7 +23,7 @@ const steps = [
 
 export default function FulfillmentSection() {
   return (
-    <section id="how-it-works" className="fulfillment-section marketing-band">
+    <section id="how-it-works" className="fulfillment-section marketing-band marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>
