@@ -1,41 +1,24 @@
-import {
-  Blend,
-  Candy,
-  CookingPot,
-  CupSoda,
-  Sparkles,
-  SprayCan
-} from "lucide-react";
+import { Blend, Candy, CookingPot, Sparkles } from "lucide-react";
 
 const categories = [
   {
-    name: "Snacks",
-    body: "Counter-ready favourites for everyday cravings.",
-    icon: Candy
-  },
-  {
-    name: "Beverages",
-    body: "Cold and ambient drinks that move all day.",
-    icon: CupSoda
-  },
-  {
-    name: "Staples",
-    body: "Routine kitchen essentials for repeat baskets.",
+    name: "Namkeen & Chana",
+    body: "Savoury namkeen and chana mixes from CRAX and JABSONS, the counter's steady sellers.",
     icon: CookingPot
   },
   {
-    name: "Personal care",
-    body: "Daily-use care products customers expect nearby.",
+    name: "Roasted & Kaju",
+    body: "Roasted peanuts, kaju and dry roasted packs that move all day.",
+    icon: Candy
+  },
+  {
+    name: "Wellness Snacks",
+    body: "MyUpchaar Ayurveda's better-for-you snack range for health-conscious shoppers.",
     icon: Sparkles
   },
   {
-    name: "Home care",
-    body: "Cleaning essentials for regular household demand.",
-    icon: SprayCan
-  },
-  {
-    name: "Impulse goods",
-    body: "Small-ticket picks that keep the counter moving.",
+    name: "Impulse Counter Packs",
+    body: "Small-ticket snack packs that keep the counter moving.",
     icon: Blend
   }
 ];
@@ -50,7 +33,7 @@ export default function MerchandiseSection() {
             <h2>Fast movers, ready for your shelf.</h2>
           </div>
           <p>
-            A practical range of everyday FMCG categories, selected around what
+            A practical range of everyday snack categories, selected around what
             neighbourhood shoppers come back for.
           </p>
         </div>
