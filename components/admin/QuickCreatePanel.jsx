@@ -193,7 +193,7 @@ export default function QuickCreatePanel({
 
   const formatNumber = (value) => {
     if (value === null) return "";
-    return (Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2);
+    return (Math.round((value + Number.EPSILON) * 1000) / 1000).toFixed(3);
   };
 
   const getMrpBase = (sku) => {

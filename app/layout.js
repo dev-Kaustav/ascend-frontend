@@ -1,6 +1,7 @@
 import Script from "next/script";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Sora } from "next/font/google";
 import "./globals.css";
+import NumberInputWheelGuard from "@/components/ui/NumberInputWheelGuard";
 
 const sora = Sora({
   subsets: ["latin"],
@@ -102,6 +103,7 @@ export default function RootLayout({ children }) {
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
+        <NumberInputWheelGuard />
         {children}
       </body>
     </html>
