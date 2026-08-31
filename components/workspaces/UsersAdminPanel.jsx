@@ -62,6 +62,9 @@ export default function AdminUsers({ showHeader = true, showGroupsSection = true
   const [modalMode, setModalMode] = useState(null);
   const [passwordValue, setPasswordValue] = useState("");
   const [form, setForm] = useState({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
+  // The password mirrors the phone number until an admin types their own, at
+  // which point the mirroring stops for the rest of this form.
+  const [passwordEdited, setPasswordEdited] = useState(false);
   const [groupForm, setGroupForm] = useState({ name: "", role: "ACCOUNTANT" });
 
   async function loadData(showLoading = true) {
@@ -94,6 +97,34 @@ export default function AdminUsers({ showHeader = true, showGroupsSection = true
     return [{ id: "ALL", label: "All groups" }, { id: null, label: "No group" }, ...options];
   }, [groups]);
 
+  // A group carries exactly one role (see docs/access-control.md), and the
+  // backend rejects a create whose role and group role disagree. Selecting
+  // either side here keeps the pair consistent so that never happens.
+  const groupsByRole = useMemo(() => {
+    const byRole = new Map();
+    groups.forEach((group) => {
+      byRole.set(group.role, [...(byRole.get(group.role) || []), group]);
+    });
+    return byRole;
+  }, [groups]);
+
+  function selectRole(role) {
+    setForm((current) => {
+      // Only auto-select when the role names exactly one group; two candidates
+      // is a genuine choice and clearing is the honest answer.
+      const matches = groupsByRole.get(role) || [];
+      const groupId = matches.length === 1 ? String(matches[0].id) : "";
+      return { ...current, role, groupId };
+    });
+  }
+
+  function selectGroup(groupId) {
+    setForm((current) => {
+      const group = groups.find((candidate) => String(candidate.id) === groupId);
+      return { ...current, groupId, role: group ? group.role : current.role };
+    });
+  }
+
   const filteredUsers = useMemo(() => {
     if (selectedGroupId === "ALL") return users;
     if (selectedGroupId === null) return users.filter((user) => !user.group_id);
@@ -122,6 +153,7 @@ export default function AdminUsers({ showHeader = true, showGroupsSection = true
         }),
       });
       setForm({ email: "", phoneNumber: "", password: "", role: "ACCOUNTANT", groupId: "" });
+      setPasswordEdited(false);
       setShowCreateUserModal(false);
       notify("User created.");
       await loadData(false);
@@ -286,7 +318,7 @@ export default function AdminUsers({ showHeader = true, showGroupsSection = true
               <h2 className="text-[1.55rem] font-bold tracking-[-0.03em] text-slate-900">Users</h2>
               <p className="mt-1 text-sm text-slate-600">{filteredUsers.length} users in this view</p>
             </div>
-            <button type="button" onClick={() => setShowCreateUserModal(true)} className={primaryButtonClass}>+ Add User</button>
+            <button type="button" onClick={() => { setPasswordEdited(false); setShowCreateUserModal(true); }} className={primaryButtonClass}>+ Add User</button>
           </div>
           {error ? <p className="mb-3 text-sm text-rose-500">{error}</p> : null}
           <div className="overflow-hidden rounded-2xl border border-slate-200/60 bg-white shadow-sm">
@@ -349,12 +381,12 @@ export default function AdminUsers({ showHeader = true, showGroupsSection = true
             <form onSubmit={handleCreateUser} className="space-y-6 px-8 py-6">
               <div className="grid gap-6 md:grid-cols-2">
                 <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Username</span><InputBar value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="username" /></label>
-                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Phone Number</span><InputBar inputMode="numeric" maxLength={10} value={form.phoneNumber} onChange={(event) => setForm((current) => ({ ...current, phoneNumber: event.target.value.replace(/\D/g, "").slice(0, 10) }))} /></label>
+                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Phone Number</span><InputBar inputMode="numeric" maxLength={10} value={form.phoneNumber} onChange={(event) => setForm((current) => { const phoneNumber = event.target.value.replace(/\D/g, "").slice(0, 10); return { ...current, phoneNumber, password: passwordEdited ? current.password : phoneNumber }; })} /></label>
               </div>
               <div className="grid gap-6 md:grid-cols-3">
-                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Password</span><InputBar type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} /></label>
-                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Role</span><SelectBar value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{toTitleCase(role)}</option>)}</SelectBar></label>
-                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Group</span><SelectBar value={form.groupId} onChange={(event) => setForm((current) => ({ ...current, groupId: event.target.value }))}><option value="">No group</option>{groups.map((group) => <option key={group.id} value={String(group.id)}>{group.name}</option>)}</SelectBar></label>
+                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Password</span><InputBar type="password" value={form.password} onChange={(event) => { setPasswordEdited(true); setForm((current) => ({ ...current, password: event.target.value })); }} /></label>
+                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Role</span><SelectBar value={form.role} onChange={(event) => selectRole(event.target.value)}>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{toTitleCase(role)}</option>)}</SelectBar></label>
+                <label className="block"><span className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-700">Group</span><SelectBar value={form.groupId} onChange={(event) => selectGroup(event.target.value)}><option value="">No group</option>{groups.map((group) => <option key={group.id} value={String(group.id)}>{group.name}</option>)}</SelectBar></label>
               </div>
               <div className="flex justify-end gap-3"><button type="button" onClick={() => setShowCreateUserModal(false)} className={secondaryButtonClass}>Cancel</button><button type="submit" disabled={saving} className={primaryButtonClass}>{saving ? "Creating..." : "Create User"}</button></div>
             </form>
