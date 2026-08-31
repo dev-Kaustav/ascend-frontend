@@ -983,7 +983,7 @@ export default function QuickCreatePanel({
                     id="sku-mrp"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="0.001"
                     value={newSku.mrp}
                     onChange={(event) => updateSkuField("mrp", event.target.value)}
                   />
@@ -993,7 +993,7 @@ export default function QuickCreatePanel({
                     id="sku-distributor-landing-price"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="0.001"
                     value={newSku.distributor_landing_price}
                     onChange={(event) =>
                       setNewSku((prev) => ({ ...prev, distributor_landing_price: event.target.value }))
@@ -1006,7 +1006,7 @@ export default function QuickCreatePanel({
                       id="sku-discount-percent"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.discount_percent}
                       onChange={(event) => updateSkuField("discount_percent", event.target.value)}
                     />
@@ -1017,7 +1017,7 @@ export default function QuickCreatePanel({
                       id="sku-discount-amount"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.discount_amount}
                       onChange={(event) => updateSkuField("discount_amount", event.target.value)}
                     />
@@ -1028,7 +1028,7 @@ export default function QuickCreatePanel({
                     id="sku-rate"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="0.001"
                     value={newSku.rate}
                     readOnly
                   />
@@ -1041,7 +1041,7 @@ export default function QuickCreatePanel({
                       id="sku-sgst-percent"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.sgst_percent}
                       onChange={(event) => updateSkuField("sgst_percent", event.target.value)}
                     />
@@ -1052,7 +1052,7 @@ export default function QuickCreatePanel({
                       id="sku-sgst-amount"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.sgst_amount}
                       onChange={(event) => updateSkuField("sgst_amount", event.target.value)}
                     />
@@ -1064,7 +1064,7 @@ export default function QuickCreatePanel({
                       id="sku-cgst-percent"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.cgst_percent}
                       onChange={(event) => updateSkuField("cgst_percent", event.target.value)}
                     />
@@ -1075,7 +1075,7 @@ export default function QuickCreatePanel({
                       id="sku-cgst-amount"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.cgst_amount}
                       onChange={(event) => updateSkuField("cgst_amount", event.target.value)}
                     />
@@ -1087,7 +1087,7 @@ export default function QuickCreatePanel({
                       id="sku-igst-percent"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.igst_percent}
                       onChange={(event) => updateSkuField("igst_percent", event.target.value)}
                     />
@@ -1098,7 +1098,7 @@ export default function QuickCreatePanel({
                       id="sku-igst-amount"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.001"
                       value={newSku.igst_amount}
                       onChange={(event) => updateSkuField("igst_amount", event.target.value)}
                     />
@@ -1109,7 +1109,7 @@ export default function QuickCreatePanel({
                     id="sku-amount"
                     type="number"
                     min="0"
-                    step="0.01"
+                    step="0.001"
                     value={newSku.amount}
                     readOnly
                   />
