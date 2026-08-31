@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { formatSkuLabel } from "@/lib/format";
 import {
   getLineTaxAmount,
   getLineTotal,
@@ -239,7 +240,7 @@ export default function OrderLineItemsTable({
                       <option value="">{selectedBrandId ? "Select SKU" : "Select brand above"}</option>
                       {filteredSkus.map((skuItem) => (
                         <option key={skuItem.id} value={skuItem.id}>
-                          {skuItem.name}
+                          {formatSkuLabel(skuItem)}
                         </option>
                       ))}
                     </select>
@@ -261,7 +262,7 @@ export default function OrderLineItemsTable({
                     <option value="">{selectedBrandId ? "Select SKU" : "Select brand above"}</option>
                     {filteredSkus.map((skuItem) => (
                       <option key={skuItem.id} value={skuItem.id}>
-                        {skuItem.name}
+                        {formatSkuLabel(skuItem)}
                       </option>
                     ))}
                   </select>

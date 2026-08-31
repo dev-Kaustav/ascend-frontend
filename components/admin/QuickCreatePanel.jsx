@@ -66,6 +66,7 @@ const LAST_EDITED_DEFAULT = { discount: null, sgst: null, cgst: null, igst: null
 
 const emptySku = () => ({
   name: "",
+  code: "",
   brand_id: "",
   hsn_code: "",
   distributor_landing_price: "",
@@ -594,6 +595,8 @@ export default function QuickCreatePanel({
         method: "POST",
         body: JSON.stringify({
           name: newSku.name,
+          // Optional, and an empty box means "no code" rather than "".
+          code: newSku.code.trim() || null,
           brand_id: Number(newSku.brand_id),
           hsn_code: newSku.hsn_code,
           distributor_landing_price: toNumber(newSku.distributor_landing_price),
@@ -953,6 +956,15 @@ export default function QuickCreatePanel({
                     value={newSku.name}
                     onChange={(event) => setNewSku((prev) => ({ ...prev, name: event.target.value }))}
                     placeholder="Enter SKU name"
+                  />
+                </FieldRow>
+                <FieldRow id="sku-code" label="SKU code">
+                  <InputBar
+                    id="sku-code"
+                    type="text"
+                    value={newSku.code}
+                    onChange={(event) => setNewSku((prev) => ({ ...prev, code: event.target.value }))}
+                    placeholder="e.g. CHN-HG-25g"
                   />
                 </FieldRow>
                 <FieldRow id="sku-brand-name" label="Brand">

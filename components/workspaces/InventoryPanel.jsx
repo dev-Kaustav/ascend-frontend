@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber, formatSkuLabel } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import BarChartCard from "@/components/charts/BarChartCard";
@@ -78,7 +78,7 @@ export default function WarehouseInventory() {
   const skuMap = useMemo(() => {
     const map = new Map();
     skus.forEach((sku) => {
-      map.set(sku.id, sku.name);
+      map.set(sku.id, formatSkuLabel(sku));
     });
     return map;
   }, [skus]);

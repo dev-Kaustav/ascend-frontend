@@ -41,6 +41,11 @@ export default function AdminCatalog() {
         cell: ({ row }) => row.original.name || "—"
       },
       {
+        header: "SKU Code",
+        accessorKey: "code",
+        cell: ({ row }) => row.original.code || "—"
+      },
+      {
         header: "Brand",
         accessorKey: "brand_name",
         cell: ({ row }) => row.original.brand_name

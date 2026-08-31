@@ -304,8 +304,9 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
     () => [
       {
         header: "SKU",
-        accessorKey: "sku_name",
-        cell: ({ row }) => row.original.sku_name || `SKU ${row.original.sku_id}`
+        accessorKey: "sku_code",
+        cell: ({ row }) =>
+          row.original.sku_code || row.original.sku_name || `SKU ${row.original.sku_id}`
       },
       {
         header: "HSN",
