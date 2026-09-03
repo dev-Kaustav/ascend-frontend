@@ -63,6 +63,7 @@ export default function DriverOrders() {
     {
       header: "Order",
       accessorKey: "id",
+      meta: { mobilePrimary: true },
       cell: ({ row }) => (
         <div>
           <p className="font-semibold text-slate-900">#{row.original.id}</p>
@@ -98,6 +99,8 @@ export default function DriverOrders() {
     {
       header: "Action",
       accessorKey: "actions",
+      // The driver's whole workflow lives in this cell; give it the full card width.
+      meta: { mobileFullWidth: true },
       cell: ({ row }) => {
         const order = row.original;
         const rowUpdate = updates[order.id] || {};
@@ -108,7 +111,7 @@ export default function DriverOrders() {
                 type="button"
                 disabled={rowUpdate.saving}
                 onClick={() => handleStatusUpdate(order.id, "OUT_FOR_DELIVERY")}
-                className="cursor-pointer rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
               >
                 {rowUpdate.saving ? "Saving…" : "Mark In Transit"}
               </button>
@@ -123,7 +126,7 @@ export default function DriverOrders() {
                 <select
                   value={rowUpdate.paymentStatus || ""}
                   onChange={(e) => updateRow(order.id, { paymentStatus: e.target.value })}
-                  className="col-span-2 rounded-full border border-slate-200 bg-white px-2 py-1"
+                  className="col-span-2 min-h-[44px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
                 >
                   <option value="">Payment (optional)</option>
                   <option value="PAID">Paid</option>

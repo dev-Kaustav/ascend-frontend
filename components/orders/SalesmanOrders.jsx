@@ -43,6 +43,7 @@ export default function SalesmanOrders() {
     {
       header: "Order",
       accessorKey: "id",
+      meta: { mobilePrimary: true },
       cell: ({ row }) => (
         <div>
           <p className="font-semibold text-slate-900">#{row.original.id}</p>
@@ -78,11 +79,13 @@ export default function SalesmanOrders() {
     {
       header: "",
       accessorKey: "detail_action",
+      // The whole card is tappable on mobile, so this duplicate control is hidden there.
+      meta: { mobileHidden: true },
       cell: ({ row }) => (
         <button
           type="button"
           onClick={() => setSelectedOrderId(row.original.id)}
-          className="cursor-pointer rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+          className="inline-flex min-h-[44px] cursor-pointer items-center rounded-full border border-slate-200 px-4 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
         >
           View
         </button>
@@ -99,7 +102,7 @@ export default function SalesmanOrders() {
         title="My Orders"
         subtitle="Orders for your retailers"
         actions={
-          <Link href="/app/orders/new" className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white">
+          <Link href="/app/orders/new" className="inline-flex min-h-[44px] items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white">
             New Order
           </Link>
         }
@@ -107,7 +110,7 @@ export default function SalesmanOrders() {
         <select
           value={filters.status}
           onChange={(e) => setFilters({ status: e.target.value })}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
+          className="min-h-[44px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base sm:w-auto sm:text-sm"
         >
           <option value="ALL">All Statuses</option>
           <option value="PENDING">Pending</option>
@@ -124,6 +127,9 @@ export default function SalesmanOrders() {
           data={orders}
           emptyLabel="No orders found."
           tableClassName="min-w-[700px]"
+          // Makes the whole mobile card tappable, which is what lets the duplicate "View"
+          // button be hidden there. Matches DriverOrders, which already did this.
+          onRowClick={(order) => setSelectedOrderId(order.id)}
         />
       </SectionCard>
 
