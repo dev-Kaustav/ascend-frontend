@@ -423,7 +423,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
           </div>
         </header>
 
-        <main className="p-5 sm:p-6">
+        <main className="p-5 pb-28 sm:p-6 lg:pb-6">
           <div className="space-y-6">{children}</div>
         </main>
       </div>

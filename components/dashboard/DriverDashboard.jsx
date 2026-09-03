@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import StatCard from "@/components/layout/StatCard";
+import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
 import SectionCard from "@/components/layout/SectionCard";
 
 export default function DriverDashboard() {
@@ -38,16 +39,26 @@ export default function DriverDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard title="Ready to Pick Up" value={counts.readyToShip} subtitle="Waiting at warehouse" accent="amber" />
         <StatCard title="In Transit" value={counts.inTransit} subtitle="Currently delivering" accent="sky" />
         <StatCard title="Delivered Today" value={counts.delivered} subtitle="Completed deliveries" accent="emerald" />
       </div>
+      {/* Inline from lg: up; on phones this action lives in the pinned bar below. */}
       <SectionCard title="Your Deliveries" subtitle="Pick up and deliver assigned orders">
-        <Link href="/app/orders" className="inline-block rounded-full bg-slate-900 px-5 py-3 text-xs font-semibold uppercase tracking-widest text-white">
+        <Link href="/app/orders" className="hidden rounded-full bg-slate-900 px-5 py-3 text-xs font-semibold uppercase tracking-widest text-white lg:inline-block">
           View My Orders
         </Link>
+        <p className="text-sm text-slate-500 lg:hidden">
+          Your assigned pickups and deliveries for today.
+        </p>
       </SectionCard>
+
+      <MobileActionBar>
+        <Link href="/app/orders" className={BAR_ACTION_PRIMARY}>
+          View My Orders
+        </Link>
+      </MobileActionBar>
     </div>
   );
 }

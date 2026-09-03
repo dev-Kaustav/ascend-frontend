@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import StatCard from "@/components/layout/StatCard";
+import MobileActionBar, { BAR_ACTION_PRIMARY, BAR_ACTION_SECONDARY } from "@/components/layout/MobileActionBar";
 import SectionCard from "@/components/layout/SectionCard";
 
 export default function SalesmanDashboard() {
@@ -38,13 +39,15 @@ export default function SalesmanDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
         <StatCard title="Total Orders" value={counts.total} subtitle="Your orders" accent="sky" />
         <StatCard title="Pending" value={counts.booked} subtitle="Awaiting warehouse" accent="amber" />
         <StatCard title="Delivered" value={counts.delivered} subtitle="Successfully delivered" accent="emerald" />
       </div>
+      {/* Inline card from lg: up, where there is room for it. On phones the same two
+          actions live in the pinned bar below, in the thumb zone. */}
       <SectionCard title="Quick Actions" subtitle="Create and track your orders">
-        <div className="flex flex-wrap gap-3">
+        <div className="hidden flex-wrap gap-3 lg:flex">
           <Link href="/app/orders/new" className="rounded-full bg-slate-900 px-5 py-3 text-xs font-semibold uppercase tracking-widest text-white">
             Create Order
           </Link>
@@ -52,7 +55,19 @@ export default function SalesmanDashboard() {
             View Orders
           </Link>
         </div>
+        <p className="text-sm text-slate-500 lg:hidden">
+          Book a new order or review the ones you have already placed.
+        </p>
       </SectionCard>
+
+      <MobileActionBar>
+        <Link href="/app/orders/new" className={BAR_ACTION_PRIMARY}>
+          Create Order
+        </Link>
+        <Link href="/app/orders" className={BAR_ACTION_SECONDARY}>
+          View Orders
+        </Link>
+      </MobileActionBar>
     </div>
   );
 }
