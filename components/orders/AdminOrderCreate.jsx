@@ -30,7 +30,8 @@ export default function AdminOrderCreate() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [brandId, setBrandId] = useState("");
   const [orderDate, setOrderDate] = useState(getTodayDate);
-  const [pricingMode, setPricingMode] = useState("discount");
+  // Unit price is what gets negotiated at the counter; discount is derived from it.
+  const [pricingMode, setPricingMode] = useState("unit");
   const { items, updateItem, addItem, removeItem, setItems } = useLineItems(createEmptyOrderItem, 5);
   const {
     retailers,
