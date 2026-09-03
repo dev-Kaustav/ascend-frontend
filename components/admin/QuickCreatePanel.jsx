@@ -130,24 +130,14 @@ export default function QuickCreatePanel({
     return options;
   }, [canManageBeat, canManageBrand, canManageRetailer, canManageSku, canManageWarehouse, entities]);
 
-  const [selectedEntity, setSelectedEntity] = useState(() => {
-    if (defaultEntity && entityOptions.find((option) => option.value === defaultEntity)) {
-      return defaultEntity;
-    }
+  const [chosenEntity, setChosenEntity] = useState(null);
+  const selectedEntity = (() => {
+    const has = (value) => Boolean(value) && entityOptions.some((option) => option.value === value);
+    if (has(defaultEntity)) return defaultEntity;
+    if (has(chosenEntity)) return chosenEntity;
     return entityOptions[0]?.value || "";
-  });
-
-  useEffect(() => {
-    if (defaultEntity && entityOptions.find((option) => option.value === defaultEntity)) {
-      if (selectedEntity !== defaultEntity) {
-        setSelectedEntity(defaultEntity);
-      }
-      return;
-    }
-    if (!entityOptions.find((option) => option.value === selectedEntity)) {
-      setSelectedEntity(entityOptions[0]?.value || "");
-    }
-  }, [defaultEntity, entityOptions, selectedEntity]);
+  })();
+  const setSelectedEntity = setChosenEntity;
 
   const toNumber = (value) => {
     if (value === "" || value === null || value === undefined) return null;

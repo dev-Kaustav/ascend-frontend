@@ -6,18 +6,24 @@ import { apiFetch, apiEndpoints } from "@/lib/api";
 export default function AssignmentsList({ refreshKey }) {
   const [jobs, setJobs] = useState([]);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  function load() {
+  // Flip back to loading when the caller asks for a refresh. Adjusting state during render
+  // is React's documented pattern for reacting to a changed prop; doing it in an effect
+  // would render once with stale data before the spinner appeared.
+  const [loadedKey, setLoadedKey] = useState(refreshKey);
+  if (loadedKey !== refreshKey) {
+    setLoadedKey(refreshKey);
     setLoading(true);
-    apiFetch(apiEndpoints.outletFinder.assignments)
-      .then((d) => setJobs(d || []))
-      .catch(() => setJobs([]))
-      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    apiFetch(apiEndpoints.outletFinder.assignments)
+      .then((d) => { if (!cancelled) setJobs(d || []); })
+      .catch(() => { if (!cancelled) setJobs([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   return (

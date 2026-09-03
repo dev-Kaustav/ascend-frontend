@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import dayjs from "dayjs";
 import { getAccessToken, getUserFromToken, logout } from "@/lib/auth";
+import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
 
 function getInitials(email) {
@@ -239,28 +240,24 @@ function NavGlyph({ label }) {
   return <Icon />;
 }
 
+const COLLAPSED_KEY = "app-shell-collapsed";
+
 export default function AppShell({ navItems = [], roleLabel, children }) {
   const pathname = usePathname();
   const token = getAccessToken();
   const user = getUserFromToken(token);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("app-shell-collapsed");
-    if (saved === "true") setSidebarCollapsed(true);
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("app-shell-collapsed", String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
+  // localStorage is the source of truth for this preference. The previous read-effect
+  // rendered once collapsed=false and again with the stored value, and the paired
+  // write-effect fired on mount too, rewriting the value it had just read.
+  const sidebarCollapsed = useStoredValue(COLLAPSED_KEY) === "true";
 
   const handleCollapseToggle = () => {
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
       return;
     }
-    setSidebarCollapsed((current) => !current);
+    writeStored(COLLAPSED_KEY, String(!sidebarCollapsed));
   };
 
   return (

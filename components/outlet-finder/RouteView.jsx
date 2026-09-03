@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import RouteLauncher from "@/components/outlet-finder/RouteLauncher";
 import RouteStops from "@/components/outlet-finder/RouteStops";
 import { buildLegs, buildMapsUrl, fingerprintOutlets, recomputeDistances } from "@/lib/route";
+import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 
 const OutletMap = dynamic(() => import("@/components/outlet-finder/OutletMap"), { ssr: false });
 
@@ -15,9 +16,6 @@ const DELIVERY_STORAGE_PREFIX = "outletFinder.deliveries.";
 export default function RouteView({ outlets: initialOutlets, userPos, allowRemove = false }) {
   const [outlets, setOutlets] = useState(initialOutlets);
   const [showMap, setShowMap] = useState(false);
-  const [currentLegIndex, setCurrentLegIndex] = useState(0);
-  const [launchedLegs, setLaunchedLegs] = useState([]);
-  const [deliveryStates, setDeliveryStates] = useState({});
 
   const legs = useMemo(() => buildLegs(userPos, outlets), [userPos, outlets]);
   const fingerprint = useMemo(() => fingerprintOutlets(outlets), [outlets]);
@@ -25,57 +23,47 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
   const launchedStorageKey = fingerprint ? LAUNCHED_STORAGE_PREFIX + fingerprint : null;
   const deliveryStorageKey = fingerprint ? DELIVERY_STORAGE_PREFIX + fingerprint : null;
 
-  useEffect(() => {
-    if (!legStorageKey || typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(legStorageKey);
-    const parsed = stored ? parseInt(stored, 10) : 0;
-    setCurrentLegIndex(Number.isFinite(parsed) ? Math.min(parsed, Math.max(0, legs.length - 1)) : 0);
-  }, [legStorageKey, legs.length]);
+  // These three were mirrored into state by effects that read localStorage and called
+  // setState — a render with the default followed immediately by a render with the stored
+  // value, on every key change. localStorage is now the source of truth and the values are
+  // derived from it during render; writes notify the store, so React re-renders on its own.
+  const storedLeg = useStoredValue(legStorageKey);
+  const storedLaunched = useStoredValue(launchedStorageKey);
+  const storedDeliveries = useStoredValue(deliveryStorageKey);
 
-  useEffect(() => {
-    if (!launchedStorageKey || typeof window === "undefined") {
-      setLaunchedLegs([]);
-      return;
-    }
-    const stored = window.localStorage.getItem(launchedStorageKey);
-    try {
-      const parsed = stored ? JSON.parse(stored) : [];
-      setLaunchedLegs(Array.isArray(parsed) ? parsed.filter((i) => i < legs.length) : []);
-    } catch {
-      setLaunchedLegs([]);
-    }
-  }, [launchedStorageKey, legs.length]);
+  const currentLegIndex = useMemo(() => {
+    const parsed = storedLeg ? parseInt(storedLeg, 10) : 0;
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(Math.max(parsed, 0), Math.max(0, legs.length - 1));
+  }, [storedLeg, legs.length]);
 
-  useEffect(() => {
-    if (!deliveryStorageKey || typeof window === "undefined") {
-      setDeliveryStates({});
-      return;
-    }
-    const stored = window.localStorage.getItem(deliveryStorageKey);
+  const launchedLegs = useMemo(() => {
+    if (!storedLaunched) return [];
     try {
-      setDeliveryStates(stored ? JSON.parse(stored) : {});
+      const parsed = JSON.parse(storedLaunched);
+      return Array.isArray(parsed) ? parsed.filter((i) => i < legs.length) : [];
     } catch {
-      setDeliveryStates({});
+      return [];
     }
-  }, [deliveryStorageKey]);
+  }, [storedLaunched, legs.length]);
+
+  const deliveryStates = useMemo(() => {
+    if (!storedDeliveries) return {};
+    try {
+      return JSON.parse(storedDeliveries) || {};
+    } catch {
+      return {};
+    }
+  }, [storedDeliveries]);
 
   function updateDeliveryState(externalId, next) {
-    setDeliveryStates((prev) => {
-      const updated = { ...prev };
-      if (next === null) {
-        delete updated[externalId];
-      } else {
-        updated[externalId] = next;
-      }
-      if (deliveryStorageKey && typeof window !== "undefined") {
-        if (Object.keys(updated).length === 0) {
-          window.localStorage.removeItem(deliveryStorageKey);
-        } else {
-          window.localStorage.setItem(deliveryStorageKey, JSON.stringify(updated));
-        }
-      }
-      return updated;
-    });
+    const updated = { ...deliveryStates };
+    if (next === null) {
+      delete updated[externalId];
+    } else {
+      updated[externalId] = next;
+    }
+    writeStored(deliveryStorageKey, Object.keys(updated).length === 0 ? null : JSON.stringify(updated));
   }
 
   function handleCoordsUpdated(externalId, lat, lng) {
@@ -85,40 +73,25 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
   }
 
   function persistLegIndex(i) {
-    if (legStorageKey && typeof window !== "undefined") {
-      window.localStorage.setItem(legStorageKey, String(i));
-    }
+    writeStored(legStorageKey, String(i));
   }
 
   function selectLeg(i) {
-    setCurrentLegIndex(i);
     persistLegIndex(i);
   }
 
   function markLaunched(i) {
-    setLaunchedLegs((prev) => {
-      const next = prev.includes(i) ? prev : [...prev, i];
-      if (launchedStorageKey && typeof window !== "undefined") {
-        window.localStorage.setItem(launchedStorageKey, JSON.stringify(next));
-      }
-      // Advance selection to the next leg not yet launched (fall back to i + 1).
-      const upcoming = legs.findIndex((_, idx) => idx > i && !next.includes(idx));
-      const target = upcoming !== -1 ? upcoming : Math.min(i + 1, legs.length - 1);
-      setCurrentLegIndex(target);
-      persistLegIndex(target);
-      return next;
-    });
+    const next = launchedLegs.includes(i) ? launchedLegs : [...launchedLegs, i];
+    writeStored(launchedStorageKey, JSON.stringify(next));
+    // Advance selection to the next leg not yet launched (fall back to i + 1).
+    const upcoming = legs.findIndex((_, idx) => idx > i && !next.includes(idx));
+    const target = upcoming !== -1 ? upcoming : Math.min(i + 1, legs.length - 1);
+    persistLegIndex(target);
   }
 
   function resetLegs() {
-    setCurrentLegIndex(0);
-    setLaunchedLegs([]);
-    if (legStorageKey && typeof window !== "undefined") {
-      window.localStorage.removeItem(legStorageKey);
-    }
-    if (launchedStorageKey && typeof window !== "undefined") {
-      window.localStorage.removeItem(launchedStorageKey);
-    }
+    writeStored(legStorageKey, null);
+    writeStored(launchedStorageKey, null);
   }
 
   function removeOutlet(index) {

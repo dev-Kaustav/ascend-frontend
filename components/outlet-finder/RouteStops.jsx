@@ -24,32 +24,32 @@ export default function RouteStops({
   onCoordsUpdated,
   onRemove,
 }) {
-  const [focusedId, setFocusedId] = useState(null);
-  const [focusPos, setFocusPos] = useState(null);
+  // Focus is derived, not stored: a tap on a stop overrides it, and the override falls away
+  // once that stop leaves the route. Mirroring this into state via an effect re-rendered
+  // every time the route or delivery state changed.
+  const [focusOverride, setFocusOverride] = useState(null);
+  const focusedId =
+    focusOverride && outlets.some((o) => o.external_id === focusOverride)
+      ? focusOverride
+      : firstUndeliveredId(outlets, deliveryStates);
 
-  // Default focus to the first undelivered stop; re-evaluate when the route or delivery state changes.
-  useEffect(() => {
-    setFocusedId((prev) => {
-      if (prev && outlets.some((o) => o.external_id === prev)) return prev;
-      return firstUndeliveredId(outlets, deliveryStates);
-    });
-  }, [outlets, deliveryStates]);
+  // Keyed to the stop it was taken for, so a stale reading is never shown against a new
+  // focus and the effect never has to clear it synchronously.
+  const [gpsReading, setGpsReading] = useState(null);
+  const focusPos = gpsReading && gpsReading.id === focusedId ? gpsReading.pos : null;
 
   // Read GPS once whenever focus changes, for the proximity hint.
   useEffect(() => {
-    if (!focusedId || typeof navigator === "undefined" || !navigator.geolocation) {
-      setFocusPos(null);
-      return;
-    }
+    if (!focusedId || typeof navigator === "undefined" || !navigator.geolocation) return undefined;
     let cancelled = false;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         if (!cancelled) {
-          setFocusPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setGpsReading({ id: focusedId, pos: { lat: pos.coords.latitude, lng: pos.coords.longitude } });
         }
       },
       () => {
-        if (!cancelled) setFocusPos(null);
+        if (!cancelled) setGpsReading({ id: focusedId, pos: null });
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -73,7 +73,7 @@ export default function RouteStops({
       const remaining = outlets.filter(
         (o) => o.external_id !== externalId && deliveryStates[o.external_id]?.status !== "delivered"
       );
-      setFocusedId(remaining.length ? remaining[0].external_id : null);
+      setFocusOverride(remaining.length ? remaining[0].external_id : null);
     }
   }
 
@@ -89,7 +89,7 @@ export default function RouteStops({
           return (
             <button
               key={outlet.external_id}
-              onClick={() => setFocusedId(outlet.external_id)}
+              onClick={() => setFocusOverride(outlet.external_id)}
               className="w-full text-left rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm flex items-center gap-3 active:bg-slate-50 transition-colors cursor-pointer"
             >
               <div
