@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 function isTabAllowed(tab, role) {
   return !tab.roles?.length || tab.roles.includes(role);
@@ -12,7 +12,7 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
   const allowedTabs = useMemo(() => tabs.filter((tab) => isTabAllowed(tab, role)), [tabs, role]);
 
   const requestedTab = searchParams.get("tab");

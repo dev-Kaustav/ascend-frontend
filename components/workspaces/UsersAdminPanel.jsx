@@ -5,7 +5,7 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import { toTitleCase } from "@/lib/format";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
-import { getAccessToken, getUserFromToken } from "@/lib/auth";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const ROLE_OPTIONS = ["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN", "DRIVER", "BRAND", "RETAILER"];
 
@@ -41,7 +41,7 @@ function getRoleBadgeClass(role) {
 
 export default function AdminUsers({ showHeader = true, showGroupsSection = true, showUsersSection = true } = {}) {
   const { notify } = useToast();
-  const currentUser = getUserFromToken(getAccessToken());
+  const { user: currentUser } = useAuth();
   const currentUserId = currentUser?.id ? Number(currentUser.id) : null;
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);

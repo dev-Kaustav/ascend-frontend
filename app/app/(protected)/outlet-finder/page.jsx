@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+import {  } from "react";
+
 import ManualFinder from "@/components/outlet-finder/ManualFinder";
 import DriverJobs from "@/components/outlet-finder/DriverJobs";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function OutletFinderPage() {
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
 
   if (role === "DRIVER") {
     return (

@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import SectionCard from "@/components/layout/SectionCard";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { INDIAN_STATES } from "@/lib/states";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 const ROW_CLASSNAME = "grid gap-2 sm:grid-cols-[160px_1fr] sm:items-center";
 const LABEL_CLASSNAME = "text-xs font-semibold text-slate-500";
@@ -102,12 +103,12 @@ export default function QuickCreatePanel({
   const [newBeat, setNewBeat] = useState({ name: "", warehouse_id: "" });
   const { notify } = useToast();
 
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
-  const canManageWarehouse = useMemo(() => role === "ADMIN", [role]);
-  const canManageBrand = useMemo(() => role === "ADMIN" || role === "ACCOUNTANT", [role]);
-  const canManageRetailer = useMemo(() => role === "ADMIN", [role]);
-  const canManageSku = useMemo(() => role === "ADMIN" || role === "WAREHOUSE_MANAGER" || role === "ACCOUNTANT", [role]);
-  const canManageBeat = useMemo(() => role === "ADMIN", [role]);
+  const { role } = useAuth();
+  const canManageWarehouse = role === "ADMIN";
+  const canManageBrand = role === "ADMIN" || role === "ACCOUNTANT";
+  const canManageRetailer = role === "ADMIN";
+  const canManageSku = role === "ADMIN" || role === "WAREHOUSE_MANAGER" || role === "ACCOUNTANT";
+  const canManageBeat = role === "ADMIN";
 
   const entityOptions = useMemo(() => {
     const options = [];
@@ -127,7 +128,7 @@ export default function QuickCreatePanel({
       options.push({ value: "beat", label: ENTITY_LABELS.beat });
     }
     return options;
-  }, [canManageBrand, canManageRetailer, canManageSku, canManageWarehouse, entities]);
+  }, [canManageBeat, canManageBrand, canManageRetailer, canManageSku, canManageWarehouse, entities]);
 
   const [selectedEntity, setSelectedEntity] = useState(() => {
     if (defaultEntity && entityOptions.find((option) => option.value === defaultEntity)) {

@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+import {  } from "react";
+
 import AdminDrivers from "@/components/drivers/AdminDrivers";
 import WarehouseDrivers from "@/components/drivers/WarehouseDrivers";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function DriversPage() {
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
 
   if (role === "ADMIN") return <AdminDrivers />;
   if (role === "WAREHOUSE_MANAGER") return <WarehouseDrivers />;

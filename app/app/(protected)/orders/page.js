@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+import {  } from "react";
+
 import AdminOrders from "@/components/orders/AdminOrders";
 import AccountantOrders from "@/components/orders/AccountantOrders";
 import WarehouseOrders from "@/components/orders/WarehouseOrders";
 import SalesmanOrders from "@/components/orders/SalesmanOrders";
 import DriverOrders from "@/components/orders/DriverOrders";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function OrdersPage() {
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
 
   if (role === "ADMIN") return <AdminOrders />;
   if (role === "ACCOUNTANT") return <AccountantOrders />;

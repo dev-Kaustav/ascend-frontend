@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+
 import DataTable from "@/components/tables/DataTable";
 import InvoiceCell from "@/components/ui/InvoiceCell";
 import MobileActionBar, {
@@ -12,6 +12,7 @@ import MobileActionBar, {
   BAR_ACTION_DANGER,
 } from "@/components/layout/MobileActionBar";
 import MobileSheet from "@/components/layout/MobileSheet";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -142,7 +143,6 @@ const CANCEL_ROLES_BY_STATUS = {
 function roleNeedsDriverList(role) {
   return (ROLE_ACTIONS[role] || []).some((status) => ACTION_CONFIG[status]?.primary?.showDriver);
 }
-
 
 function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = null }) {
   const [form, setForm] = useState({});
@@ -339,7 +339,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
   const [loading, setLoading] = useState(Boolean(orderId));
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
 
   async function loadOrder() {
     if (!orderId) return;

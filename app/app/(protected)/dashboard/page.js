@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+import {  } from "react";
+
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import AccountantDashboard from "@/components/dashboard/AccountantDashboard";
 import WarehouseDashboard from "@/components/dashboard/WarehouseDashboard";
 import SalesmanDashboard from "@/components/dashboard/SalesmanDashboard";
 import DriverDashboard from "@/components/dashboard/DriverDashboard";
 import BrandDashboard from "@/components/dashboard/BrandDashboard";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function DashboardPage() {
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
 
   if (role === "ADMIN") return <AdminDashboard />;
   if (role === "ACCOUNTANT") return <AccountantDashboard />;

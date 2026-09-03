@@ -7,8 +7,9 @@ import { formatDate, formatNumber, formatSkuLabel } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import BarChartCard from "@/components/charts/BarChartCard";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+
 import { roleCanManageInventory } from "@/lib/workspaceRoutes";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 function getExpiry(item) {
   return item.earliest_expiry || item.expiry_date || null;
@@ -32,7 +33,7 @@ export default function WarehouseInventory() {
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const role = getRoleFromToken(getAccessToken());
+  const { role } = useAuth();
   const canManage = roleCanManageInventory(role);
 
   useEffect(() => {
