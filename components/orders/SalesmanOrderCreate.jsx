@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import OrderLineItemsTable from "@/components/orders/OrderLineItemsTable";
 import SectionCard from "@/components/layout/SectionCard";
+import SearchSelect from "@/components/ui/SearchSelect";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
@@ -35,6 +36,16 @@ export default function SalesmanOrderCreate() {
     errorMessage: "Unable to load order form data."
   });
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
+  const retailerOptions = useMemo(
+    () =>
+      retailers.map((retailer) => ({
+        value: String(retailer.id),
+        label: retailer.name,
+        hint: retailer.city || "",
+        keywords: [retailer.city, retailer.mobile_number]
+      })),
+    [retailers]
+  );
   const currencyFormatter = useMemo(
     () =>
       new Intl.NumberFormat("en-IN", {
@@ -159,14 +170,14 @@ export default function SalesmanOrderCreate() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Retailer</label>
-              <SelectBar value={retailerId} onChange={(event) => setRetailerId(event.target.value)} className="mt-2">
-                <option value="">Select retailer</option>
-                {retailers.map((retailer) => (
-                  <option key={retailer.id} value={retailer.id}>
-                    {retailer.name}
-                  </option>
-                ))}
-              </SelectBar>
+              <SearchSelect
+                value={retailerId}
+                onChange={setRetailerId}
+                options={retailerOptions}
+                placeholder="Search retailers by name, city or phone"
+                emptyLabel="No retailers match"
+                className="mt-2"
+              />
               {!retailers.length ? (
                 <p className="mt-2 text-xs text-amber-600">
                   No retailers are assigned to you yet. Ask an admin to assign your outlets before booking an order.
@@ -297,7 +308,6 @@ export default function SalesmanOrderCreate() {
               onItemChange={updateItem}
               onAddItem={addItem}
               onRemoveItem={removeItem}
-              wrapSkuSelect={false}
             />
           </div>
 

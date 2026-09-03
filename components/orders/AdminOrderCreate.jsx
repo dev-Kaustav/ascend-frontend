@@ -7,12 +7,14 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import OrderLineItemsTable from "@/components/orders/OrderLineItemsTable";
 import SectionCard from "@/components/layout/SectionCard";
+import SearchSelect from "@/components/ui/SearchSelect";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
-import { getAccessToken, getRoleFromToken } from "@/lib/auth";
+
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
 import { createEmptyOrderItem, getOrderTotal, getSkuGstRate, roundToTwo } from "@/lib/orders";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function AdminOrderCreate() {
   const router = useRouter();
@@ -44,6 +46,16 @@ export default function AdminOrderCreate() {
     errorMessage: "Unable to load order form data."
   });
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
+  const retailerOptions = useMemo(
+    () =>
+      retailers.map((retailer) => ({
+        value: String(retailer.id),
+        label: retailer.name,
+        hint: retailer.city || "",
+        keywords: [retailer.city, retailer.mobile_number]
+      })),
+    [retailers]
+  );
   const currencyFormatter = useMemo(
     () =>
       new Intl.NumberFormat("en-IN", {
@@ -54,7 +66,7 @@ export default function AdminOrderCreate() {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const role = useMemo(() => getRoleFromToken(getAccessToken()), []);
+  const { role } = useAuth();
   const canEditDiscount = useMemo(() => role === "SALESMAN" || role === "ACCOUNTANT" || role === "ADMIN", [role]);
   const { notify } = useToast();
   const formatRupee = (value) => `₹${currencyFormatter.format(Number(value) || 0)}`;
@@ -149,7 +161,6 @@ export default function AdminOrderCreate() {
     }
   }
 
-
   if (loading) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
@@ -176,14 +187,14 @@ export default function AdminOrderCreate() {
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Retailer</label>
-              <SelectBar value={retailerId} onChange={(event) => setRetailerId(event.target.value)} className="mt-2">
-                <option value="">Select retailer</option>
-                {retailers.map((retailer) => (
-                  <option key={retailer.id} value={retailer.id}>
-                    {retailer.name}
-                  </option>
-                ))}
-              </SelectBar>
+              <SearchSelect
+                value={retailerId}
+                onChange={setRetailerId}
+                options={retailerOptions}
+                placeholder="Search retailers by name, city or phone"
+                emptyLabel="No retailers match"
+                className="mt-2"
+              />
             </div>
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Order date</label>

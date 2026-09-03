@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { formatSkuLabel } from "@/lib/format";
+import SearchSelect from "@/components/ui/SearchSelect";
 import {
   getLineTaxAmount,
   getLineTotal,
@@ -19,8 +20,7 @@ export default function OrderLineItemsTable({
   onItemChange,
   onAddItem,
   onRemoveItem,
-  canEditDiscount = true,
-  wrapSkuSelect = true
+  canEditDiscount = true
 }) {
   const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
   const currencyFormatter = useMemo(
@@ -38,6 +38,15 @@ export default function OrderLineItemsTable({
     if (!selectedBrandId) return [];
     return skus.filter((sku) => String(sku.brand_id) === String(selectedBrandId));
   }, [skus, selectedBrandId]);
+  const skuOptions = useMemo(
+    () =>
+      filteredSkus.map((sku) => ({
+        value: String(sku.id),
+        label: formatSkuLabel(sku),
+        keywords: [sku.code]
+      })),
+    [filteredSkus]
+  );
   const getDefaultDiscount = (sku) => {
     if (!sku) return "0";
     if (sku.discount_amount !== null && sku.discount_amount !== undefined) {
@@ -222,51 +231,21 @@ export default function OrderLineItemsTable({
                 <div className="flex items-center text-xs font-semibold text-slate-500">
                   {index + 1}
                 </div>
-                {wrapSkuSelect ? (
-                  <div className="flex h-9 w-full min-w-0 items-center rounded-2xl border border-slate-200 bg-white px-3">
-                    <select
-                      value={item.skuId}
-                      disabled={!selectedBrandId}
-                      onChange={(event) => {
-                        const skuId = event.target.value;
-                        const selectedSku = skuMap.get(String(skuId));
-                        applyItemChange(index, {
-                          skuId,
-                          brandId: selectedSku?.brand_id ? String(selectedSku.brand_id) : item.brandId
-                        });
-                      }}
-                      className="h-full w-full border-0 bg-transparent p-0 text-sm text-slate-700 appearance-none"
-                    >
-                      <option value="">{selectedBrandId ? "Select SKU" : "Select brand above"}</option>
-                      {filteredSkus.map((skuItem) => (
-                        <option key={skuItem.id} value={skuItem.id}>
-                          {formatSkuLabel(skuItem)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <select
-                    value={item.skuId}
-                    disabled={!selectedBrandId}
-                    onChange={(event) => {
-                      const skuId = event.target.value;
-                      const selectedSku = skuMap.get(String(skuId));
-                      applyItemChange(index, {
-                        skuId,
-                        brandId: selectedSku?.brand_id ? String(selectedSku.brand_id) : item.brandId
-                      });
-                    }}
-                    className={inputClassName}
-                  >
-                    <option value="">{selectedBrandId ? "Select SKU" : "Select brand above"}</option>
-                    {filteredSkus.map((skuItem) => (
-                      <option key={skuItem.id} value={skuItem.id}>
-                        {formatSkuLabel(skuItem)}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <SearchSelect
+                  value={item.skuId}
+                  disabled={!selectedBrandId}
+                  onChange={(skuId) => {
+                    const selectedSku = skuMap.get(String(skuId));
+                    applyItemChange(index, {
+                      skuId,
+                      brandId: selectedSku?.brand_id ? String(selectedSku.brand_id) : item.brandId
+                    });
+                  }}
+                  options={skuOptions}
+                  placeholder={selectedBrandId ? "Search SKUs by name or code" : "Select brand above"}
+                  emptyLabel="No SKUs match"
+                  inputClassName="h-9 rounded-2xl px-3 py-0"
+                />
                 <input
                   type="number"
                   min="0"
