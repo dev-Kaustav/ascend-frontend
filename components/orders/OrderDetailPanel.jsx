@@ -128,6 +128,22 @@ const CANCEL_ROLES_BY_STATUS = {
   DELIVERED: new Set(["ADMIN"]),
 };
 
+// Whether this role can reach any transition that needs a driver chosen. Derived from
+// ROLE_ACTIONS and ACTION_CONFIG rather than hardcoding role names, so granting a role a
+// driver-requiring transition automatically grants it the lookup too.
+//
+// /admin/drivers is restricted to ADMIN and WAREHOUSE_MANAGER, so fetching it for every
+// viewer meant a guaranteed 403 on every order a driver, salesman or accountant opened.
+// It was swallowed by a .catch, leaving an empty list — harmless only because the roles
+// that need the list are exactly the roles allowed to fetch it. That coincidence is not
+// something to keep relying on: if a driver-requiring transition were ever granted to
+// another role, the select would render empty and submitAction would reject with
+// "Please select a driver" and nothing to select.
+function roleNeedsDriverList(role) {
+  return (ROLE_ACTIONS[role] || []).some((status) => ACTION_CONFIG[status]?.primary?.showDriver);
+}
+
+
 function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = null }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
@@ -331,7 +347,9 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
     try {
       const [response, driversResponse] = await Promise.all([
         apiFetch(apiEndpoints.orders.detail(orderId)),
-        apiFetchCached(apiEndpoints.admin.drivers, { ttl: 60000 }).catch(() => []),
+        roleNeedsDriverList(role)
+          ? apiFetchCached(apiEndpoints.admin.drivers, { ttl: 60000 }).catch(() => [])
+          : Promise.resolve([]),
       ]);
       setOrder(response);
       setDrivers(driversResponse || []);
