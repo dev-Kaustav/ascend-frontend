@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, toTitleCase } from "@/lib/format";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import InvoiceCell from "@/components/ui/InvoiceCell";
+import { describeMissingFields } from "@/lib/companyProfile";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
@@ -41,6 +43,22 @@ export default function AdminInvoices() {
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [missingCompanyFields, setMissingCompanyFields] = useState([]);
+
+  // Warn, do not block: issuance still proceeds with an incomplete supplier profile, so
+  // the only defence against permanently invalid immutable invoices is that somebody sees
+  // this. The endpoint is admin-only, so an accountant simply gets no banner.
+  useEffect(() => {
+    let active = true;
+    apiFetch(apiEndpoints.admin.companyProfile)
+      .then((response) => {
+        if (active) setMissingCompanyFields(response?.missing_invoice_fields || []);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -187,6 +205,20 @@ export default function AdminInvoices() {
 
   return (
     <div className="space-y-6">
+      {missingCompanyFields.length ? (
+        <div className="rounded-[1.5rem] border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+          <p className="font-semibold">Company profile is incomplete — invoices will be issued invalid.</p>
+          <p className="mt-2">
+            Missing: <span className="font-semibold">{describeMissingFields(missingCompanyFields)}</span>. These are
+            stamped onto each invoice at dispatch and an issued invoice cannot be corrected. Fix this under{" "}
+            <Link href="/app/admin?tab=company-profile" className="font-semibold underline">
+              Admin → Company Profile
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <StatCard
           title="Invoices"

@@ -3,6 +3,7 @@
 import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
 import UsersAdminPanel from "@/components/workspaces/UsersAdminPanel";
 import QuickCreateWorkspacePanel from "@/components/workspaces/QuickCreateWorkspacePanel";
+import CompanyProfilePanel from "@/components/workspaces/CompanyProfilePanel";
 
 export default function AdminWorkspacePage() {
   const tabs = [
@@ -18,6 +19,13 @@ export default function AdminWorkspacePage() {
           showUsersSection={true}
         />
       )
+    },
+    {
+      key: "company-profile",
+      label: "Company Profile",
+      description: "Supplier details stamped onto every invoice at dispatch.",
+      roles: ["ADMIN"],
+      render: () => <CompanyProfilePanel />
     },
     {
       key: "quick-create",
