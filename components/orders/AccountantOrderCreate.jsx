@@ -323,11 +323,11 @@ export default function AccountantOrderCreate() {
           <div className="flex flex-wrap items-center justify-end gap-3">
             {paymentMode !== "CREDIT" ? (
               <div className="w-full space-y-2">
-                <div className="grid items-center gap-3 md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                <div className="flex items-center justify-between gap-3 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
                   <span className="md:col-span-7 text-right text-sm font-semibold text-slate-700">
                     Payment received
                   </span>
-                  <div className="md:col-span-2 md:col-start-8">
+                  <div className="w-40 shrink-0 md:col-span-2 md:col-start-8 md:w-auto">
                     <InputBar
                       type="number"
                       min="0"
@@ -340,7 +340,7 @@ export default function AccountantOrderCreate() {
                     />
                   </div>
                 </div>
-                <div className="grid items-center gap-3 text-sm text-slate-600 md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                <div className="flex items-center justify-between gap-3 text-sm text-slate-600 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
                   <span className="md:col-span-7 text-right text-sm font-semibold text-slate-500">
                     Payment pending
                   </span>

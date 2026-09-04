@@ -15,8 +15,9 @@ import { useToast } from "@/components/ui/ToastProvider";
 
 // No salesman picker: create_outgoing_order stamps salesman_id from the authenticated
 // user's employee record and ignores any client-supplied value, so a field here would be
-// decorative at best and misleading at worst. No QuickCreatePanel either — a salesman
-// does not create retailers, brands or SKUs.
+// decorative at best and misleading at worst. No QuickCreatePanel either: a salesman does not
+// create brands or SKUs, and retailers are added on their own My Retailers screen, where the
+// backend stamps the assignment that makes the new outlet visible here.
 export default function SalesmanOrderCreate() {
   const router = useRouter();
   const getTodayDate = () => {
@@ -181,7 +182,11 @@ export default function SalesmanOrderCreate() {
               />
               {!retailers.length ? (
                 <p className="mt-2 text-xs text-amber-600">
-                  No retailers are assigned to you yet. Ask an admin to assign your outlets before booking an order.
+                  No retailers are assigned to you yet.{" "}
+                  <Link href="/app/retailers" className="font-semibold underline underline-offset-2">
+                    Add your first outlet
+                  </Link>{" "}
+                  to start booking orders.
                 </p>
               ) : null}
             </div>
@@ -315,11 +320,11 @@ export default function SalesmanOrderCreate() {
           <div className="flex flex-wrap items-center justify-end gap-3">
             {paymentMode !== "CREDIT" ? (
               <div className="w-full space-y-2">
-                <div className="grid items-center gap-3 md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                <div className="flex items-center justify-between gap-3 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
                   <span className="md:col-span-7 text-right text-sm font-semibold text-slate-700">
                     Payment received
                   </span>
-                  <div className="md:col-span-2 md:col-start-8">
+                  <div className="w-40 shrink-0 md:col-span-2 md:col-start-8 md:w-auto">
                     <InputBar
                       type="number"
                       min="0"
@@ -332,7 +337,7 @@ export default function SalesmanOrderCreate() {
                     />
                   </div>
                 </div>
-                <div className="grid items-center gap-3 text-sm text-slate-600 md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                <div className="flex items-center justify-between gap-3 text-sm text-slate-600 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
                   <span className="md:col-span-7 text-right text-sm font-semibold text-slate-500">
                     Payment pending
                   </span>

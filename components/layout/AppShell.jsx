@@ -139,6 +139,16 @@ function WalletIcon() {
   );
 }
 
+function StorefrontIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9Z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 9 5 4.5h14L20.5 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M10 20v-5h4v5" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function PinIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
@@ -231,6 +241,7 @@ const NAV_ICON_MAP = {
   Admin: ShieldIcon,
   Profile: PersonIcon,
   "Bill Labels": LabelIcon,
+  "My Retailers": StorefrontIcon,
   "Outlet Finder": PinIcon,
   "Tracking": PinIcon,
 };

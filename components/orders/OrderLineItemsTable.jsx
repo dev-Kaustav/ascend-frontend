@@ -10,7 +10,7 @@ import {
 } from "@/lib/orders";
 
 const inputClassName =
-  "w-full min-w-0 h-9 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm";
+  "w-full min-w-0 h-11 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-base md:h-9 md:text-sm";
 
 export default function OrderLineItemsTable({
   items,
@@ -32,8 +32,10 @@ export default function OrderLineItemsTable({
     []
   );
   const formatRupee = (value) => `₹${currencyFormatter.format(Number(value) || 0)}`;
-  const gridClassName =
-    "grid gap-3 items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]";
+  // Desktop only. Below md the same fields are re-laid-out as labelled cards, because nine
+  // unlabelled controls stacked in one column tells a phone user nothing.
+  const gridColumnsClassName = "md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]";
+  const desktopRowClassName = `hidden gap-3 items-center md:grid ${gridColumnsClassName}`;
   const filteredSkus = useMemo(() => {
     if (!selectedBrandId) return [];
     return skus.filter((sku) => String(sku.brand_id) === String(selectedBrandId));
@@ -133,12 +135,13 @@ export default function OrderLineItemsTable({
     `${resolveInputClass(isEditable)} text-right tabular-nums`;
   const headerNumericClass = "text-right pr-3";
   const currencyCellClass =
-    "flex h-9 items-center justify-end gap-1 px-3 text-right text-sm text-slate-500 tabular-nums";
+    "flex h-11 items-center justify-end gap-1 px-3 text-right text-base text-slate-500 tabular-nums md:h-9 md:text-sm";
   const currencySymbolClass = "text-slate-400 leading-none";
-  const currencyInputWrapClass = "flex h-9 w-full items-center justify-end gap-1";
+  const currencyInputWrapClass = "flex h-11 w-full items-center justify-end gap-1 md:h-9";
   const currencyInputClass = (isEditable) =>
-    `${resolveNumericInputClass(isEditable)} w-20`;
-  const totalsRowClassName = `${gridClassName} text-sm text-slate-700`;
+    `${resolveNumericInputClass(isEditable)} w-full md:w-20`;
+  // Label left, figure right on a phone; the desktop grid keeps them aligned to the columns.
+  const totalsRowClassName = `flex items-center justify-between gap-3 text-sm text-slate-700 md:grid md:gap-3 ${gridColumnsClassName}`;
   const applyItemChange = (index, patch) => {
     const current = items[index] || {};
     let next = { ...current, ...patch };
@@ -211,7 +214,7 @@ export default function OrderLineItemsTable({
     <>
       <div className="space-y-3">
         <div>
-          <div className={`${gridClassName} text-xs uppercase tracking-widest text-slate-400`}>
+          <div className={`${desktopRowClassName} text-xs uppercase tracking-widest text-slate-400`}>
             <span>#</span>
             <span className="pl-3">SKU</span>
             <span className={headerNumericClass}>Quantity</span>
@@ -226,114 +229,181 @@ export default function OrderLineItemsTable({
             const sku = skuMap.get(String(item.skuId));
             const mrpValue = getSkuListPrice(sku);
             const lineTotalValue = sku ? currencyFormatter.format(getLineTotal(item, sku)) : "";
-            return (
-              <div key={`line-${index}`} className={`${gridClassName} items-center`}>
-                <div className="flex items-center text-xs font-semibold text-slate-500">
-                  {index + 1}
-                </div>
-                <SearchSelect
-                  value={item.skuId}
-                  disabled={!selectedBrandId}
-                  onChange={(skuId) => {
-                    const selectedSku = skuMap.get(String(skuId));
-                    applyItemChange(index, {
-                      skuId,
-                      brandId: selectedSku?.brand_id ? String(selectedSku.brand_id) : item.brandId
-                    });
-                  }}
-                  options={skuOptions}
-                  placeholder={selectedBrandId ? "Search SKUs by name or code" : "Select brand above"}
-                  emptyLabel="No SKUs match"
-                  inputClassName="h-9 rounded-2xl px-3 py-0"
-                />
+
+            // Built once and rendered into both layouts. Responsive classes handle the size
+            // difference, so the phone and desktop views can never drift apart in behaviour.
+            const skuField = (
+              <SearchSelect
+                value={item.skuId}
+                disabled={!selectedBrandId}
+                onChange={(skuId) => {
+                  const selectedSku = skuMap.get(String(skuId));
+                  applyItemChange(index, {
+                    skuId,
+                    brandId: selectedSku?.brand_id ? String(selectedSku.brand_id) : item.brandId
+                  });
+                }}
+                options={skuOptions}
+                placeholder={selectedBrandId ? "Search SKUs by name or code" : "Select brand above"}
+                emptyLabel="No SKUs match"
+                inputClassName="h-11 rounded-2xl px-3 py-0 text-base md:h-9 md:text-sm"
+              />
+            );
+            const quantityField = (
+              <input
+                type="number"
+                min="0"
+                step="1"
+                aria-label={`Quantity for line ${index + 1}`}
+                value={item.quantity}
+                onChange={(event) => applyItemChange(index, { quantity: event.target.value })}
+                className={`${inputClassName} text-right tabular-nums`}
+                placeholder="0"
+              />
+            );
+            const mrpField = (
+              <div className={currencyCellClass}>
+                {mrpValue ? <span className={currencySymbolClass}>₹</span> : null}
+                <span>{mrpValue ? currencyFormatter.format(Number(mrpValue) || 0) : "—"}</span>
+              </div>
+            );
+            const discountPercentField = (
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                aria-label={`Discount percent for line ${index + 1}`}
+                value={item.discountPercent ?? "0"}
+                onChange={(event) => {
+                  if (!isPercentEditable) return;
+                  applyItemChange(index, { discountPercent: event.target.value });
+                }}
+                readOnly={!isPercentEditable}
+                className={resolveNumericInputClass(isPercentEditable)}
+                placeholder="0"
+              />
+            );
+            const discountField = (
+              <div className={currencyInputWrapClass}>
+                <span className={currencySymbolClass}>₹</span>
                 <input
                   type="number"
                   min="0"
-                  step="1"
-                  value={item.quantity}
-                  onChange={(event) => applyItemChange(index, { quantity: event.target.value })}
-                  className={`${inputClassName} text-right tabular-nums`}
-                  placeholder="0"
-                />
-                <div className={currencyCellClass}>
-                  {mrpValue ? <span className={currencySymbolClass}>₹</span> : null}
-                  <span>{mrpValue ? currencyFormatter.format(Number(mrpValue) || 0) : "—"}</span>
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={item.discountPercent ?? "0"}
+                  step="0.01"
+                  aria-label={`Discount amount for line ${index + 1}`}
+                  value={item.discount}
                   onChange={(event) => {
-                    if (!isPercentEditable) return;
-                    applyItemChange(index, { discountPercent: event.target.value });
+                    if (!isDiscountEditable) return;
+                    applyItemChange(index, { discount: event.target.value });
                   }}
-                  readOnly={!isPercentEditable}
-                  className={resolveNumericInputClass(isPercentEditable)}
-                  placeholder="0"
+                  readOnly={!isDiscountEditable}
+                  className={currencyInputClass(isDiscountEditable)}
+                  placeholder="0.00"
                 />
-                <div className={currencyInputWrapClass}>
-                  <span className={currencySymbolClass}>₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.discount}
-                    onChange={(event) => {
-                      if (!isDiscountEditable) return;
-                      applyItemChange(index, { discount: event.target.value });
-                    }}
-                    readOnly={!isDiscountEditable}
-                    className={currencyInputClass(isDiscountEditable)}
-                    placeholder="0.00"
-                  />
+              </div>
+            );
+            const unitPriceField = (
+              <div className={currencyInputWrapClass}>
+                <span className={currencySymbolClass}>₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  aria-label={`Unit price for line ${index + 1}`}
+                  value={item.unitPrice ?? ""}
+                  onChange={(event) => {
+                    if (!isUnitEditable) return;
+                    applyItemChange(index, { unitPrice: event.target.value });
+                  }}
+                  readOnly={!isUnitEditable}
+                  className={currencyInputClass(isUnitEditable)}
+                  placeholder="0.00"
+                />
+              </div>
+            );
+            const lineTotalField = (
+              <div className={currencyCellClass}>
+                {lineTotalValue ? <span className={currencySymbolClass}>₹</span> : null}
+                <span>{lineTotalValue || "—"}</span>
+              </div>
+            );
+            const removeButton =
+              items.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => onRemoveItem(index)}
+                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-rose-200 text-rose-500 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 md:h-8 md:w-8"
+                  aria-label={`Remove line item ${index + 1}`}
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M6 6l1 14h10l1-14" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                  </svg>
+                </button>
+              ) : null;
+
+            const mobileField = (label, control) => (
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{label}</span>
+                {control}
+              </label>
+            );
+
+            return (
+              <div key={`line-${index}`}>
+                {/* Phone: a labelled card. Every control keeps its name, which the desktop
+                    column header would otherwise be carrying. */}
+                <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3 md:hidden">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                      Item {index + 1}
+                    </span>
+                    {removeButton}
+                  </div>
+                  <div className="space-y-3">
+                    {mobileField("SKU", skuField)}
+                    <div className="grid grid-cols-2 gap-3">
+                      {mobileField("Quantity", quantityField)}
+                      {mobileField("MRP", mrpField)}
+                      {mobileField("Discount %", discountPercentField)}
+                      {mobileField("Discount", discountField)}
+                    </div>
+                    {mobileField("Unit price", unitPriceField)}
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                        Line total
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-slate-800">
+                        {lineTotalValue ? `₹${lineTotalValue}` : "—"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className={currencyInputWrapClass}>
-                  <span className={currencySymbolClass}>₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unitPrice ?? ""}
-                    onChange={(event) => {
-                      if (!isUnitEditable) return;
-                      applyItemChange(index, { unitPrice: event.target.value });
-                    }}
-                    readOnly={!isUnitEditable}
-                    className={currencyInputClass(isUnitEditable)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className={currencyCellClass}>
-                  {lineTotalValue ? <span className={currencySymbolClass}>₹</span> : null}
-                  <span>{lineTotalValue || "—"}</span>
-                </div>
-                <div className="flex items-center justify-end text-xs text-slate-500 whitespace-nowrap">
-                  {items.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveItem(index)}
-                      className="ml-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-rose-200 text-rose-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
-                      aria-label="Remove line item"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 24 24"
-                        className="h-4 w-4"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M3 6h18" />
-                        <path d="M8 6V4h8v2" />
-                        <path d="M6 6l1 14h10l1-14" />
-                        <path d="M10 11v6" />
-                        <path d="M14 11v6" />
-                      </svg>
-                    </button>
-                  ) : null}
+
+                <div className={`${desktopRowClassName} items-center`}>
+                  <div className="flex items-center text-xs font-semibold text-slate-500">{index + 1}</div>
+                  {skuField}
+                  {quantityField}
+                  {mrpField}
+                  {discountPercentField}
+                  {discountField}
+                  {unitPriceField}
+                  {lineTotalField}
+                  <div className="flex items-center justify-end text-xs text-slate-500 whitespace-nowrap">
+                    {removeButton}
+                  </div>
                 </div>
               </div>
             );
