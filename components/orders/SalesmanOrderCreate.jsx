@@ -184,7 +184,7 @@ export default function SalesmanOrderCreate() {
                 <p className="mt-2 text-xs text-amber-600">
                   No retailers are assigned to you yet.{" "}
                   <Link href="/app/retailers" className="font-semibold underline underline-offset-2">
-                    Add your first outlet
+                    Request your first outlet
                   </Link>{" "}
                   to start booking orders.
                 </p>

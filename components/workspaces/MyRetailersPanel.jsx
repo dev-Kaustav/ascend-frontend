@@ -1,18 +1,28 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { MapPin, Pencil, Phone, Plus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Clock, MapPin, Pencil, Phone, Plus, X } from "lucide-react";
 import SectionCard from "@/components/layout/SectionCard";
-import { apiEndpoints } from "@/lib/api";
+import { useToast } from "@/components/ui/ToastProvider";
+import { apiEndpoints, apiFetch } from "@/lib/api";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
-import useInlineRowEditor from "@/lib/hooks/useInlineRowEditor";
 import { INDIAN_STATES } from "@/lib/states";
 
-// A salesman works this screen on a phone in a market, so it is a card list rather than the
-// wide admin table: no horizontal scroll, 44px targets, 16px inputs (which also stops iOS
-// zooming the page when a field takes focus).
+// A salesman works this screen on a phone in a market: card list, no horizontal scroll, 44px
+// targets, 16px inputs (which also stops iOS zooming the page when a field takes focus).
 const FIELD_CLASSNAME =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-800 transition-colors placeholder:text-slate-400 focus:border-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25";
+
+const BLANK = {
+  name: "",
+  mobile_number: "",
+  address_line1: "",
+  address_line2: "",
+  city: "",
+  state: "",
+  pincode: "",
+  gst_number: ""
+};
 
 const asText = (value) => (value === null || value === undefined ? "" : String(value));
 const orNull = (value) => (value === "" || value === undefined ? null : value);
@@ -22,6 +32,14 @@ const formatPhone = (value) => {
   if (!value && value !== 0) return null;
   const raw = String(value).replace(/\D/g, "");
   return raw.length === 10 ? `${raw.slice(0, 5)} ${raw.slice(5)}` : raw || null;
+};
+
+// Text on every pill, never colour alone — the status has to survive a greyscale screen or a
+// colour-blind reader.
+const STATUS_PILL = {
+  PENDING: { label: "Pending approval", icon: Clock, className: "border-amber-200 bg-amber-50 text-amber-700" },
+  REJECTED: { label: "Rejected", icon: X, className: "border-rose-200 bg-rose-50 text-rose-700" },
+  WITHDRAWN: { label: "Withdrawn", icon: X, className: "border-slate-200 bg-slate-100 text-slate-500" }
 };
 
 function Field({ label, children }) {
@@ -34,84 +52,129 @@ function Field({ label, children }) {
 }
 
 export default function MyRetailersPanel() {
-  // Scoped by the backend to this salesman's assigned outlets, which is exactly the set they
-  // are allowed to edit — so the list and the permission can never disagree.
+  // Approved outlets only — the backend scopes this to retailers actually assigned to this
+  // salesman, which is exactly the set they can book orders against.
   const { retailers, loading, error, refreshLookups } = useOrderFormLookups({
     errorMessage: "Unable to load your retailers."
   });
+  const { notify } = useToast();
+  const [requests, setRequests] = useState([]);
+  const [requestsError, setRequestsError] = useState("");
   const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
 
-  const editor = useInlineRowEditor({
-    blank: useCallback(
-      () => ({
-        name: "",
-        mobile_number: "",
-        address_line1: "",
-        address_line2: "",
-        city: "",
-        state: "",
-        pincode: "",
-        gst_number: ""
-      }),
-      []
-    ),
-    toForm: useCallback(
-      (retailer) => ({
-        name: asText(retailer.name),
-        mobile_number: asText(retailer.mobile_number),
-        address_line1: asText(retailer.address_line1),
-        address_line2: asText(retailer.address_line2),
-        city: asText(retailer.city),
-        state: asText(retailer.state),
-        pincode: asText(retailer.pincode),
-        gst_number: asText(retailer.gst_number)
-      }),
-      []
-    ),
-    // No salesman or beat field: the backend stamps this salesman on create and refuses to
-    // move either on update, so offering them here would only promise something it rejects.
-    buildBody: useCallback(
-      (values) => ({
-        name: values.name,
-        mobile_number: numOrNull(values.mobile_number),
-        address_line1: orNull(values.address_line1),
-        address_line2: orNull(values.address_line2),
-        city: orNull(values.city),
-        state: orNull(values.state),
-        pincode: numOrNull(values.pincode),
-        gst_number: orNull(values.gst_number),
-        assigned_salesman_id: null,
-        beat_id: null
-      }),
-      []
-    ),
-    createUrl: apiEndpoints.admin.retailers,
-    updateUrl: apiEndpoints.admin.retailerUpdate,
-    onSaved: refreshLookups
-  });
+  const loadRequests = useCallback(async () => {
+    try {
+      const response = await apiFetch(apiEndpoints.retailerRequests.list);
+      setRequests(Array.isArray(response) ? response : []);
+      setRequestsError("");
+    } catch (err) {
+      setRequestsError(err?.payload?.detail || err?.message || "Unable to load your requests.");
+    }
+  }, []);
 
-  const filtered = useMemo(() => {
-    const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (!tokens.length) return retailers || [];
-    return (retailers || []).filter((retailer) => {
-      const haystack = [retailer.name, retailer.city, retailer.mobile_number, retailer.gst_number]
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  // Only pending and rejected requests are worth showing: an approved one has already become a
+  // real outlet in the list above, so rendering both would double it.
+  const openRequests = useMemo(
+    () => requests.filter((request) => request.status !== "APPROVED"),
+    [requests]
+  );
+
+  const matches = useCallback(
+    (row) => {
+      const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (!tokens.length) return true;
+      const haystack = [row.name, row.city, row.mobile_number, row.gst_number]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return tokens.every((token) => haystack.includes(token));
-    });
-  }, [retailers, search]);
+    },
+    [search]
+  );
+
+  const visibleRetailers = useMemo(() => (retailers || []).filter(matches), [retailers, matches]);
+  const visibleRequests = useMemo(() => openRequests.filter(matches), [openRequests, matches]);
+
+  const startCreate = () => {
+    setDraft({ ...BLANK });
+    setEditingId(null);
+    setFormError("");
+  };
+
+  const startEdit = (request) => {
+    setDraft(Object.fromEntries(Object.keys(BLANK).map((key) => [key, asText(request[key])])));
+    setEditingId(request.id);
+    setFormError("");
+  };
+
+  const cancel = () => {
+    setDraft(null);
+    setEditingId(null);
+    setFormError("");
+  };
+
+  const setField = (field, value) => setDraft((prev) => ({ ...prev, [field]: value }));
+
+  const submit = async () => {
+    if (saving) return;
+    setSaving(true);
+    setFormError("");
+    const body = {
+      name: draft.name,
+      mobile_number: numOrNull(draft.mobile_number),
+      address_line1: orNull(draft.address_line1),
+      address_line2: orNull(draft.address_line2),
+      city: orNull(draft.city),
+      state: orNull(draft.state),
+      pincode: numOrNull(draft.pincode),
+      gst_number: orNull(draft.gst_number)
+    };
+    try {
+      await apiFetch(
+        editingId ? apiEndpoints.retailerRequests.update(editingId) : apiEndpoints.retailerRequests.create,
+        { method: editingId ? "PATCH" : "POST", body: JSON.stringify(body) }
+      );
+      notify(editingId ? "Request updated." : "Sent to admin for approval.");
+      cancel();
+      await loadRequests();
+    } catch (err) {
+      setFormError(err?.payload?.detail || err?.message || "Unable to submit the request.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const withdraw = async (request) => {
+    try {
+      await apiFetch(apiEndpoints.retailerRequests.withdraw(request.id), { method: "POST" });
+      notify("Request withdrawn.");
+      await loadRequests();
+    } catch (err) {
+      setRequestsError(err?.payload?.detail || err?.message || "Unable to withdraw the request.");
+    }
+  };
 
   const form = (
     <div className="space-y-3 rounded-2xl border border-[#7c3aed]/30 bg-[#7c3aed]/[0.03] p-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-        {editor.mode === "create" ? "New retailer" : "Edit retailer"}
+        {editingId ? "Edit request" : "New retailer request"}
+      </p>
+      <p className="text-xs text-slate-500">
+        An admin reviews this before the outlet can take orders.
       </p>
       <Field label="Shop name">
         <input
           className={FIELD_CLASSNAME}
-          value={editor.values.name ?? ""}
-          onChange={(event) => editor.setField("name", event.target.value)}
+          value={draft?.name ?? ""}
+          onChange={(event) => setField("name", event.target.value)}
           placeholder="Shop name"
           autoFocus
         />
@@ -121,16 +184,16 @@ export default function MyRetailersPanel() {
           <input
             className={FIELD_CLASSNAME}
             inputMode="numeric"
-            value={editor.values.mobile_number ?? ""}
-            onChange={(event) => editor.setField("mobile_number", event.target.value.replace(/\D/g, "").slice(0, 10))}
+            value={draft?.mobile_number ?? ""}
+            onChange={(event) => setField("mobile_number", event.target.value.replace(/\D/g, "").slice(0, 10))}
             placeholder="10 digits"
           />
         </Field>
         <Field label="City">
           <input
             className={FIELD_CLASSNAME}
-            value={editor.values.city ?? ""}
-            onChange={(event) => editor.setField("city", event.target.value)}
+            value={draft?.city ?? ""}
+            onChange={(event) => setField("city", event.target.value)}
             placeholder="City"
           />
         </Field>
@@ -138,16 +201,16 @@ export default function MyRetailersPanel() {
       <Field label="Address line 1">
         <input
           className={FIELD_CLASSNAME}
-          value={editor.values.address_line1 ?? ""}
-          onChange={(event) => editor.setField("address_line1", event.target.value)}
+          value={draft?.address_line1 ?? ""}
+          onChange={(event) => setField("address_line1", event.target.value)}
           placeholder="Street, landmark"
         />
       </Field>
       <Field label="Address line 2">
         <input
           className={FIELD_CLASSNAME}
-          value={editor.values.address_line2 ?? ""}
-          onChange={(event) => editor.setField("address_line2", event.target.value)}
+          value={draft?.address_line2 ?? ""}
+          onChange={(event) => setField("address_line2", event.target.value)}
           placeholder="Optional"
         />
       </Field>
@@ -155,8 +218,8 @@ export default function MyRetailersPanel() {
         <Field label="State">
           <select
             className={FIELD_CLASSNAME}
-            value={editor.values.state ?? ""}
-            onChange={(event) => editor.setField("state", event.target.value)}
+            value={draft?.state ?? ""}
+            onChange={(event) => setField("state", event.target.value)}
           >
             <option value="">Select state</option>
             {INDIAN_STATES.map((state) => (
@@ -170,8 +233,8 @@ export default function MyRetailersPanel() {
           <input
             className={FIELD_CLASSNAME}
             inputMode="numeric"
-            value={editor.values.pincode ?? ""}
-            onChange={(event) => editor.setField("pincode", event.target.value.replace(/\D/g, "").slice(0, 6))}
+            value={draft?.pincode ?? ""}
+            onChange={(event) => setField("pincode", event.target.value.replace(/\D/g, "").slice(0, 6))}
             placeholder="6 digits"
           />
         </Field>
@@ -179,27 +242,27 @@ export default function MyRetailersPanel() {
       <Field label="GST number">
         <input
           className={FIELD_CLASSNAME}
-          value={editor.values.gst_number ?? ""}
-          onChange={(event) => editor.setField("gst_number", event.target.value)}
+          value={draft?.gst_number ?? ""}
+          onChange={(event) => setField("gst_number", event.target.value)}
           placeholder="Optional"
         />
       </Field>
-      {editor.error ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{editor.error}</p>
+      {formError ? (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{formError}</p>
       ) : null}
       <div className="flex gap-2 pt-1">
         <button
           type="button"
-          onClick={editor.save}
-          disabled={editor.saving || !(editor.values.name || "").trim()}
+          onClick={submit}
+          disabled={saving || !(draft?.name || "").trim()}
           className="h-11 flex-1 cursor-pointer rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
         >
-          {editor.saving ? "Saving…" : "Save"}
+          {saving ? "Sending…" : editingId ? "Save changes" : "Send for approval"}
         </button>
         <button
           type="button"
-          onClick={editor.cancel}
-          disabled={editor.saving}
+          onClick={cancel}
+          disabled={saving}
           className="h-11 cursor-pointer rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
         >
           Cancel
@@ -220,19 +283,21 @@ export default function MyRetailersPanel() {
     return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
   }
 
+  const nothingToShow = visibleRetailers.length === 0 && visibleRequests.length === 0 && !draft;
+
   return (
     <SectionCard
       title="My Retailers"
-      subtitle={`${filtered.length} of ${(retailers || []).length} outlets assigned to you`}
+      subtitle={`${visibleRetailers.length} approved${openRequests.length ? ` · ${openRequests.length} awaiting review` : ""}`}
       actions={
         <button
           type="button"
-          onClick={editor.startCreate}
-          disabled={editor.isActive}
+          onClick={startCreate}
+          disabled={Boolean(draft)}
           className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-full bg-slate-900 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
-          Add retailer
+          Request retailer
         </button>
       }
     >
@@ -246,52 +311,109 @@ export default function MyRetailersPanel() {
           className={FIELD_CLASSNAME}
         />
 
-        {editor.mode === "create" ? form : null}
+        {draft && !editingId ? form : null}
 
-        {filtered.length === 0 && editor.mode !== "create" ? (
+        {requestsError ? (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">
+            {requestsError}
+          </p>
+        ) : null}
+
+        {nothingToShow ? (
           <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-            {(retailers || []).length === 0
-              ? "No outlets yet. Add your first retailer to start booking orders."
+            {(retailers || []).length === 0 && openRequests.length === 0
+              ? "No outlets yet. Request your first retailer — an admin approves it before you can book orders."
               : "No outlets match that search."}
           </p>
         ) : null}
 
         <ul className="space-y-2.5">
-          {filtered.map((retailer) => {
-            const phone = formatPhone(retailer.mobile_number);
-            const place = [retailer.address_line1, retailer.city].filter(Boolean).join(", ");
-            if (editor.isEditing(retailer)) {
-              return <li key={retailer.id}>{form}</li>;
+          {visibleRequests.map((request) => {
+            if (editingId === request.id) {
+              return <li key={`request-${request.id}`}>{form}</li>;
             }
+            const pill = STATUS_PILL[request.status] || STATUS_PILL.PENDING;
+            const place = [request.address_line1, request.city].filter(Boolean).join(", ");
+            const phone = formatPhone(request.mobile_number);
+            const isPending = request.status === "PENDING";
             return (
               <li
-                key={retailer.id}
-                className="flex items-start justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+                key={`request-${request.id}`}
+                // Greyed and dashed: this outlet is not real yet and cannot take an order.
+                className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 p-4"
               >
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-slate-900">{retailer.name}</p>
-                  {place ? (
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                      <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      <span className="truncate">{place}</span>
-                    </p>
-                  ) : null}
-                  {phone ? (
-                    <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
-                      <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      <span className="tabular-nums">{phone}</span>
-                    </p>
-                  ) : null}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 opacity-60">
+                    <p className="font-semibold text-slate-900">{request.name}</p>
+                    {place ? (
+                      <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-500">
+                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                        <span>{place}</span>
+                      </p>
+                    ) : null}
+                    {phone ? (
+                      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
+                        <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                        <span className="tabular-nums">{phone}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 self-start rounded-full border px-2.5 py-1 text-[11px] font-semibold ${pill.className}`}
+                  >
+                    <pill.icon className="h-3 w-3" strokeWidth={2.5} />
+                    {pill.label}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => editor.startEdit(retailer)}
-                  disabled={editor.isActive}
-                  aria-label={`Edit ${retailer.name}`}
-                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 disabled:opacity-40"
-                >
-                  <Pencil className="h-4 w-4" strokeWidth={2} />
-                </button>
+                {request.review_note ? (
+                  <p className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    <span className="font-semibold">Admin note:</span> {request.review_note}
+                  </p>
+                ) : null}
+                {isPending ? (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(request)}
+                      disabled={Boolean(draft)}
+                      className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => withdraw(request)}
+                      disabled={Boolean(draft)}
+                      className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                      Withdraw
+                    </button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+
+          {visibleRetailers.map((retailer) => {
+            const phone = formatPhone(retailer.mobile_number);
+            const place = [retailer.address_line1, retailer.city].filter(Boolean).join(", ");
+            return (
+              <li key={`retailer-${retailer.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="font-semibold text-slate-900">{retailer.name}</p>
+                {place ? (
+                  <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-500">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    <span>{place}</span>
+                  </p>
+                ) : null}
+                {phone ? (
+                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
+                    <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    <span className="tabular-nums">{phone}</span>
+                  </p>
+                ) : null}
               </li>
             );
           })}
