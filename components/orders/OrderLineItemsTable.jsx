@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { formatSkuLabel } from "@/lib/format";
 import SearchSelect from "@/components/ui/SearchSelect";
 import {
   getLineTaxAmount,
@@ -40,11 +39,14 @@ export default function OrderLineItemsTable({
     if (!selectedBrandId) return [];
     return skus.filter((sku) => String(sku.brand_id) === String(selectedBrandId));
   }, [skus, selectedBrandId]);
+  // Name, not code: on the order form the person booking is looking for a product they can
+  // recognise. The code stays in keywords, so typing it still finds the row — it just is not
+  // what gets shown. Falls back to the code, then the id, for SKUs with no name.
   const skuOptions = useMemo(
     () =>
       filteredSkus.map((sku) => ({
         value: String(sku.id),
-        label: formatSkuLabel(sku),
+        label: sku.name || sku.code || `SKU ${sku.id}`,
         keywords: [sku.code]
       })),
     [filteredSkus]

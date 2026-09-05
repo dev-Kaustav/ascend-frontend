@@ -18,18 +18,17 @@ import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function AdminOrderCreate() {
   const router = useRouter();
-  const getTodayDate = () => {
-    const now = new Date();
-    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-    return local.toISOString().slice(0, 10);
-  };
   const [retailerId, setRetailerId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [salesmanId, setSalesmanId] = useState("");
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [brandId, setBrandId] = useState("");
-  const [orderDate, setOrderDate] = useState(getTodayDate);
+  // Today, fixed at mount. Display only — the server decides the real timestamp.
+  const displayDate = useMemo(
+    () => new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
+    []
+  );
   // Unit price is what gets negotiated at the counter; discount is derived from it.
   const [pricingMode, setPricingMode] = useState("unit");
   const { items, updateItem, addItem, removeItem, setItems } = useLineItems(createEmptyOrderItem, 5);
@@ -90,10 +89,6 @@ export default function AdminOrderCreate() {
       setError("Select a brand before submitting.");
       return;
     }
-    if (!orderDate) {
-      setError("Order date is required.");
-      return;
-    }
     if (!salesmanId) {
       setError("Select a salesman before submitting.");
       return;
@@ -149,7 +144,6 @@ export default function AdminOrderCreate() {
           salesman_id: Number(salesmanId),
           payment_mode: paymentMode,
           payment_amount: paymentAmountValue,
-          order_date: orderDate,
           items: payloadItems
         })
       });
@@ -199,13 +193,12 @@ export default function AdminOrderCreate() {
             </div>
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Order date</label>
-              <InputBar
-                type="date"
-                value={orderDate}
-                onChange={(event) => setOrderDate(event.target.value)}
-                className="mt-2"
-                required
-              />
+              {/* Read-only: an order is dated when it is booked. The server stamps created_at
+                  from its own clock and ignores anything sent here, so an editable box would
+                  only promise a backdate it will not honour. */}
+              <p className="mt-2 flex h-[42px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-600">
+                {displayDate}
+              </p>
             </div>
           </div>
 
