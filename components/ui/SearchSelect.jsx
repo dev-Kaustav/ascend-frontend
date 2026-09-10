@@ -6,8 +6,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 // Filtering is client-side over options already in memory; swap the memo for a debounced
 // fetch if a list ever outgrows what the form downloads up front.
 
+// 16px on phones so iOS Safari does not zoom the page in on focus; 14px from md up.
+// See the note on the same constant in components/ui/InputBars.jsx.
 const BASE_BAR_CLASSNAME =
-  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#7c3aed] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30";
+  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-base md:text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#7c3aed] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30";
 
 function matchesQuery(option, tokens) {
   if (!tokens.length) return true;

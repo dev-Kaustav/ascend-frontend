@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { apiEndpoints, apiFetch, invalidateApiCache } from "@/lib/api";
 import SectionCard from "@/components/layout/SectionCard";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
@@ -96,6 +96,7 @@ export default function WarehouseInventoryAdd() {
           items: payloadItems
         })
       });
+      invalidateApiCache(apiEndpoints.admin.lookups);
       notify("Inventory added.");
       router.push("/app/operations?tab=inventory");
     } catch (err) {

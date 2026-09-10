@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached, invalidateApiCache } from "@/lib/api";
 import SectionCard from "@/components/layout/SectionCard";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
 
@@ -233,6 +233,9 @@ export default function ImportsPage() {
         body: formData,
       });
       setResult(data);
+      // An import creates SKUs, retailers and warehouses; the 5-minute lookups cache
+      // would otherwise hide them from every form until it expired.
+      invalidateApiCache(apiEndpoints.admin.lookups);
       const anyInserted = Object.values(data).some((r) => r.inserted > 0);
       if (anyInserted) {
         setFile(null);

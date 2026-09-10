@@ -6,6 +6,7 @@ import SectionCard from "@/components/layout/SectionCard";
 import { InputBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
 import { toTitleCase } from "@/lib/format";
+import { logout } from "@/lib/auth";
 
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
@@ -60,7 +61,11 @@ export default function ProfilePage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      notify("Password updated.");
+      // The change signs out every session including this one — the tokens in hand are
+      // already dead server-side, so drop them and go to the login screen rather than
+      // letting the next request fail with a 401 out of nowhere.
+      notify("Password updated. Sign in again with your new password.");
+      logout();
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to update password.");
     } finally {

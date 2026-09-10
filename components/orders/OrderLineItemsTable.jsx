@@ -14,6 +14,7 @@ const inputClassName =
 export default function OrderLineItemsTable({
   items,
   skus,
+  available,
   selectedBrandId,
   pricingMode = "discount",
   onItemChange,
@@ -35,6 +36,9 @@ export default function OrderLineItemsTable({
   // unlabelled controls stacked in one column tells a phone user nothing.
   const gridColumnsClassName = "md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]";
   const desktopRowClassName = `hidden gap-3 items-center md:grid ${gridColumnsClassName}`;
+  // The one blank line phones are allowed to show. -1 once every line carries a SKU, which
+  // is also when "Add SKU" becomes the only way to get another one.
+  const firstBlankIndex = items.findIndex((item) => !item.skuId);
   const filteredSkus = useMemo(() => {
     if (!selectedBrandId) return [];
     return skus.filter((sku) => String(sku.brand_id) === String(selectedBrandId));
@@ -228,6 +232,11 @@ export default function OrderLineItemsTable({
             <span />
           </div>
           {items.map((item, index) => {
+            // Phones show one SKU at a time: every line already carrying a SKU, plus the
+            // single next blank one. The form seeds several blank lines for the desktop
+            // grid, and on a phone those stack into a wall of empty cards you have to
+            // scroll past. Desktop is untouched — this only gates the mobile card.
+            const showOnMobile = Boolean(item.skuId) || index === firstBlankIndex;
             const sku = skuMap.get(String(item.skuId));
             const mrpValue = getSkuListPrice(sku);
             const lineTotalValue = sku ? currencyFormatter.format(getLineTotal(item, sku)) : "";
@@ -251,17 +260,31 @@ export default function OrderLineItemsTable({
                 inputClassName="h-11 rounded-2xl px-3 py-0 text-base md:h-9 md:text-sm"
               />
             );
+            // Allocatable units at the chosen warehouse, or null when there is nothing to
+            // say (no warehouse picked, no SKU on the line, lookup failed). Advisory: it
+            // never disables the input, because the server re-checks under a row lock and
+            // a stale client-side block is the failure this hint exists to prevent.
+            const availableForLine = item.skuId && available ? available[String(item.skuId)] : undefined;
+            const isShort =
+              availableForLine !== undefined && Number(item.quantity) > Number(availableForLine);
             const quantityField = (
-              <input
-                type="number"
-                min="0"
-                step="1"
-                aria-label={`Quantity for line ${index + 1}`}
-                value={item.quantity}
-                onChange={(event) => applyItemChange(index, { quantity: event.target.value })}
-                className={`${inputClassName} text-right tabular-nums`}
-                placeholder="0"
-              />
+              <div>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  aria-label={`Quantity for line ${index + 1}`}
+                  value={item.quantity}
+                  onChange={(event) => applyItemChange(index, { quantity: event.target.value })}
+                  className={`${inputClassName} text-right tabular-nums ${isShort ? "border-rose-300" : ""}`}
+                  placeholder="0"
+                />
+                {availableForLine !== undefined ? (
+                  <p className={`mt-1 text-right text-[11px] tabular-nums ${isShort ? "text-rose-500" : "text-slate-400"}`}>
+                    {availableForLine} in stock
+                  </p>
+                ) : null}
+              </div>
             );
             const mrpField = (
               <div className={currencyCellClass}>
@@ -367,7 +390,7 @@ export default function OrderLineItemsTable({
               <div key={`line-${index}`}>
                 {/* Phone: a labelled card. Every control keeps its name, which the desktop
                     column header would otherwise be carrying. */}
-                <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3 md:hidden">
+                <div className={`mb-3 rounded-2xl border border-slate-200 bg-white p-3 md:hidden ${showOnMobile ? "" : "hidden"}`}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                       Item {index + 1}
@@ -417,9 +440,14 @@ export default function OrderLineItemsTable({
         <button
           type="button"
           onClick={onAddItem}
-          className="mr-auto rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+          // On a phone there is already a blank line waiting whenever firstBlankIndex is
+          // set, so the button would append a line the view cannot show. Desktop, which
+          // renders every line as a grid row, always offers it.
+          className={`mr-auto rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500 ${
+            firstBlankIndex === -1 ? "" : "hidden md:block"
+          }`}
         >
-          Add Line
+          Add SKU
         </button>
         <div className="ml-auto w-full space-y-2">
           <div className={totalsRowClassName}>

@@ -10,6 +10,7 @@ import SearchSelect from "@/components/ui/SearchSelect";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import useLineItems from "@/lib/hooks/useLineItems";
+import useStockAvailability from "@/lib/hooks/useStockAvailability";
 import { createEmptyOrderItem, getOrderTotal, getSkuGstRate, roundToTwo } from "@/lib/orders";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -33,6 +34,13 @@ export default function SalesmanOrderCreate() {
   // Unit price is what gets negotiated at the counter; discount is derived from it.
   const [pricingMode, setPricingMode] = useState("unit");
   const { items, updateItem, addItem, removeItem, setItems } = useLineItems(createEmptyOrderItem, 5);
+  // Live allocatable stock for the chosen warehouse, shown beside each line so a
+  // shortage is visible before the order is keyed in rather than after (INVT-07).
+  const selectedSkuIds = useMemo(
+    () => [...new Set(items.map((item) => item.skuId).filter(Boolean).map(String))],
+    [items]
+  );
+  const { available, refreshAvailability } = useStockAvailability(warehouseId, selectedSkuIds);
   const { retailers, skus, warehouses, brands, loading, error: lookupError } = useOrderFormLookups({
     errorMessage: "Unable to load order form data."
   });
@@ -72,6 +80,10 @@ export default function SalesmanOrderCreate() {
     setError("");
     if (!retailerId) {
       setError("Select a retailer before submitting.");
+      return;
+    }
+    if (!warehouseId) {
+      setError("Select a warehouse before submitting.");
       return;
     }
     if (!brandId) {
@@ -135,6 +147,8 @@ export default function SalesmanOrderCreate() {
       router.push(`/app/orders/${response.id}`);
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create order.");
+      // The rejection means the figures on screen are behind the warehouse; re-read them.
+      refreshAvailability();
     } finally {
       setSaving(false);
     }
@@ -197,9 +211,9 @@ export default function SalesmanOrderCreate() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse (optional)</label>
+              <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse</label>
               <SelectBar value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="mt-2">
-                <option value="">Auto-assign</option>
+                <option value="" disabled>Select warehouse</option>
                 {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
@@ -301,6 +315,7 @@ export default function SalesmanOrderCreate() {
             </div>
             <OrderLineItemsTable
               items={items}
+              available={available}
               skus={skus}
               selectedBrandId={brandId}
               pricingMode={pricingMode}

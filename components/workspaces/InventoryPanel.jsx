@@ -141,10 +141,19 @@ export default function WarehouseInventory() {
         cell: ({ row }) => row.original.warehouse_name || row.original.warehouse_id || "—"
       },
       {
-        header: "Available",
+        header: "Total",
         accessorKey: "total_quantity",
         meta: { type: "number" },
         cell: ({ row }) => formatNumber(row.original.total_quantity)
+      },
+      {
+        // What the allocator would actually honour: physical stock less what is reserved
+        // and less what has expired. This column used to show total_quantity, so an order
+        // could be refused for stock the screen said was there.
+        header: "Available",
+        accessorKey: "available_quantity",
+        meta: { type: "number" },
+        cell: ({ row }) => formatNumber(row.original.available_quantity)
       },
       {
         header: "Expired",
@@ -164,12 +173,6 @@ export default function WarehouseInventory() {
         accessorKey: "reserved_quantity",
         meta: { type: "number" },
         cell: ({ row }) => formatNumber(row.original.reserved_quantity)
-      },
-      {
-        header: "Damaged",
-        accessorKey: "quantity_damaged",
-        meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.quantity_damaged)
       },
       {
         header: "Earliest Expiry",
