@@ -367,7 +367,7 @@ export default function SalesmanOrderCreate() {
             <button
               type="submit"
               disabled={saving || !retailers.length}
-              className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-[48px] w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:hover:-translate-y-0.5"
             >
               {saving ? "Creating..." : "Create Order"}
             </button>

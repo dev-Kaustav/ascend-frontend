@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
+import { getCoords } from "@/lib/geo";
 import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
 
 import DataTable from "@/components/tables/DataTable";
@@ -176,6 +177,9 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
         if (form.paymentStatus) body.payment_status = form.paymentStatus;
         if (form.paymentMode) body.payment_mode = form.paymentMode;
         if (form.paymentAmount) body.payment_amount = Number(form.paymentAmount);
+        // Best-effort, same rule as the driver's order list: a refused or failed location
+        // must not block the delivery. Missing coordinates are recorded as missing.
+        Object.assign(body, (await getCoords().catch(() => null)) || {});
       }
       await apiFetch(apiEndpoints.orders.updateStatus(order.id), {
         method: "PATCH",

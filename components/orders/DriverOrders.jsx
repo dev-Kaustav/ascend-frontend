@@ -7,6 +7,7 @@ import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 import InvoiceCell from "@/components/ui/InvoiceCell";
+import { getCoords } from "@/lib/geo";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || null;
@@ -48,9 +49,14 @@ export default function DriverOrders() {
   async function handleStatusUpdate(orderId, status, extra = {}) {
     updateRow(orderId, { saving: true, error: "" });
     try {
+      // Where the driver stood when they closed this out. Attached here rather than at the
+      // button so every caller of this function gets it, and best-effort on purpose: a denied
+      // permission or a dead fix must not stop a driver clearing the day's orders. The server
+      // treats missing coordinates as missing, not as an error.
+      const coords = status === "DELIVERED" ? await getCoords().catch(() => null) : null;
       await apiFetch(apiEndpoints.orders.updateStatus(orderId), {
         method: "PATCH",
-        body: JSON.stringify({ status, ...extra }),
+        body: JSON.stringify({ status, ...extra, ...(coords || {}) }),
       });
       updateRow(orderId, { saving: false, error: "", paymentStatus: "", paymentMode: "", paymentAmount: "" });
       await loadOrders(false);
@@ -126,7 +132,7 @@ export default function DriverOrders() {
                 <select
                   value={rowUpdate.paymentStatus || ""}
                   onChange={(e) => updateRow(order.id, { paymentStatus: e.target.value })}
-                  className="col-span-2 min-h-[44px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
+                  className="col-span-2 min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
                 >
                   <option value="">Payment (optional)</option>
                   <option value="PAID">Paid</option>
@@ -138,7 +144,7 @@ export default function DriverOrders() {
                     <select
                       value={rowUpdate.paymentMode || ""}
                       onChange={(e) => updateRow(order.id, { paymentMode: e.target.value })}
-                      className="rounded-full border border-slate-200 bg-white px-2 py-1"
+                      className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
                     >
                       <option value="">Mode</option>
                       <option value="CASH">Cash</option>
@@ -152,7 +158,7 @@ export default function DriverOrders() {
                       value={rowUpdate.paymentAmount || ""}
                       onChange={(e) => updateRow(order.id, { paymentAmount: e.target.value })}
                       placeholder="Amount"
-                      className="rounded-full border border-slate-200 bg-white px-2 py-1"
+                      className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
                     />
                   </>
                 )}
@@ -165,15 +171,17 @@ export default function DriverOrders() {
                   payment_mode: rowUpdate.paymentMode || undefined,
                   payment_amount: rowUpdate.paymentAmount ? Number(rowUpdate.paymentAmount) : undefined,
                 })}
-                className="cursor-pointer rounded-full bg-emerald-700 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
+                className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-full bg-emerald-700 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-transform active:scale-[0.98] disabled:opacity-60"
               >
-                {rowUpdate.saving ? "Saving…" : "Mark Delivered"}
+                {/* This press now waits on a GPS fix before it sends, which can take a few
+                    seconds on a market street. "Saving…" would read as a hung button. */}
+                {rowUpdate.saving ? "Getting location…" : "Mark Delivered"}
               </button>
               <button
                 type="button"
                 disabled={rowUpdate.saving}
                 onClick={() => handleStatusUpdate(order.id, "CANCELLED")}
-                className="cursor-pointer rounded-full bg-rose-600 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
+                className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-full border border-rose-300 bg-white px-4 text-xs font-semibold uppercase tracking-widest text-rose-600 transition-transform active:scale-[0.98] disabled:opacity-60"
               >
                 {rowUpdate.saving ? "Saving…" : "Refused"}
               </button>

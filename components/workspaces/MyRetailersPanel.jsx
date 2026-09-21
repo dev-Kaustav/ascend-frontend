@@ -5,6 +5,7 @@ import { Clock, MapPin, Pencil, Phone, Plus, X } from "lucide-react";
 import SectionCard from "@/components/layout/SectionCard";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiEndpoints, apiFetch } from "@/lib/api";
+import CaptureLocationButton from "@/components/ui/CaptureLocationButton";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import { INDIAN_STATES } from "@/lib/states";
 
@@ -21,7 +22,12 @@ const BLANK = {
   city: "",
   state: "",
   pincode: "",
-  gst_number: ""
+  gst_number: "",
+  // Numbers, not strings, unlike every other field here — they come straight off the device
+  // rather than a keyboard, and the API takes floats.
+  latitude: null,
+  longitude: null,
+  accuracy_m: null
 };
 
 const asText = (value) => (value === null || value === undefined ? "" : String(value));
@@ -110,7 +116,15 @@ export default function MyRetailersPanel() {
   };
 
   const startEdit = (request) => {
-    setDraft(Object.fromEntries(Object.keys(BLANK).map((key) => [key, asText(request[key])])));
+    setDraft({
+      ...Object.fromEntries(Object.keys(BLANK).map((key) => [key, asText(request[key])])),
+      // Kept numeric: asText would turn these into strings the capture button cannot format
+      // and the API would reject. accuracy_m is not stored on the request — a re-opened draft
+      // shows the pin without claiming a precision we no longer know.
+      latitude: request.latitude ?? null,
+      longitude: request.longitude ?? null,
+      accuracy_m: null
+    });
     setEditingId(request.id);
     setFormError("");
   };
@@ -135,7 +149,9 @@ export default function MyRetailersPanel() {
       city: orNull(draft.city),
       state: orNull(draft.state),
       pincode: numOrNull(draft.pincode),
-      gst_number: orNull(draft.gst_number)
+      gst_number: orNull(draft.gst_number),
+      latitude: draft.latitude ?? null,
+      longitude: draft.longitude ?? null
     };
     try {
       await apiFetch(
@@ -245,6 +261,28 @@ export default function MyRetailersPanel() {
           value={draft?.gst_number ?? ""}
           onChange={(event) => setField("gst_number", event.target.value)}
           placeholder="Optional"
+        />
+      </Field>
+      {/* Placed last, right above the submit button: the salesman is standing at the shop when
+          they fill this in, and this is the one field that is cheap now and expensive later.
+          The coordinates ride along to the retailer row when an admin approves the request. */}
+      <Field label="Shop location">
+        <CaptureLocationButton
+          value={draft}
+          onCapture={(coords) =>
+            setDraft((prev) => ({
+              ...prev,
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              accuracy_m: coords.accuracy_m
+            }))
+          }
+          onClear={() =>
+            setDraft((prev) => ({ ...prev, latitude: null, longitude: null, accuracy_m: null }))
+          }
+          idleLabel="Capture shop location"
+          capturedLabel="Shop location captured"
+          hint="Optional, but do it now — stand at the shop door and tap."
         />
       </Field>
       {formError ? (
