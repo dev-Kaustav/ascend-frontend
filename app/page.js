@@ -1,13 +1,13 @@
 import BrandSection from "@/components/landing/BrandSection";
-import BrandStrip from "@/components/landing/BrandStrip";
-import ConversionSection from "@/components/landing/ConversionSection";
+import BrandWall from "@/components/landing/BrandWall";
+import ContrastSection from "@/components/landing/ContrastSection";
 import Footer from "@/components/landing/Footer";
 import FoundersSection from "@/components/landing/FoundersSection";
 import FulfillmentSection from "@/components/landing/FulfillmentSection";
 import HeroSection from "@/components/landing/HeroSection";
-import MerchandiseSection from "@/components/landing/MerchandiseSection";
+import LeadSection from "@/components/landing/LeadSection";
 import Navbar from "@/components/landing/Navbar";
-import RetailerSection from "@/components/landing/RetailerSection";
+import RangeSection from "@/components/landing/RangeSection";
 
 export default function Home() {
   return (
@@ -18,13 +18,13 @@ export default function Home() {
       <Navbar />
       <main id="main">
         <HeroSection />
-        <MerchandiseSection />
+        <BrandWall />
+        <ContrastSection />
         <FulfillmentSection />
-        <RetailerSection />
-        <BrandStrip />
+        <RangeSection />
         <BrandSection />
         <FoundersSection />
-        <ConversionSection />
+        <LeadSection />
       </main>
       <Footer />
     </div>

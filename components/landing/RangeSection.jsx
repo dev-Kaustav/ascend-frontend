@@ -1,9 +1,10 @@
-import { Blend, Candy, CookingPot, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Blend, Candy, CookingPot, Sparkles } from "lucide-react";
 
 const categories = [
   {
     name: "Namkeen & Chana",
-    body: "Savoury namkeen and chana mixes from CRAX and JABSONS, the counter's steady sellers.",
+    body: "Bhujia, mixtures and chana from Bikaji, CRAX and Jabsons.",
     icon: CookingPot
   },
   {
@@ -13,28 +14,28 @@ const categories = [
   },
   {
     name: "Wellness Snacks",
-    body: "MyUpchaar Ayurveda's better-for-you snack range for health-conscious shoppers.",
+    body: "MyUpchaar Ayurveda's better-for-you range for health-conscious shoppers.",
     icon: Sparkles
   },
   {
     name: "Impulse Counter Packs",
-    body: "Small-ticket snack packs that keep the counter moving.",
+    body: "Small-ticket packs that keep the counter moving between big buys.",
     icon: Blend
   }
 ];
 
-export default function MerchandiseSection() {
+export default function RangeSection() {
   return (
-    <section id="merchandise" className="merchandise-section marketing-band marketing-band--light">
+    <section id="range" className="range-section marketing-band marketing-band--light">
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>
-            <p className="marketing-eyebrow">FOCUSED ASSORTMENT</p>
-            <h2>Fast movers, ready for your shelf.</h2>
+            <p className="marketing-eyebrow">WHAT YOU CAN ORDER</p>
+            <h2>Every snack your counter sells, on one order.</h2>
           </div>
           <p>
-            A practical range of everyday snack categories, selected around what
-            neighbourhood shoppers come back for.
+            Over 100 SKUs across four categories, chosen around what
+            neighbourhood shoppers actually come back for.
           </p>
         </div>
 
@@ -50,6 +51,13 @@ export default function MerchandiseSection() {
             </li>
           ))}
         </ul>
+
+        <div className="retailer-section__actions">
+          <Link className="marketing-button marketing-button--primary" href="/#contact">
+            Stock this range
+            <ArrowRight aria-hidden="true" size={18} strokeWidth={2} />
+          </Link>
+        </div>
       </div>
     </section>
   );

@@ -6,10 +6,10 @@ import { useEffect, useState } from "react";
 import Logo from "@/components/landing/Logo";
 
 const navItems = [
-  { label: "Merchandise", href: "/#merchandise" },
+  { label: "Why Ascend", href: "/#why" },
   { label: "How it works", href: "/#how-it-works" },
-  { label: "For brands", href: "/#brands" },
-  { label: "Founders", href: "/#founders" }
+  { label: "What we stock", href: "/#range" },
+  { label: "For brands", href: "/#brands" }
 ];
 
 export default function Navbar() {

@@ -28,7 +28,7 @@ const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
 const defaultTitle = "Ascend: Snack Restocking in 60 Minutes";
 const defaultDescription =
-  "Ascend helps India's kirana and convenience retailers restock snacks and namkeen from nearby inventory within a 60-minute delivery window.";
+  "Ascend restocks kirana and convenience stores across Gurugram and Delhi NCR with Bikaji, CRAX, Jabsons and MyUpchaar snacks, delivered from a nearby dark store in 60 minutes.";
 const defaultImage = "/ascend-kirana-restock.webp";
 
 const organizationSchema = {

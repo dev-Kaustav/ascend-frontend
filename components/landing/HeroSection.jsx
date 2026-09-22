@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, Clock3 } from "lucide-react";
+import { ArrowDown, ArrowRight, MapPin } from "lucide-react";
 
 const metrics = [
-  ["3,000+", "active stores"],
-  ["100+", "curated SKUs"],
-  ["60 min", "delivery window"],
-  ["2", "dark stores live"]
+  ["3,000+", "kirana stores served"],
+  ["100+", "snack SKUs to order from"],
+  ["60 min", "from order to shelf"],
+  ["2", "dark stores live in NCR"]
 ];
 
 export default function HeroSection() {
@@ -25,11 +25,16 @@ export default function HeroSection() {
 
       <div className="marketing-container marketing-hero__content">
         <div className="marketing-hero__copy">
-          <p className="marketing-eyebrow">ASCEND FOR RETAILERS</p>
-          <h1 id="hero-title"><span className="hero-emphasis">60 minutes</span> to a full shelf.</h1>
+          <p className="marketing-eyebrow">WHOLESALE SNACK SUPPLY FOR KIRANA STORES</p>
+          <h1 id="hero-title">
+            Your distributor comes once a week.
+            <br />
+            <span className="hero-emphasis">We come in 60 minutes.</span>
+          </h1>
           <p className="marketing-hero__lead">
-            Snacks and namkeen, picked from nearby inventory and delivered
-            before an empty shelf costs you the next sale.
+            Ascend restocks neighbourhood shops with the snack brands their
+            counter already sells. Order what you need, when you run out, and it
+            arrives from a dark store in your own cluster the same hour.
           </p>
           <div className="marketing-hero__actions">
             <Link className="marketing-button marketing-button--primary" href="/#contact">
@@ -42,8 +47,8 @@ export default function HeroSection() {
             </Link>
           </div>
           <p className="marketing-speed-marker">
-            <Clock3 aria-hidden="true" size={16} strokeWidth={2} />
-            60-minute delivery window
+            <MapPin aria-hidden="true" size={16} strokeWidth={2} />
+            Live in Gurugram and Delhi NCR
           </p>
         </div>
       </div>

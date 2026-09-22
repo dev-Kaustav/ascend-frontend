@@ -3,20 +3,20 @@ import { PackageCheck, ShoppingBasket, Truck } from "lucide-react";
 const steps = [
   {
     number: "01",
-    title: "Choose your essentials",
-    body: "Tell us which fast movers your store needs and where your shelves are running low.",
+    title: "Send your list",
+    body: "Tell us what your shelf is short on. No route, no waiting for the salesman.",
     icon: ShoppingBasket
   },
   {
     number: "02",
-    title: "We pick nearby",
-    body: "Your restock is picked and checked from inventory already positioned in your cluster.",
+    title: "We pick it nearby",
+    body: "Your order is picked and checked at the dark store already stocked for your cluster.",
     icon: PackageCheck
   },
   {
     number: "03",
-    title: "Shelves restock fast",
-    body: "The order reaches your store inside the 60-minute service window, subject to cluster availability.",
+    title: "It reaches your counter",
+    body: "The crate arrives inside the hour and goes straight onto the shelf.",
     icon: Truck
   }
 ];
@@ -27,12 +27,11 @@ export default function FulfillmentSection() {
       <div className="marketing-container">
         <div className="marketing-section-heading">
           <div>
-            <p className="marketing-eyebrow">ONE RESTOCK RUN</p>
-            <h2>From restock list to shelf in one run.</h2>
+            <p className="marketing-eyebrow">HOW IT WORKS</p>
+            <h2>Three steps from empty shelf to full one.</h2>
           </div>
           <p>
-            One clear route from what your store needs to what arrives at your
-            counter, without waiting for the next distributor round.
+            One route from what your store needs to what lands at your counter.
           </p>
         </div>
 

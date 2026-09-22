@@ -11,7 +11,7 @@ export default function Footer() {
             <p>60-minute snack restocking for neighbourhood retail.</p>
           </div>
           <div className="marketing-footer__links">
-            <a href="mailto:kaustav@ascendfoods.in">kaustav@ascendfoods.in</a>
+            <a href="mailto:pranshu@ascendfoods.in">pranshu@ascendfoods.in</a>
             <Link href="/privacy-policy">Privacy policy</Link>
             <Link href="/login">Team login</Link>
           </div>

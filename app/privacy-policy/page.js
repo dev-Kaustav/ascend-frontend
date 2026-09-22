@@ -49,10 +49,10 @@ export default function PrivacyPolicy() {
               <p className="mt-3">
                 For any privacy-related questions, you can reach us at{" "}
                 <a
-                  href="mailto:kaustav@ascendfoods.in"
+                  href="mailto:pranshu@ascendfoods.in"
                   className="font-semibold text-[color:var(--color-accent-strong)] hover:underline"
                 >
-                  kaustav@ascendfoods.in
+                  pranshu@ascendfoods.in
                 </a>
                 .
               </p>
@@ -128,10 +128,10 @@ export default function PrivacyPolicy() {
                 You can opt out at any time by replying &quot;STOP&quot; or by
                 contacting us at{" "}
                 <a
-                  href="mailto:kaustav@ascendfoods.in"
+                  href="mailto:pranshu@ascendfoods.in"
                   className="font-semibold text-[color:var(--color-accent-strong)] hover:underline"
                 >
-                  kaustav@ascendfoods.in
+                  pranshu@ascendfoods.in
                 </a>
                 . We do not use WhatsApp message content for advertising
                 purposes, and we do not sell your WhatsApp data.
@@ -190,10 +190,10 @@ export default function PrivacyPolicy() {
                 withdraw consent for certain processing. To exercise these
                 rights, contact us at{" "}
                 <a
-                  href="mailto:kaustav@ascendfoods.in"
+                  href="mailto:pranshu@ascendfoods.in"
                   className="font-semibold text-[color:var(--color-accent-strong)] hover:underline"
                 >
-                  kaustav@ascendfoods.in
+                  pranshu@ascendfoods.in
                 </a>
                 . We will respond in accordance with applicable law.
               </p>
@@ -233,10 +233,10 @@ export default function PrivacyPolicy() {
                 <br />
                 Email:{" "}
                 <a
-                  href="mailto:kaustav@ascendfoods.in"
+                  href="mailto:pranshu@ascendfoods.in"
                   className="font-semibold text-[color:var(--color-accent-strong)] hover:underline"
                 >
-                  kaustav@ascendfoods.in
+                  pranshu@ascendfoods.in
                 </a>
               </p>
             </Section>

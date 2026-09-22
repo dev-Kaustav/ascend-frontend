@@ -1,11 +1,10 @@
+import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-const proofBrands = ["CRAX", "JABSONS", "MyUpchaar Ayurveda"];
-
 const benefits = [
-  ["More neighbourhood doors", "Reach dense urban retail pockets store by store, including outlets outside the usual distributor rhythm."],
-  ["Faster product movement", "Nearby inventory and short restock cycles help products return to active shelves with less delay."],
-  ["Clearer demand visibility", "Store-level replenishment shows where products move and where the next case should be positioned."]
+  ["Reach doors a distributor skips", "Dense urban pockets get served store by store, including outlets outside the usual route."],
+  ["Move stock in hours, not weeks", "Inventory sits in the cluster it sells in, so a case goes from dark store to shelf the same day."],
+  ["See where your product actually sells", "Store-level replenishment shows which streets pull which SKUs, and where the next case should sit."]
 ];
 
 export default function BrandSection() {
@@ -16,18 +15,13 @@ export default function BrandSection() {
         <div className="marketing-section-heading marketing-section-heading--brand brand-section__reveal">
           <div>
             <p className="marketing-eyebrow">FOR SNACK BRANDS</p>
-            <h2>Reach more neighbourhood shelves.</h2>
+            <h2>Put your packs on shelves your distributor never reaches.</h2>
           </div>
           <p>
-            Put products closer to active demand with local execution and a
-            clearer replenishment trail.
+            Ascend carries your range into neighbourhood retail and reports back
+            what moved, store by store.
           </p>
         </div>
-
-        <p className="brand-section__proof brand-section__reveal">
-          Already live on Ascend
-          <span>{proofBrands.join(" · ")}</span>
-        </p>
 
         <ol className="editorial-benefits editorial-benefits--brand">
           {benefits.map(([title, body], index) => (
@@ -38,13 +32,10 @@ export default function BrandSection() {
             </li>
           ))}
         </ol>
-        <a
-          className="marketing-inline-link brand-section__reveal"
-          href="mailto:kaustav@ascendfoods.in?subject=Partner%20with%20Ascend"
-        >
+        <Link className="marketing-inline-link brand-section__reveal" href="/#contact">
           Partner as a brand
           <ArrowRight aria-hidden="true" size={17} />
-        </a>
+        </Link>
       </div>
     </section>
   );
