@@ -1,4 +1,3 @@
-import Script from "next/script";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Sora } from "next/font/google";
 import "./globals.css";
 import NumberInputWheelGuard from "@/components/ui/NumberInputWheelGuard";
@@ -37,7 +36,10 @@ const organizationSchema = {
   name: siteName,
   url: siteUrl,
   description: defaultDescription,
-  email: "pranshu@ascendfoods.in"
+  // Distinct from the favicon: this is the logo Google can attach to the brand itself.
+  logo: `${siteUrl}/ascend-logo.png`,
+  email: "pranshu@ascendfoods.in",
+  areaServed: "Gurugram and Delhi NCR, India"
 };
 
 export const metadata = {
@@ -82,6 +84,13 @@ export const metadata = {
     description: defaultDescription,
     images: [defaultImage]
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
+      { url: "/icon.svg", type: "image/svg+xml" }
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }]
+  },
   robots: {
     index: true,
     follow: true,
@@ -98,7 +107,7 @@ export default function RootLayout({ children }) {
       className={`${sora.variable} ${ibmPlexSans.variable} ${ibmPlexMono.variable}`}
     >
       <body className="antialiased font-sans">
-        <Script
+        <script
           id="organization-jsonld"
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
