@@ -2,6 +2,13 @@ import "./app.css";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 
+// Staff workspace: never indexed, and it must not present the public store's identity.
+export const metadata = {
+  title: "Staff workspace",
+  description: "Ascend staff workspace.",
+  robots: { index: false, follow: false }
+};
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "default-no-store";

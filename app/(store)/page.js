@@ -4,15 +4,25 @@ import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 
 export const dynamic = "force-dynamic";
 
-// Own metadata: the root layout's title/OG copy is the marketing page's 60-minute claim,
-// which must not describe the shopping surface.
+// Own metadata: the store is not the marketing page, so it must not carry its 60-minute claim.
+// Nested metadata objects replace the root's, so canonical, OG and Twitter are complete here.
+const siteUrl = "https://ascendfoods.in";
 const title = "Ascend Foods: Jabsons snacks for retailers";
 const description = "Browse the Ascend range. Pay on delivery.";
+const image = { url: "/ascend-logo.png", width: 512, height: 512, alt: "Ascend Foods logo" };
 export const metadata = {
   title: { absolute: title },
   description,
-  openGraph: { title, description, url: "https://ascendfoods.in" },
-  twitter: { card: "summary", title, description }
+  alternates: { canonical: "/" },
+  openGraph: {
+    title,
+    description,
+    url: `${siteUrl}/`,
+    siteName: "Ascend Foods",
+    type: "website",
+    images: [image]
+  },
+  twitter: { card: "summary", title, description, images: [image.url] }
 };
 
 const mrp = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });

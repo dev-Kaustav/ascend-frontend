@@ -25,17 +25,18 @@ const ibmPlexMono = IBM_Plex_Mono({
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-const defaultTitle = "Ascend: Snack Restocking in 60 Minutes";
-const defaultDescription =
-  "Ascend restocks kirana and convenience stores across Gurugram and Delhi NCR with Bikaji, CRAX, Jabsons and MyUpchaar snacks, delivered from a nearby dark store in 60 minutes.";
-const defaultImage = "/ascend-kirana-restock.webp";
+// Root defaults describe the B2B store at "/" and carry no delivery-time promise. The marketing
+// copy (60-minute restocking) belongs to /landing, which sets its own complete metadata.
+const defaultTitle = "Ascend Foods: Jabsons snacks for retailers";
+const defaultDescription = "Browse the Ascend range of Jabsons snacks for retailers. Pay on delivery.";
 
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: siteName,
   url: siteUrl,
-  description: defaultDescription,
+  // Neutral facts only: this block is emitted on every route, so no delivery-time claim here.
+  description: "Ascend Foods supplies Jabsons snacks to retailers.",
   // Distinct from the favicon: this is the logo Google can attach to the brand itself.
   logo: `${siteUrl}/ascend-logo.png`,
   email: "pranshu@ascendfoods.in",
@@ -50,39 +51,14 @@ export const metadata = {
   },
   description: defaultDescription,
   applicationName: siteName,
-  keywords: [
-    "B2B quick commerce",
-    "kirana restocking",
-    "dark store delivery",
-    "Snacks B2B distribution",
-    "retailer ordering",
-    "India snacks distribution"
-  ],
-  alternates: {
-    canonical: "/"
-  },
+  // No canonical, OG url, OG image or keywords here: nested metadata is inherited by every
+  // route, so each public route (/, /landing, /privacy-policy) declares its own and the
+  // private ones (/login, /app) opt out of indexing.
   creator: siteName,
   publisher: siteName,
   openGraph: {
-    title: defaultTitle,
-    description: defaultDescription,
-    url: siteUrl,
     siteName,
-    type: "website",
-    images: [
-      {
-        url: defaultImage,
-        width: 1536,
-        height: 1024,
-        alt: "A kirana owner restocking everyday products with Ascend"
-      }
-    ]
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: defaultTitle,
-    description: defaultDescription,
-    images: [defaultImage]
+    type: "website"
   },
   icons: {
     icon: [
