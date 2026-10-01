@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import {
@@ -11,13 +11,23 @@ import {
   RowActions
 } from "@/components/tables/InlineRowCells";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
-import { apiEndpoints } from "@/lib/api";
+import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useInlineRowEditor from "@/lib/hooks/useInlineRowEditor";
 import { applySkuFieldChange, emptySku, toNumber } from "@/lib/skuPricing";
 
 const asText = (value) => (value === null || value === undefined ? "" : String(value));
+
+// The stored URL is only ever an img src, never HTML or an href (T-08-17). A plain img rather
+// than next/image because these are hotlinked from arbitrary hosts (D-14).
+function Thumbnail({ url, name }) {
+  if (!url) return "—";
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt={name || "SKU image"} loading="lazy" className="h-10 w-10 rounded-lg object-cover" />
+  );
+}
 
 export default function AdminCatalog() {
   const { skus, brands, loading, error, refreshLookups } = useAdminLookups({
@@ -27,6 +37,28 @@ export default function AdminCatalog() {
   const [brandFilter, setBrandFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [categories, setCategories] = useState([]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      return await apiFetch(apiEndpoints.admin.categories);
+    } catch {
+      // The catalogue stays usable without categories; the select just has no choices.
+      return [];
+    }
+  }, []);
+  // Handed to the Categories section so a saved category is assignable without a page reload.
+  const loadCategories = useCallback(async () => setCategories(await fetchCategories()), [fetchCategories]);
+
+  useEffect(() => {
+    let active = true;
+    fetchCategories().then((rows) => {
+      if (active) setCategories(rows);
+    });
+    return () => {
+      active = false;
+    };
+  }, [fetchCategories]);
 
   const editor = useInlineRowEditor({
     blank: emptySku,
@@ -60,7 +92,11 @@ export default function AdminCatalog() {
         weight: toNumber(values.weight),
         length_cm: toNumber(values.length_cm),
         width_cm: toNumber(values.width_cm),
-        height_cm: toNumber(values.height_cm)
+        height_cm: toNumber(values.height_cm),
+        // Empty box means "none" rather than "", so a cleared field really clears the column.
+        image_url: values.image_url.trim() || null,
+        category_id: values.category_id ? Number(values.category_id) : null,
+        net_weight_g: toNumber(values.net_weight_g)
       }),
       []
     ),
@@ -77,6 +113,14 @@ export default function AdminCatalog() {
     [brands]
   );
   const brandMap = useMemo(() => new Map(brandOptions.map((option) => [option.value, option.label])), [brandOptions]);
+  const categoryOptions = useMemo(
+    () => (categories || []).map((category) => ({ value: String(category.id), label: category.name })),
+    [categories]
+  );
+  const categoryMap = useMemo(
+    () => new Map(categoryOptions.map((option) => [option.value, option.label])),
+    [categoryOptions]
+  );
 
   const skuRows = useMemo(() => {
     return (skus || []).map((sku) => {
@@ -87,10 +131,11 @@ export default function AdminCatalog() {
       return {
         ...sku,
         brand_name: brandMap.get(String(sku.brand_id)) || "—",
+        category_name: categoryMap.get(String(sku.category_id)) || "—",
         dimensions: dimensions || "—"
       };
     });
-  }, [skus, brandMap]);
+  }, [skus, brandMap, categoryMap]);
 
   const filteredSkus = useMemo(() => {
     const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -119,7 +164,7 @@ export default function AdminCatalog() {
       meta: { type: "number", ...(extra.meta || {}) },
       cell: ({ row }) =>
         editor.isEditing(row) ? (
-          <InlineNumber editor={editor} field={field} label={header} placeholder="0" />
+          <InlineNumber editor={editor} field={field} label={header} placeholder="0" digits={extra.digits} />
         ) : (
           format(row.original[field])
         )
@@ -138,6 +183,16 @@ export default function AdminCatalog() {
             <InlineText editor={editor} field="name" label="SKU name" placeholder="SKU name" autoFocus />
           ) : (
             row.original.name || "—"
+          )
+      },
+      {
+        header: "Image",
+        accessorKey: "image_url",
+        cell: ({ row }) =>
+          editor.isEditing(row) ? (
+            <InlineText editor={editor} field="image_url" label="Image URL" placeholder="https://…" />
+          ) : (
+            <Thumbnail url={row.original.image_url} name={row.original.name} />
           )
       },
       {
@@ -161,6 +216,22 @@ export default function AdminCatalog() {
           )
       },
       {
+        header: "Category",
+        accessorKey: "category_name",
+        cell: ({ row }) =>
+          editor.isEditing(row) ? (
+            <InlineSelect
+              editor={editor}
+              field="category_id"
+              label="Category"
+              options={categoryOptions}
+              placeholder="No category"
+            />
+          ) : (
+            row.original.category_name
+          )
+      },
+      {
         header: "HSN Code",
         accessorKey: "hsn_code",
         cell: ({ row }) =>
@@ -179,6 +250,10 @@ export default function AdminCatalog() {
       numericColumn("IGST %", "igst_percent", formatPercent),
       numericColumn("Amount", "amount", formatCurrency),
       numericColumn("Weight", "weight", formatNumber),
+      // Whole grams only: digits={6} strips anything else as it is typed.
+      numericColumn("Net wt (g)", "net_weight_g", (value) => (value ? String(value) : "—"), {
+        digits: 6
+      }),
       {
         header: "Dimensions (cm)",
         accessorKey: "dimensions",
@@ -199,7 +274,7 @@ export default function AdminCatalog() {
         cell: ({ row }) => <RowActions editor={editor} row={row} onEdit={editor.startEdit} />
       }
     ],
-    [editor, brandOptions, numericColumn]
+    [editor, brandOptions, categoryOptions, numericColumn]
   );
 
   if (loading) {
