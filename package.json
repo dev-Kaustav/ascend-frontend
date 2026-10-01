@@ -12,6 +12,7 @@
     "@react-leaflet/core": "^2.1.0",
     "@tanstack/react-table": "^8.21.3",
     "dayjs": "^1.11.13",
+    "firebase": "12.17.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.487.0",
     "motion": "^12.40.0",
