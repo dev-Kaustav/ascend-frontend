@@ -402,7 +402,7 @@ const firebaseError = (code) => Object.assign(new Error(code), { code });
 const storeError = (status, extra = {}) => Object.assign(new Error(`status ${status}`), { name: "StoreApiError", status, retryAfter: null, payload: null, reason: null, ...extra });
 
 test("a wrong or expired code points at the code field with the contract copy", () => {
-  for (const code of ["auth/invalid-verification-code", "auth/code-expired", "auth/missing-verification-code"]) {
+  for (const code of ["auth/invalid-verification-code", "auth/code-expired", "auth/missing-verification-code", "app/no-challenge"]) {
     assert.deepEqual(describeLoginError(firebaseError(code)), {
       field: "code",
       message: "We couldn't verify that code. Check it or request a new code.",

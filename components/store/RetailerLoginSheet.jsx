@@ -7,10 +7,17 @@ import { X } from "lucide-react";
 import { useRetailer } from "@/components/store/RetailerProvider";
 import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 import {
-  canCommitExchange,
+  canRequestCode,
   decideResume,
+  describeLoginError,
+  exchangeAndSave,
+  extendCooldown,
   getSessionGeneration,
-  saveRetailerTokens
+  isCompleteOtp,
+  normalizeOtpInput,
+  normalizePhoneInput,
+  saveRetailerTokens,
+  startCooldown
 } from "@/lib/store/session.mjs";
 import {
   confirmPhoneCode,
@@ -51,6 +58,9 @@ function releaseHistoryEntry() {
   }, 0);
 }
 
+// "+91 98765 43210" for display; the number is only ever shown back to the person who typed it.
+const formatPhone = (digits) => `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+
 export default function RetailerLoginSheet({ intent, onClose }) {
   const router = useRouter();
   const { readiness, status, takeIntent, openSheet, closeSheet, refreshMe } = useRetailer();
@@ -65,11 +75,15 @@ export default function RetailerLoginSheet({ intent, onClose }) {
   });
   const [step, setStep] = useState("phone");
   const [phone, setPhone] = useState("");
+  const [sentTo, setSentTo] = useState(""); // the 10 digits a code was last requested for
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(null); // "send" | "verify" | null
   const [signedIn, setSignedIn] = useState(false);
   const [error, setError] = useState(null); // { field: "phone" | "code" | "form", message }
   const [notice, setNotice] = useState("");
+  const [cooldown, setCooldown] = useState(null); // { phone, until }: resend wait for one number
+  const [verifyUntil, setVerifyUntil] = useState(null); // epoch ms: verify waits out a 429
+  const [now, setNow] = useState(() => Date.now());
 
   const dialogRef = useRef(null);
   const phoneRef = useRef(null);
@@ -77,8 +91,19 @@ export default function RetailerLoginSheet({ intent, onClose }) {
   const recaptchaRef = useRef(null);
   const openRef = useRef(true);
   const attemptRef = useRef(0); // bumped by a number change or a restart; drops a late exchange
+  const proofRef = useRef(null); // a confirmed ID token kept only to retry a transient exchange failure
   const loginGenerationRef = useRef(null); // the session generation this sheet created
   const resumedRef = useRef(false);
+
+  const resendWait = canRequestCode(cooldown, sentTo, now).remaining;
+  const verifyWait = verifyUntil ? Math.max(0, Math.ceil((verifyUntil - now) / 1000)) : 0;
+  const ticking = resendWait > 0 || verifyWait > 0;
+
+  useEffect(() => {
+    if (!ticking) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [ticking]);
 
   // The host lives inside .ascend-storefront so the sheet inherits the storefront styles, while
   // everything else in that root can be made inert behind it. Declared first so it runs before the
@@ -121,6 +146,7 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     if (!openRef.current) return;
     openRef.current = false;
     attemptRef.current += 1;
+    proofRef.current = null;
     disposePhoneVerifier();
     onClose();
   }, [onClose]);
@@ -168,6 +194,7 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     return () => {
       openRef.current = false;
       attemptRef.current += 1;
+      proofRef.current = null;
       disposePhoneVerifier();
     };
   }, []);
@@ -176,42 +203,65 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     if (step === "code") codeRef.current?.focus();
   }, [step]);
 
-  async function onSendCode(event) {
-    event.preventDefault();
-    if (busy) return;
-    const digits = phone.replace(/\D/g, "");
-    if (!/^[6-9]\d{9}$/.test(digits)) {
-      setError({ field: "phone", message: "Enter a 10-digit mobile number." });
-      return;
-    }
+  // Ask Firebase to text a code. Used for the first request and for Resend.
+  async function requestCode(digits) {
     setError(null);
     setNotice("");
     setBusy("send");
+    proofRef.current = null;
     const attempt = attemptRef.current;
     try {
       await sendPhoneCode(`+91${digits}`, recaptchaRef.current);
       if (attempt !== attemptRef.current || !openRef.current) return;
-      setStep("code");
+      const at = Date.now();
+      setSentTo(digits);
+      setCooldown(startCooldown(digits, at));
+      setNow(at);
+      setVerifyUntil(null);
       setCode("");
+      setStep("code");
       setNotice("Code sent. Enter the 6 digits from the SMS.");
     } catch (failure) {
       if (failure?.code === "app/cancelled" || attempt !== attemptRef.current || !openRef.current) return;
-      setError({
-        field: "form",
-        message:
-          failure?.code === "auth/invalid-phone-number"
-            ? "Enter a valid mobile number."
-            : "We couldn't send a code. Please try again."
-      });
+      const described = describeLoginError(failure);
+      // A throttle from Firebase carries no Retry-After, so the unknown-length wait applies.
+      if (failure?.code === "auth/too-many-requests" || failure?.code === "auth/quota-exceeded") {
+        const at = Date.now();
+        setSentTo(digits);
+        setCooldown(extendCooldown(startCooldown(digits, at), at, null));
+        setNow(at);
+      }
+      setError({ field: described.field, message: described.message });
     } finally {
       if (attempt === attemptRef.current) setBusy(null);
     }
   }
 
-  async function onVerify(event) {
+  function onSendCode(event) {
     event.preventDefault();
     if (busy) return;
-    if (!/^\d{6}$/.test(code)) {
+    const normalized = normalizePhoneInput(phone);
+    if (!normalized.valid) {
+      setError({ field: "phone", message: "Enter a valid 10-digit mobile number." });
+      return;
+    }
+    const gate = canRequestCode(cooldown, normalized.digits, Date.now());
+    if (!gate.allowed) {
+      setError({ field: "form", message: `Please wait ${gate.remaining}s before requesting another code.` });
+      return;
+    }
+    requestCode(normalized.digits);
+  }
+
+  function onResend() {
+    if (busy || canRequestCode(cooldown, sentTo, Date.now()).remaining > 0) return;
+    requestCode(sentTo);
+  }
+
+  async function onVerify(event) {
+    event.preventDefault();
+    if (busy || verifyWait > 0) return;
+    if (!proofRef.current && !isCompleteOtp(code)) {
       setError({ field: "code", message: "Enter the 6-digit code." });
       return;
     }
@@ -220,15 +270,21 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     setBusy("verify");
     const started = { attempt: attemptRef.current, generation: getSessionGeneration() };
     try {
-      const idToken = await confirmPhoneCode(code);
-      const data = await storeFetch(storeEndpoints.authExchange, {
-        method: "POST",
-        public: true,
-        body: JSON.stringify({ id_token: idToken })
+      const result = await exchangeAndSave({
+        started,
+        // A proof kept from a transient failure is reused, so a throttled or offline moment does not
+        // cost the visitor another SMS. A fresh code check otherwise.
+        confirm: async () => {
+          if (!proofRef.current) proofRef.current = await confirmPhoneCode(code);
+          return proofRef.current;
+        },
+        exchange: (idToken) =>
+          storeFetch(storeEndpoints.authExchange, { method: "POST", public: true, body: JSON.stringify({ id_token: idToken }) }),
+        current: () => ({ attempt: attemptRef.current, generation: getSessionGeneration(), open: openRef.current }),
+        save: saveRetailerTokens
       });
-      const current = { attempt: attemptRef.current, generation: getSessionGeneration(), open: openRef.current };
-      if (!canCommitExchange(started, current)) return;
-      saveRetailerTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
+      proofRef.current = null;
+      if (!result.committed) return;
       loginGenerationRef.current = getSessionGeneration();
       signOutPhoneProof();
       setSignedIn(true);
@@ -236,13 +292,18 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     } catch (failure) {
       if (failure?.code === "app/cancelled" || isStaleStoreError(failure)) return;
       if (started.attempt !== attemptRef.current || !openRef.current) return;
-      setError({
-        field: failure?.code === "auth/invalid-verification-code" || failure?.code === "auth/code-expired" ? "code" : "form",
-        message:
-          failure?.code === "auth/invalid-verification-code" || failure?.code === "auth/code-expired"
-            ? "We couldn't verify that code. Check it or request a new code."
-            : "We couldn't sign you in. Please try again."
-      });
+      const described = describeLoginError(failure);
+      // Only a transient failure keeps the proof: a 401 or a bad code means a new code is needed.
+      const transient = failure?.reason === "network" || failure?.status === 429 || failure?.status >= 500;
+      if (!transient) proofRef.current = null;
+      if (failure?.status === 429) {
+        const at = Date.now();
+        // Resend is held for at least as long as the backend asked; Verify waits exactly that long.
+        setCooldown(extendCooldown(cooldown || startCooldown(sentTo, at), at, described.retryAfter));
+        setVerifyUntil(extendCooldown({ phone: sentTo, until: 0 }, at, described.retryAfter).until);
+        setNow(at);
+      }
+      setError({ field: described.field, message: described.message });
     } finally {
       if (started.attempt === attemptRef.current) setBusy(null);
     }
@@ -250,13 +311,22 @@ export default function RetailerLoginSheet({ intent, onClose }) {
 
   function onChangeNumber() {
     attemptRef.current += 1;
+    proofRef.current = null;
     disposePhoneVerifier();
     setStep("phone");
     setCode("");
+    setSentTo("");
+    setVerifyUntil(null);
     setError(null);
     setNotice("");
     setBusy(null);
     requestAnimationFrame(() => phoneRef.current?.focus());
+  }
+
+  function onCodeChange(value) {
+    // Editing the code abandons any proof kept for a retry: it belonged to the old code.
+    proofRef.current = null;
+    setCode(normalizeOtpInput(value));
   }
 
   // After a successful exchange the provider loads /store/me; once readiness is a final answer the
@@ -289,18 +359,14 @@ export default function RetailerLoginSheet({ intent, onClose }) {
     .map(([name]) => name)
     .join(",");
   const pending = busy !== null || (signedIn && !sessionFailed);
+  const describedBy = (field, hintId) =>
+    [hintId, error?.field === field ? "store-login-error" : null].filter(Boolean).join(" ") || undefined;
 
   if (!host) return null;
 
   return createPortal(
     <div className="store-sheet-backdrop" data-firebase-missing={missingConfig} data-login-status={status}>
-      <div
-        ref={dialogRef}
-        className="store-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="store-login-title"
-      >
+      <div ref={dialogRef} className="store-sheet" role="dialog" aria-modal="true" aria-labelledby="store-login-title">
         <div className="store-sheet__head">
           <h2 id="store-login-title">Log in or Sign up</h2>
           <button type="button" className="store-sheet__close" onClick={dismiss} aria-label="Close login">
@@ -325,13 +391,17 @@ export default function RetailerLoginSheet({ intent, onClose }) {
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel-national"
+                  maxLength={20}
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
                   aria-invalid={error?.field === "phone" ? "true" : undefined}
-                  aria-describedby={error?.field === "phone" ? "store-login-error" : undefined}
+                  aria-describedby={describedBy("phone", "store-login-phone-hint")}
                   disabled={busy === "send"}
                 />
               </div>
+              <p id="store-login-phone-hint" className="store-hint">
+                We&apos;ll text you a 6-digit code.
+              </p>
               <button
                 type="submit"
                 className="store-button store-sheet__submit"
@@ -355,17 +425,33 @@ export default function RetailerLoginSheet({ intent, onClose }) {
                 autoComplete="one-time-code"
                 maxLength={6}
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
+                onChange={(event) => onCodeChange(event.target.value)}
+                onPaste={(event) => {
+                  const text = event.clipboardData?.getData("text");
+                  if (typeof text === "string") {
+                    // A pasted "123 456" is longer than maxLength, so clean it before the browser truncates it.
+                    event.preventDefault();
+                    onCodeChange(text);
+                  }
+                }}
                 aria-invalid={error?.field === "code" ? "true" : undefined}
-                aria-describedby={error?.field === "code" ? "store-login-error" : undefined}
+                aria-describedby={describedBy("code", "store-login-code-hint")}
                 disabled={pending}
               />
-              <button type="submit" className="store-button store-sheet__submit" disabled={pending}>
-                {busy === "verify" || signedIn ? "Verifying" : "Verify code"}
+              <p id="store-login-code-hint" className="store-hint">
+                Sent to {formatPhone(sentTo)}.
+              </p>
+              <button type="submit" className="store-button store-sheet__submit" disabled={pending || verifyWait > 0}>
+                {busy === "verify" || signedIn ? "Verifying" : verifyWait > 0 ? `Try again in ${verifyWait}s` : "Verify code"}
               </button>
-              <button type="button" className="store-link-button" onClick={onChangeNumber} disabled={signedIn}>
-                Change number
-              </button>
+              <div className="store-sheet__links">
+                <button type="button" className="store-link-button" onClick={onResend} disabled={pending || resendWait > 0}>
+                  {resendWait > 0 ? `Resend code in ${resendWait}s` : "Resend code"}
+                </button>
+                <button type="button" className="store-link-button" onClick={onChangeNumber} disabled={signedIn}>
+                  Change number
+                </button>
+              </div>
             </form>
           )}
 

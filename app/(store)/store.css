@@ -504,6 +504,21 @@
   line-height: 1.4;
 }
 
+.store-hint {
+  margin-top: 8px;
+  color: var(--s-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.store-sheet__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 8px;
+}
+
 .store-sheet__live {
   min-height: 21px;
   margin-top: 8px;
