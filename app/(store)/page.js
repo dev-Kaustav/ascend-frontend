@@ -1,0 +1,54 @@
+import Link from "next/link";
+import ProductImage from "@/components/store/ProductImage";
+import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+
+export const dynamic = "force-dynamic";
+
+// Own metadata: the root layout's title/OG copy is the marketing page's 60-minute claim,
+// which must not describe the shopping surface.
+const title = "Ascend Foods: Jabsons snacks for retailers";
+const description = "Browse the Ascend range. Pay on delivery.";
+export const metadata = {
+  title: { absolute: title },
+  description,
+  openGraph: { title, description, url: "https://ascendfoods.in" },
+  twitter: { card: "summary", title, description }
+};
+
+const mrp = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
+
+async function loadSeedProduct() {
+  try {
+    const page = await storeFetch(`${storeEndpoints.products}?limit=1`, { public: true });
+    return { product: page?.items?.[0] ?? null, failed: false };
+  } catch {
+    return { product: null, failed: true };
+  }
+}
+
+export default async function StoreHomePage() {
+  const { product, failed } = await loadSeedProduct();
+
+  return (
+    <section aria-labelledby="store-home-heading">
+      <h1 id="store-home-heading">Ascend range</h1>
+
+      {failed ? (
+        <div role="alert">
+          <p>We couldn&apos;t load products. Please try again.</p>
+          <Link href="/">Try again</Link>
+        </div>
+      ) : !product ? (
+        <p>No products found. Check back soon.</p>
+      ) : (
+        <article data-store-product-id={product.id} aria-label={product.name}>
+          <ProductImage src={product.image_url} />
+          <h2>{product.name}</h2>
+          {product.pack_size ? <p>{product.pack_size}</p> : null}
+          <p>MRP {mrp.format(product.mrp)}</p>
+          <p>{product.in_stock ? "In stock" : "Out of stock"}</p>
+        </article>
+      )}
+    </section>
+  );
+}

@@ -9,6 +9,11 @@ import LeadSection from "@/components/landing/LeadSection";
 import Navbar from "@/components/landing/Navbar";
 import RangeSection from "@/components/landing/RangeSection";
 
+// The storefront now owns "/", which the root layout still declares as canonical.
+export const metadata = {
+  alternates: { canonical: "/landing" }
+};
+
 export default function Home() {
   return (
     <div className="ascend-marketing">
