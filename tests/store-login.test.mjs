@@ -7,7 +7,20 @@
 // saved, where does a ready retailer go next) run on lib/store/session.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canCommitExchange, decideResume } from "../lib/store/session.mjs";
+import {
+  RESEND_COOLDOWN_SECONDS,
+  canCommitExchange,
+  canRequestCode,
+  cooldownRemaining,
+  decideResume,
+  describeLoginError,
+  exchangeAndSave,
+  extendCooldown,
+  isCompleteOtp,
+  normalizeOtpInput,
+  normalizePhoneInput,
+  startCooldown
+} from "../lib/store/session.mjs";
 import { createPhoneAuth } from "../lib/store/firebase.js";
 
 // ---------------------------------------------------------------------------------------------
@@ -278,4 +291,237 @@ test("a failed send clears its verifier so the next attempt starts clean", async
   const { fake, phoneAuth } = makeAuth({}, { sendError: error });
   await assert.rejects(() => phoneAuth.sendPhoneCode("+919876543210", fakeContainer()), { code: "auth/too-many-requests" });
   assert.equal(fake.verifiers[0].cleared, true);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Phone and code input. The code is a string: "012345" must never become 12345.
+// ---------------------------------------------------------------------------------------------
+
+test("a 10-digit Indian mobile number is valid and gets +91", () => {
+  assert.deepEqual(normalizePhoneInput("9876543210"), { digits: "9876543210", valid: true, e164: "+919876543210" });
+});
+
+test("pasted formats normalise: spaces, dashes, +91, 91 and a leading trunk zero", () => {
+  for (const raw of ["98765 43210", "98765-43210", "+91 98765 43210", "+91-9876543210", "919876543210", "09876543210", " 9876543210 "]) {
+    assert.equal(normalizePhoneInput(raw).e164, "+919876543210", raw);
+  }
+});
+
+test("partial, over-long, empty and non-mobile numbers are invalid and keep what was typed", () => {
+  for (const raw of ["98765", "98765432101", "", "abcdefghij", "1234567890", "5876543210"]) {
+    const result = normalizePhoneInput(raw);
+    assert.equal(result.valid, false, raw);
+    assert.equal(result.e164, null, raw);
+  }
+  assert.equal(normalizePhoneInput("98765").digits, "98765");
+});
+
+test("a non-string phone input is invalid, not a crash", () => {
+  for (const raw of [undefined, null, 9876543210, {}]) assert.equal(normalizePhoneInput(raw).valid, false);
+});
+
+test("the one-time code keeps its leading zero as a string", () => {
+  assert.equal(normalizeOtpInput("012345"), "012345");
+  assert.equal(normalizeOtpInput("000000"), "000000");
+  assert.equal(typeof normalizeOtpInput("012345"), "string");
+});
+
+test("a pasted or autofilled code is cleaned and capped at six digits", () => {
+  assert.equal(normalizeOtpInput("123 456"), "123456");
+  assert.equal(normalizeOtpInput("123-456"), "123456");
+  assert.equal(normalizeOtpInput("G-123456 is your code"), "123456");
+  assert.equal(normalizeOtpInput("1234567890"), "123456");
+  assert.equal(normalizeOtpInput("12ab"), "12");
+  assert.equal(normalizeOtpInput(undefined), "");
+});
+
+test("only exactly six digits is a complete code", () => {
+  assert.equal(isCompleteOtp("012345"), true);
+  for (const code of ["12345", "1234567", "12345a", "", " 12345", undefined, 123456]) assert.equal(isCompleteOtp(code), false, String(code));
+});
+
+// ---------------------------------------------------------------------------------------------
+// Resend cooldown.
+// ---------------------------------------------------------------------------------------------
+
+test("a code request starts a cooldown for that number only", () => {
+  const cooldown = startCooldown("9876543210", 1_000_000);
+  assert.equal(cooldown.phone, "9876543210");
+  assert.equal(cooldown.until, 1_000_000 + RESEND_COOLDOWN_SECONDS * 1000);
+});
+
+test("the remaining wait counts down in whole seconds, rounding up, and never goes negative", () => {
+  const cooldown = startCooldown("9876543210", 0);
+  assert.equal(cooldownRemaining(cooldown, 0), RESEND_COOLDOWN_SECONDS);
+  assert.equal(cooldownRemaining(cooldown, 100), RESEND_COOLDOWN_SECONDS);
+  assert.equal(cooldownRemaining(cooldown, (RESEND_COOLDOWN_SECONDS - 1) * 1000 + 1), 1);
+  assert.equal(cooldownRemaining(cooldown, RESEND_COOLDOWN_SECONDS * 1000), 0);
+  assert.equal(cooldownRemaining(cooldown, 10 * RESEND_COOLDOWN_SECONDS * 1000), 0);
+  assert.equal(cooldownRemaining(null, 0), 0);
+});
+
+test("resend is suppressed for the same number during the cooldown and allowed after it", () => {
+  const cooldown = startCooldown("9876543210", 0);
+  assert.deepEqual(canRequestCode(cooldown, "9876543210", 5_000), { allowed: false, remaining: RESEND_COOLDOWN_SECONDS - 5 });
+  assert.deepEqual(canRequestCode(cooldown, "9876543210", RESEND_COOLDOWN_SECONDS * 1000), { allowed: true, remaining: 0 });
+});
+
+test("changing to a different number is not held back by the previous number's cooldown", () => {
+  const cooldown = startCooldown("9876543210", 0);
+  assert.deepEqual(canRequestCode(cooldown, "9123456780", 1_000), { allowed: true, remaining: 0 });
+  assert.deepEqual(canRequestCode(null, "9123456780", 1_000), { allowed: true, remaining: 0 });
+});
+
+test("a 429 Retry-After lengthens the wait and never shortens it", () => {
+  const cooldown = startCooldown("9876543210", 0);
+  const longer = extendCooldown(cooldown, 2_000, 120);
+  assert.equal(longer.until, 2_000 + 120_000);
+  assert.equal(longer.phone, "9876543210");
+  const shorter = extendCooldown(cooldown, 2_000, 5);
+  assert.equal(shorter.until, cooldown.until, "a short Retry-After must not cut an existing wait");
+});
+
+test("a 429 with no readable Retry-After still imposes a wait, and an absurd one is capped", () => {
+  const base = startCooldown("9876543210", 0);
+  const missing = extendCooldown(base, 0, null);
+  assert.ok(missing.until > base.until, "the unknown-length throttle waits longer than the normal cooldown");
+  const absurd = extendCooldown(base, 0, 10 ** 9);
+  assert.ok(absurd.until <= 3600 * 1000, "capped at an hour");
+});
+
+test("extending with no cooldown yet creates one for the given number", () => {
+  const created = extendCooldown({ phone: "9876543210", until: 0 }, 1_000, 30);
+  assert.equal(created.until, 31_000);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Error wording. Typed values are kept by the caller; this only decides what to say and where.
+// ---------------------------------------------------------------------------------------------
+
+const firebaseError = (code) => Object.assign(new Error(code), { code });
+const storeError = (status, extra = {}) => Object.assign(new Error(`status ${status}`), { name: "StoreApiError", status, retryAfter: null, payload: null, reason: null, ...extra });
+
+test("a wrong or expired code points at the code field with the contract copy", () => {
+  for (const code of ["auth/invalid-verification-code", "auth/code-expired", "auth/missing-verification-code"]) {
+    assert.deepEqual(describeLoginError(firebaseError(code)), {
+      field: "code",
+      message: "We couldn't verify that code. Check it or request a new code.",
+      retryAfter: null
+    });
+  }
+});
+
+test("the backend refusing the proof (401) uses the same code copy", () => {
+  const described = describeLoginError(storeError(401));
+  assert.equal(described.field, "code");
+  assert.equal(described.message, "We couldn't verify that code. Check it or request a new code.");
+});
+
+test("an invalid phone number points at the phone field", () => {
+  for (const code of ["auth/invalid-phone-number", "auth/missing-phone-number"]) {
+    assert.equal(describeLoginError(firebaseError(code)).field, "phone", code);
+  }
+});
+
+test("throttling from Firebase or from Ascend asks the visitor to wait, carrying Retry-After", () => {
+  for (const code of ["auth/too-many-requests", "auth/quota-exceeded"]) {
+    const described = describeLoginError(firebaseError(code));
+    assert.equal(described.field, "form");
+    assert.match(described.message, /wait/i);
+    assert.equal(described.retryAfter, null);
+  }
+  const ascend = describeLoginError(storeError(429, { retryAfter: 45 }));
+  assert.equal(ascend.retryAfter, 45);
+  assert.match(ascend.message, /wait/i);
+});
+
+test("provider or backend outages and a missing config read as temporarily unavailable", () => {
+  for (const error of [firebaseError("app/not-configured"), firebaseError("auth/operation-not-allowed"), storeError(503), storeError(500)]) {
+    const described = describeLoginError(error);
+    assert.equal(described.field, "form");
+    assert.match(described.message, /temporarily unavailable/i);
+  }
+});
+
+test("a network failure asks for a connection check; an unknown failure is generic; none leak internals", () => {
+  assert.match(describeLoginError(firebaseError("auth/network-request-failed")).message, /connection/i);
+  assert.match(describeLoginError(storeError(0, { reason: "network" })).message, /connection/i);
+  const unknown = describeLoginError(new Error("secret internal detail id_token=abc"));
+  assert.equal(unknown.field, "form");
+  assert.doesNotMatch(unknown.message, /secret|id_token|abc/);
+  assert.equal(describeLoginError(null).field, "form");
+});
+
+test("a failed reCAPTCHA check says so without blaming the number", () => {
+  const described = describeLoginError(firebaseError("auth/captcha-check-failed"));
+  assert.equal(described.field, "form");
+  assert.match(described.message, /try again/i);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Late completion. The exchange runs first; whether it may be saved is decided afterwards.
+// ---------------------------------------------------------------------------------------------
+
+function exchangeHarness({ open = true, generation = 5, attempt = 3, confirmError, exchangeError } = {}) {
+  const state = { open, generation, attempt, saved: [], exchanged: [], confirmed: [] };
+  const run = () =>
+    exchangeAndSave({
+      started: { attempt: 3, generation: 5 },
+      confirm: async () => {
+        state.confirmed.push(true);
+        if (confirmError) throw confirmError;
+        return "fresh-id-token";
+      },
+      exchange: async (idToken) => {
+        state.exchanged.push(idToken);
+        if (exchangeError) throw exchangeError;
+        return { access_token: "access", refresh_token: "refresh", onboarding: "ready" };
+      },
+      current: () => ({ attempt: state.attempt, generation: state.generation, open: state.open }),
+      save: (tokens) => state.saved.push(tokens)
+    });
+  return { state, run };
+}
+
+test("a current exchange saves the tokens once and reports the server's onboarding answer", async () => {
+  const { state, run } = exchangeHarness();
+  const result = await run();
+  assert.deepEqual(result, { committed: true, onboarding: "ready" });
+  assert.deepEqual(state.exchanged, ["fresh-id-token"]);
+  assert.deepEqual(state.saved, [{ accessToken: "access", refreshToken: "refresh" }]);
+});
+
+test("closing the sheet while the exchange is in flight saves nothing", async () => {
+  const { state, run } = exchangeHarness();
+  const pending = run();
+  state.open = false;
+  assert.deepEqual(await pending, { committed: false, reason: "stale" });
+  assert.deepEqual(state.saved, []);
+});
+
+test("an account switch while the exchange is in flight saves nothing", async () => {
+  const { state, run } = exchangeHarness();
+  const pending = run();
+  state.generation = 6;
+  assert.deepEqual(await pending, { committed: false, reason: "stale" });
+  assert.deepEqual(state.saved, []);
+});
+
+test("changing the number while the exchange is in flight saves nothing", async () => {
+  const { state, run } = exchangeHarness();
+  const pending = run();
+  state.attempt = 4;
+  assert.deepEqual(await pending, { committed: false, reason: "stale" });
+  assert.deepEqual(state.saved, []);
+});
+
+test("a wrong code never reaches the exchange; a refused exchange never saves", async () => {
+  const wrong = exchangeHarness({ confirmError: firebaseError("auth/invalid-verification-code") });
+  await assert.rejects(() => wrong.run(), { code: "auth/invalid-verification-code" });
+  assert.deepEqual(wrong.state.exchanged, []);
+  assert.deepEqual(wrong.state.saved, []);
+
+  const refused = exchangeHarness({ exchangeError: storeError(401) });
+  await assert.rejects(() => refused.run(), { status: 401 });
+  assert.deepEqual(refused.state.saved, []);
 });
