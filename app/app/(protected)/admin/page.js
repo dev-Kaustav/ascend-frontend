@@ -4,6 +4,7 @@ import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
 import UsersAdminPanel from "@/components/workspaces/UsersAdminPanel";
 import QuickCreateWorkspacePanel from "@/components/workspaces/QuickCreateWorkspacePanel";
 import CompanyProfilePanel from "@/components/workspaces/CompanyProfilePanel";
+import StoreSettingsPanel from "@/components/workspaces/StoreSettingsPanel";
 
 export default function AdminWorkspacePage() {
   const tabs = [
@@ -26,6 +27,13 @@ export default function AdminWorkspacePage() {
       description: "Supplier details stamped onto every invoice at dispatch.",
       roles: ["ADMIN"],
       render: () => <CompanyProfilePanel />
+    },
+    {
+      key: "store-settings",
+      label: "Store Settings",
+      description: "Minimum order, delivery charge and the warehouse the store ships from.",
+      roles: ["ADMIN"],
+      render: () => <StoreSettingsPanel />
     },
     {
       key: "quick-create",
