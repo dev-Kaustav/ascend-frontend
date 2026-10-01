@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import dynamic from "next/dynamic";
 import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
   clearRetailerTokens,
   deriveRetailerState,
@@ -21,6 +23,9 @@ import {
 //
 // The provider never blocks rendering: whatever the state (loading, anonymous, expired, error)
 // the shell and the public catalogue stay usable.
+
+// Loaded only when the login sheet opens, so public browsing never downloads it (or Firebase).
+const RetailerLoginSheet = dynamic(() => import("@/components/store/RetailerLoginSheet"), { ssr: false });
 
 const SHEETS = ["login", "shop", "address", "cart"];
 const getServerSnapshot = () => undefined;
@@ -129,6 +134,16 @@ export function RetailerProvider({ children }) {
     setPendingIntent(null);
     setActiveSheet(null);
     clearRetailerTokens();
+    // The phone proof is only ever a bridge to the Ascend session; end it with the session.
+    disposePhoneVerifier();
+    signOutPhoneProof();
+  }, []);
+
+  // Dismissing the login sheet (close, Escape, Back) discards the destination it was holding.
+  const dismissLogin = useCallback(() => {
+    intentRef.current = null;
+    setPendingIntent(null);
+    setActiveSheet(null);
   }, []);
 
   const value = useMemo(
@@ -160,13 +175,38 @@ export function RetailerProvider({ children }) {
         data-retailer-status={state.status}
         data-retailer-readiness={state.readiness}
         data-retailer-generation={generation ?? ""}
+        data-retailer-intent={pendingIntent?.type ?? ""}
       >
         {children}
       </div>
+      {activeSheet === "login" ? <RetailerLoginSheet intent={pendingIntent} onClose={dismissLogin} /> : null}
     </RetailerContext.Provider>
   );
 }
 
 export function useRetailer() {
   return useContext(RetailerContext);
+}
+
+// Retailer-only destinations. An anonymous visitor who picks one gets the login sheet in place
+// instead of a navigation, and is sent on once they are ready (never to the staff /login).
+const RETAILER_ONLY = ["/orders", "/account"];
+const isRetailerOnly = (href) => RETAILER_ONLY.some((base) => href === base || href.startsWith(`${base}/`) || href.startsWith(`${base}?`));
+
+/**
+ * Returns href => onClick handler for a store link. A plain left click on a retailer-only
+ * destination by an anonymous visitor opens login with that destination held; every other click
+ * (modified, other buttons, public destinations, signed-in visitors) navigates as normal.
+ */
+export function useRetailerLinkGate() {
+  const { readiness, requireRetailer } = useRetailer();
+  return useCallback(
+    (href) => (event) => {
+      if (readiness !== "anonymous" || !isRetailerOnly(href)) return;
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      requireRetailer({ type: "navigate", href });
+    },
+    [readiness, requireRetailer]
+  );
 }

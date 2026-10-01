@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MapPin, Search } from "lucide-react";
 import BottomNavigation, { STORE_NAV_ITEMS } from "@/components/store/BottomNavigation";
+import { useRetailerLinkGate } from "@/components/store/RetailerProvider";
 
 // The delivery address picker and retailer login arrive with later slices; until then the
 // header only advertises the empty state and stays fully navigable without any permission.
@@ -11,6 +12,7 @@ const LOCATION_PLACEHOLDER = "Select delivery address";
 
 export default function StoreShell({ children }) {
   const pathname = usePathname() || "/";
+  const gate = useRetailerLinkGate();
 
   return (
     <div className="ascend-storefront">
@@ -50,7 +52,7 @@ export default function StoreShell({ children }) {
 
           <nav className="store-header__links" aria-label="Browse and account">
             {STORE_NAV_ITEMS.filter(({ label }) => label !== "Home").map(({ label, href, match }) => (
-              <Link key={label} href={href} aria-current={match(pathname) ? "page" : undefined}>
+              <Link key={label} href={href} onClick={gate(href)} aria-current={match(pathname) ? "page" : undefined}>
                 {label}
               </Link>
             ))}

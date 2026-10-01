@@ -341,7 +341,189 @@
   background: var(--s-surface-alt);
 }
 
+/* ---- Dialog sheet (login; later address and shop sheets reuse it) ----------------------- */
+
+.store-sheet-host {
+  display: contents;
+}
+
+.store-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(28, 28, 31, 0.5);
+}
+
+/* One scroll area: the sheet itself. Long content scrolls inside it, never behind it. */
+.store-sheet {
+  width: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px var(--s-gutter) calc(24px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
+  background: var(--s-surface);
+}
+
+.store-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.store-sheet__head h2 {
+  font-family: var(--font-marketing-display), sans-serif;
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.store-sheet__close {
+  display: inline-flex;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin: -8px -8px 0 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--s-ink);
+  cursor: pointer;
+}
+
+.store-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.store-field {
+  display: flex;
+  min-height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.store-field:focus-within {
+  outline: 2px solid var(--s-orange-text);
+  outline-offset: 2px;
+}
+
+.store-field__prefix {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid var(--s-border);
+  background: var(--s-surface-alt);
+  color: var(--s-muted);
+}
+
+.store-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--s-ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.store-field .store-input {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+}
+
+.store-field .store-input:focus-visible {
+  outline: none;
+}
+
+.store-input[aria-invalid="true"],
+.store-field:has(.store-input[aria-invalid="true"]) {
+  border-color: var(--s-destructive);
+}
+
+.store-input--code {
+  letter-spacing: 0.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.store-sheet__submit {
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  cursor: pointer;
+}
+
+.store-sheet__submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.store-link-button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 8px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--s-orange-text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.store-link-button:disabled {
+  color: var(--s-muted);
+  cursor: not-allowed;
+}
+
+.store-form-error {
+  margin-top: 8px;
+  color: var(--s-destructive);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.store-sheet__live {
+  min-height: 21px;
+  margin-top: 8px;
+  color: var(--s-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 @media (min-width: 768px) {
+  .store-sheet-backdrop {
+    align-items: center;
+  }
+
+  .store-sheet {
+    max-width: 440px;
+    max-height: calc(100dvh - 48px);
+    padding: 24px;
+    border-radius: 12px;
+  }
+
   .store-bottom-nav {
     display: none;
   }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClipboardList, Home, LayoutGrid, User } from "lucide-react";
+import { useRetailerLinkGate } from "@/components/store/RetailerProvider";
 
 // Destinations for Orders and Account are owned by later storefront slices; the links are
 // real so the navigation shape is final, and they resolve once those routes exist.
@@ -22,10 +23,11 @@ export const STORE_NAV_ITEMS = [
 // same destinations in the header instead. Safe-area padding is applied in store.css.
 export default function BottomNavigation() {
   const pathname = usePathname() || "/";
+  const gate = useRetailerLinkGate();
   return (
     <nav className="store-bottom-nav" aria-label="Main">
       {STORE_NAV_ITEMS.map(({ label, href, icon: Icon, match }) => (
-        <Link key={label} href={href} aria-current={match(pathname) ? "page" : undefined}>
+        <Link key={label} href={href} onClick={gate(href)} aria-current={match(pathname) ? "page" : undefined}>
           <Icon size={22} strokeWidth={1.75} aria-hidden="true" />
           {label}
         </Link>
