@@ -32,7 +32,7 @@ export default function BrandSection() {
             </li>
           ))}
         </ol>
-        <Link className="marketing-inline-link brand-section__reveal" href="/#contact">
+        <Link className="marketing-inline-link brand-section__reveal" href="/landing#contact">
           Partner as a brand
           <ArrowRight aria-hidden="true" size={17} />
         </Link>

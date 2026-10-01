@@ -37,11 +37,11 @@ export default function HeroSection() {
             arrives from a dark store in your own cluster the same hour.
           </p>
           <div className="marketing-hero__actions">
-            <Link className="marketing-button marketing-button--primary" href="/#contact">
+            <Link className="marketing-button marketing-button--primary" href="/landing#contact">
               Stock my store
               <ArrowRight aria-hidden="true" size={18} strokeWidth={2} />
             </Link>
-            <Link className="marketing-button marketing-button--text" href="/#how-it-works">
+            <Link className="marketing-button marketing-button--text" href="/landing#how-it-works">
               See how it works
               <ArrowDown aria-hidden="true" size={18} strokeWidth={2} />
             </Link>

@@ -6,10 +6,10 @@ import { useEffect, useState } from "react";
 import Logo from "@/components/landing/Logo";
 
 const navItems = [
-  { label: "Why Ascend", href: "/#why" },
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "What we stock", href: "/#range" },
-  { label: "For brands", href: "/#brands" }
+  { label: "Why Ascend", href: "/landing#why" },
+  { label: "How it works", href: "/landing#how-it-works" },
+  { label: "What we stock", href: "/landing#range" },
+  { label: "For brands", href: "/landing#brands" }
 ];
 
 export default function Navbar() {
@@ -63,7 +63,7 @@ export default function Navbar() {
           <Link className="marketing-nav__login" href="/login">
             Login
           </Link>
-          <Link className="marketing-button marketing-button--primary marketing-button--small" href="/#contact">
+          <Link className="marketing-button marketing-button--primary marketing-button--small" href="/landing#contact">
             Stock my store
           </Link>
         </div>
@@ -95,7 +95,7 @@ export default function Navbar() {
         </nav>
         <Link
           className="marketing-button marketing-button--primary"
-          href="/#contact"
+          href="/landing#contact"
           onClick={() => setOpen(false)}
         >
           Stock my store

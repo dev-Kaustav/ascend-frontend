@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Logo({ dark = false, onClick }) {
   return (
     <Link
-      href="/#main"
+      href="/landing#main"
       onClick={onClick}
       className={`marketing-logo ${dark ? "marketing-logo--dark" : ""}`}
       aria-label="Ascend Foods home"

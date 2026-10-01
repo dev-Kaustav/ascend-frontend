@@ -53,7 +53,7 @@ export default function RangeSection() {
         </ul>
 
         <div className="retailer-section__actions">
-          <Link className="marketing-button marketing-button--primary" href="/#contact">
+          <Link className="marketing-button marketing-button--primary" href="/landing#contact">
             Stock this range
             <ArrowRight aria-hidden="true" size={18} strokeWidth={2} />
           </Link>
