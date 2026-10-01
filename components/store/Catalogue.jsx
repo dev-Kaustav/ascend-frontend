@@ -1,0 +1,518 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Cookie, Minus, Nut, Package, Plus, Popcorn, Wheat } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import ProductImage from "@/components/store/ProductImage";
+import { useRetailer } from "@/components/store/RetailerProvider";
+import { formatCurrency } from "@/lib/format";
+import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+import {
+  DEFAULT_LISTING_LIMIT,
+  clampQuantity,
+  createRequestGate,
+  decideAddResume,
+  displayPrice,
+  listingHref,
+  pageOffset,
+  productQuery,
+  productsPath,
+  purchaseState,
+  sortAvailableLast,
+  stepQuantity,
+  totalPages,
+  viewerKey
+} from "@/lib/store/catalogue.mjs";
+
+// Catalogue UI for the storefront: product cards and shelves, the searchable listing, and the
+// data hooks the home and the product page share. All product text is rendered as React text
+// (never as HTML) and only https images are shown (T-09-05-2).
+
+// Identity-independent data (categories, brands) is always fetched anonymously.
+export const PUBLIC_VIEWER = { mode: "public", key: "public", canPurchase: false };
+
+/** How the current visitor is looking at the catalogue (see viewerKey). Stable between renders. */
+export function useViewer() {
+  const { status, readiness, generation } = useRetailer();
+  return useMemo(() => viewerKey({ status, readiness, generation }), [status, readiness, generation]);
+}
+
+/**
+ * One catalogue request, tied to who is asking.
+ *   id:     what is being asked for (a query string); a new id is a new request.
+ *   load:   (get) => Promise; call get(path) to fetch with the right identity (anonymous, or the
+ *           ready retailer's bearer). Receives no stale results: only the latest request may win.
+ *   viewer: from useViewer(). "pending" waits for readiness; a new key (login, logout, account
+ *           switch) discards the previous results at once, so nobody sees another identity's data.
+ *   seed:   { id, data } from the server, public shape, used as the first result for that id.
+ *   enabled: false means no request at all.
+ * Returns { phase: "idle" | "loading" | "ready" | "error", data, error, busy, retry }. busy is true
+ * while an earlier result for the same identity is still shown during a new request.
+ */
+export function useViewerResource({ id, load, viewer, seed = null, enabled = true }) {
+  const [result, setResult] = useState(() =>
+    seed && seed.id === id ? { phase: "ready", key: "public", id, reload: 0, data: seed.data, error: null } : null
+  );
+  const [reload, setReload] = useState(0);
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  });
+
+  const matches = Boolean(result && result.key === viewer.key && result.id === id && result.reload === reload);
+
+  useEffect(() => {
+    if (!enabled || viewer.mode === "pending" || matches) return undefined;
+    const gate = createRequestGate();
+    const token = gate.begin();
+    const get = (path) => storeFetch(path, viewer.mode === "private" ? {} : { public: true });
+    loadRef
+      .current(get)
+      .then((data) => {
+        if (gate.isCurrent(token)) setResult({ phase: "ready", key: viewer.key, id, reload, data, error: null });
+      })
+      .catch((error) => {
+        if (!gate.isCurrent(token) || isStaleStoreError(error)) return;
+        // The session ended while this ran; the provider is about to switch to anonymous, which
+        // changes the key and starts a fresh public request.
+        if (error?.reason === "session-expired" || error?.reason === "needs-login") return;
+        setResult({ phase: "error", key: viewer.key, id, reload, data: null, error });
+      });
+    return () => gate.invalidate();
+  }, [enabled, viewer.mode, viewer.key, id, reload, matches]);
+
+  const retry = () => setReload((count) => count + 1);
+  if (!enabled) return { phase: "idle", data: null, error: null, busy: false, retry };
+  if (matches) return { phase: result.phase, data: result.data, error: result.error, busy: false, retry };
+  if (result && result.key === viewer.key && result.phase === "ready") {
+    return { phase: "ready", data: result.data, error: null, busy: true, retry };
+  }
+  return { phase: "loading", data: null, error: null, busy: false, retry };
+}
+
+// The cart arrives with 09-07 as retailer.cart = { quantityOf(skuId), setQuantity(skuId, qty) }.
+// Until then a ready retailer's controls keep a local, non-persistent quantity per card so the
+// whole control can be exercised; a held add stays held (see useResumePendingAdd).
+function useCart() {
+  const retailer = useRetailer();
+  return { retailer, cart: retailer.cart || null };
+}
+
+/** Applies an add that was held across login once a cart can take it. Mount once per page. */
+export function useResumePendingAdd(viewer) {
+  const { pendingIntent, takeIntent } = useRetailer();
+  const { cart } = useCart();
+  useEffect(() => {
+    const resume = decideAddResume({ intent: pendingIntent, viewer, cartAvailable: Boolean(cart) });
+    if (!resume) return;
+    takeIntent();
+    cart.setQuantity(resume.skuId, resume.quantity);
+  }, [pendingIntent, viewer, cart, takeIntent]);
+}
+
+// ---- purchase control -----------------------------------------------------------------------------
+
+const UNAVAILABLE_LABEL = {
+  "out-of-stock": "Out of stock",
+  "no-price": "Price unavailable",
+  "no-limit": "Unavailable"
+};
+
+/** Add, then minus / quantity / plus. Whole packets only; Out of stock and missing price block it. */
+export function PurchaseControl({ product, viewer }) {
+  const { retailer, cart } = useCart();
+  const [localQuantity, setLocalQuantity] = useState(0);
+  const state = purchaseState(product, viewer);
+  const max = state.action === "add" ? state.max : 0;
+  const quantity = cart ? clampQuantity(cart.quantityOf(product.id), max) : clampQuantity(localQuantity, max);
+  const setQuantity = (next) => (cart ? cart.setQuantity(product.id, next) : setLocalQuantity(next));
+
+  if (state.action === "none") {
+    const label = UNAVAILABLE_LABEL[state.reason] || "Unavailable";
+    return (
+      <button type="button" className="store-add" disabled aria-label={`Add ${product.name} (${label.toLowerCase()})`}>
+        {label}
+      </button>
+    );
+  }
+
+  if (state.action === "gate") {
+    // Anonymous, or a retailer whose shop is not confirmed: opens login or onboarding and holds
+    // this add, so it resumes afterwards. No trade price is shown before that.
+    return (
+      <button
+        type="button"
+        className="store-add"
+        aria-label={`Add ${product.name}`}
+        onClick={() => retailer.requireRetailer({ type: "add", skuId: product.id, quantity: 1 })}
+      >
+        Add
+      </button>
+    );
+  }
+
+  if (quantity < 1) {
+    return (
+      <button
+        type="button"
+        className="store-add"
+        aria-label={`Add ${product.name}`}
+        onClick={() => {
+          if (!retailer.requireRetailer({ type: "add", skuId: product.id, quantity: 1 })) return;
+          setQuantity(1);
+        }}
+      >
+        Add
+      </button>
+    );
+  }
+
+  const atMax = stepQuantity(quantity, 0, max).capped;
+  return (
+    <div className="store-qty-wrap">
+      <div className="store-qty" role="group" aria-label={`Quantity of ${product.name}`}>
+        <button
+          type="button"
+          aria-label={`Decrease quantity of ${product.name}`}
+          onClick={() => setQuantity(stepQuantity(quantity, -1, max).quantity)}
+        >
+          <Minus size={18} strokeWidth={2} aria-hidden="true" />
+        </button>
+        <output aria-live="polite" aria-label={`${product.name} quantity`}>
+          {quantity}
+        </output>
+        <button
+          type="button"
+          aria-label={`Increase quantity of ${product.name}`}
+          disabled={atMax}
+          onClick={() => setQuantity(stepQuantity(quantity, 1, max).quantity)}
+        >
+          <Plus size={18} strokeWidth={2} aria-hidden="true" />
+        </button>
+      </div>
+      {atMax ? (
+        <p className="store-qty__max" role="status">
+          Maximum available
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The price a visitor is allowed to see: MRP with a login prompt, or the retailer's trade price. */
+export function PriceBlock({ product, viewer }) {
+  const price = displayPrice(product, viewer);
+  const mrp = price.mrp === null ? null : formatCurrency(price.mrp);
+  if (price.kind === "trade") {
+    return (
+      <div className="store-price">
+        <p className="store-price__line">
+          <span className="store-price__now">{formatCurrency(price.tradePrice)}</span>{" "}
+          <span className="store-price__unit">per packet</span>
+        </p>
+        {mrp ? <p className="store-price__mrp">MRP {mrp}</p> : null}
+      </div>
+    );
+  }
+  return (
+    <div className="store-price">
+      {mrp ? <p className="store-price__line store-price__now">MRP {mrp}</p> : null}
+      {price.kind === "unavailable" ? (
+        <p className="store-price__prompt">Trade price unavailable</p>
+      ) : (
+        <p className="store-price__prompt">Log in for trade prices</p>
+      )}
+    </div>
+  );
+}
+
+// ---- cards, shelves, grids -----------------------------------------------------------------------
+
+export function ProductCard({ product, viewer, lazy = false }) {
+  return (
+    <li className="store-card store-product-card" data-store-product-id={product.id}>
+      <Link href={`/products/${product.id}`} className="store-card__link">
+        <ProductImage src={product.image_url} lazy={lazy} />
+        <p className="store-card__name" title={product.name}>
+          {product.name}
+        </p>
+      </Link>
+      <p className="store-card__pack">{product.pack_size || " "}</p>
+      <PriceBlock product={product} viewer={viewer} />
+      <PurchaseControl product={product} viewer={viewer} />
+    </li>
+  );
+}
+
+/** Real products in a swipeable row with a See all link that never needs a swipe. */
+export function ProductShelf({ shelfId, title, href, products, viewer }) {
+  const headingId = useId();
+  if (!products?.length) return null;
+  return (
+    <section className="store-section" aria-labelledby={headingId}>
+      <div className="store-section__head">
+        <h2 id={headingId}>{title}</h2>
+        {href ? (
+          <Link href={href} className="store-see-all" aria-label={`See all ${title}`}>
+            See all
+          </Link>
+        ) : null}
+      </div>
+      <ul className="store-shelf" data-shelf-id={shelfId}>
+        {products.map((product, index) => (
+          <ProductCard key={product.id} product={product} viewer={viewer} lazy={index >= 3} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function ProductGrid({ products, viewer, eagerCount = 4 }) {
+  return (
+    <ul className="store-grid">
+      {products.map((product, index) => (
+        <ProductCard key={product.id} product={product} viewer={viewer} lazy={index >= eagerCount} />
+      ))}
+    </ul>
+  );
+}
+
+export function ProductSkeletons({ count = 6 }) {
+  return (
+    <div aria-busy="true">
+      <p className="sr-only" role="status">
+        Loading products
+      </p>
+      <ul className="store-grid" aria-hidden="true">
+        {Array.from({ length: count }, (_, index) => (
+          <li key={index} className="store-card store-skeleton-card">
+            <div className="store-skeleton-tile" />
+            <div className="store-skeleton-bar" />
+            <div className="store-skeleton-bar store-skeleton-bar--short" />
+            <div className="store-skeleton-bar store-skeleton-bar--button" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function CatalogueError({ onRetry }) {
+  return (
+    <div className="store-state" role="alert">
+      <p>We couldn&apos;t load products. Please try again.</p>
+      <button type="button" className="store-button" onClick={onRetry}>
+        Try again
+      </button>
+    </div>
+  );
+}
+
+// ---- categories -------------------------------------------------------------------------------------
+
+// A category's own icon when it has one, otherwise a neutral local illustration. Matched on the
+// real name; unknown names get the package.
+function CategoryIllustration({ category }) {
+  const url = category.icon_url;
+  if (typeof url === "string" && url.startsWith("https://")) {
+    // eslint-disable-next-line @next/next/no-img-element -- remote host is not whitelisted for next/image
+    return <img src={url} alt="" width={56} height={56} loading="lazy" />;
+  }
+  const name = String(category.name || "").toLowerCase();
+  const Icon = /nut|seed|fruit/.test(name)
+    ? Nut
+    : /namkeen|bhujia|mixture|sev/.test(name)
+      ? Wheat
+      : /chip|crisp|puff|popcorn/.test(name)
+        ? Popcorn
+        : /biscuit|cookie/.test(name)
+          ? Cookie
+          : Package;
+  return <Icon size={32} strokeWidth={1.5} aria-hidden="true" />;
+}
+
+export function CategoryTile({ category }) {
+  return (
+    <li>
+      <Link href={listingHref({ categoryId: category.id })} className="store-category-tile">
+        <span className="store-category-tile__art">
+          <CategoryIllustration category={category} />
+        </span>
+        <span className="store-category-tile__name">{category.name}</span>
+      </Link>
+    </li>
+  );
+}
+
+// ---- the listing ---------------------------------------------------------------------------------------
+
+const fetchCategories = (get) => get(storeEndpoints.categories);
+const fetchBrands = (get) => get(storeEndpoints.brands);
+
+function FilterSelect({ label, value, allLabel, options, onChange }) {
+  return (
+    <label className="store-filter">
+      <span>{label}</span>
+      <select value={value ?? ""} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{allLabel}</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * The searchable listing. The URL holds q / category_id / brand_id / page, so a reload, a shared
+ * link and Back all land on the same list; the API is asked with exactly those values (bounded
+ * to limit 24 per page and q up to 100). seed is the server's public first page for these params.
+ */
+export function ProductListing({ params, seed = null }) {
+  const router = useRouter();
+  const viewer = useViewer();
+  const headingId = useId();
+  useResumePendingAdd(viewer);
+
+  const showChooser = params.view === "categories";
+  const limit = DEFAULT_LISTING_LIMIT;
+  const offset = pageOffset(params.page, limit);
+  const id = productQuery({ q: params.q, categoryId: params.categoryId, brandId: params.brandId, limit, offset });
+
+  const products = useViewerResource({
+    id,
+    viewer,
+    seed: seed?.products,
+    enabled: !showChooser,
+    load: (get) => get(productsPath({ q: params.q, categoryId: params.categoryId, brandId: params.brandId, limit, offset }))
+  });
+  const categories = useViewerResource({ id: "categories", viewer: PUBLIC_VIEWER, seed: seed?.categories, load: fetchCategories });
+  const brands = useViewerResource({ id: "brands", viewer: PUBLIC_VIEWER, seed: seed?.brands, load: fetchBrands });
+
+  const categoryList = categories.data || [];
+  const brandList = brands.data || [];
+  const category = categoryList.find((item) => item.id === params.categoryId);
+  const brand = brandList.find((item) => item.id === params.brandId);
+  const filtered = Boolean(params.q || params.categoryId || params.brandId);
+
+  const title = params.q
+    ? `Results for “${params.q}”`
+    : category?.name || brand?.name || (showChooser ? "Categories" : "All products");
+
+  const go = (next) => router.push(listingHref({ ...params, view: null, page: 1, ...next }));
+
+  const items = sortAvailableLast(products.data?.items || []);
+  const total = products.data?.total ?? 0;
+  const pages = totalPages(total, limit);
+
+  return (
+    <section className="store-listing" aria-labelledby={headingId}>
+      <div className="store-page-head">
+        <h1 id={headingId}>{title}</h1>
+        {showChooser ? (
+          <Link className="store-text-link" href="/products">
+            All products
+          </Link>
+        ) : null}
+      </div>
+
+      {showChooser ? (
+        categories.phase === "error" ? (
+          <CatalogueError onRetry={categories.retry} />
+        ) : categories.phase !== "ready" ? (
+          <p role="status">Loading categories</p>
+        ) : categoryList.length === 0 ? (
+          <p>No categories yet.</p>
+        ) : (
+          <ul className="store-category-grid">
+            {categoryList.map((item) => (
+              <CategoryTile key={item.id} category={item} />
+            ))}
+          </ul>
+        )
+      ) : (
+        <>
+          {categoryList.length || brandList.length ? (
+            <div className="store-filters">
+              {categoryList.length ? (
+                <FilterSelect
+                  label="Category"
+                  allLabel="All categories"
+                  value={params.categoryId}
+                  options={categoryList}
+                  onChange={(value) => go({ categoryId: value ? Number(value) : null })}
+                />
+              ) : null}
+              {brandList.length ? (
+                <FilterSelect
+                  label="Brand"
+                  allLabel="All brands"
+                  value={params.brandId}
+                  options={brandList}
+                  onChange={(value) => go({ brandId: value ? Number(value) : null })}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          {products.phase === "error" ? (
+            <CatalogueError onRetry={products.retry} />
+          ) : products.phase !== "ready" ? (
+            <ProductSkeletons />
+          ) : items.length === 0 ? (
+            <div className="store-state">
+              <h2>No products found</h2>
+              <p>Try another name or browse categories.</p>
+              <div className="store-state__actions">
+                <Link className="store-button" href="/products?view=categories">
+                  Browse categories
+                </Link>
+                {filtered ? (
+                  <Link className="store-text-link" href="/products">
+                    Clear filters
+                  </Link>
+                ) : null}
+                {total > 0 && params.page > 1 ? (
+                  <Link className="store-text-link" href={listingHref({ ...params, page: 1 })}>
+                    Back to the first page
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="store-results" aria-busy={products.busy ? "true" : undefined}>
+              <p className="store-results__count" role="status">
+                {total === 1 ? "1 product" : `${total} products`}
+              </p>
+              <ProductGrid products={items} viewer={viewer} />
+              {pages > 1 ? (
+                <nav className="store-pager" aria-label="Pages">
+                  {params.page > 1 ? (
+                    <Link href={listingHref({ ...params, page: params.page - 1 })} rel="prev">
+                      Previous
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                  <span>
+                    Page {params.page} of {pages}
+                  </span>
+                  {params.page < pages ? (
+                    <Link href={listingHref({ ...params, page: params.page + 1 })} rel="next">
+                      Next
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                </nav>
+              ) : null}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}

@@ -527,6 +527,362 @@
   line-height: 1.5;
 }
 
+/* ---- Product card, price, purchase control (09-05) ---------------------------------------- */
+
+.store-card__link {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  color: inherit;
+}
+
+.store-card .store-card__name {
+  min-height: calc(2 * 1.4em);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--s-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.store-card__link:hover .store-card__name {
+  text-decoration: underline;
+}
+
+.store-card .store-card__pack {
+  min-height: 1.5em;
+}
+
+.store-price {
+  display: flex;
+  min-height: 3em;
+  flex-direction: column;
+  gap: 0;
+}
+
+.store-card .store-price__now {
+  color: var(--s-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.store-card .store-price__unit,
+.store-card .store-price__mrp {
+  color: var(--s-muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.store-card .store-price__prompt {
+  color: var(--s-orange-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-add {
+  display: inline-flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--s-orange);
+  color: var(--s-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* A disabled control keeps a legible label and says why (Out of stock, Price unavailable). */
+.store-add:disabled {
+  background: #ececea;
+  color: var(--s-muted);
+  cursor: not-allowed;
+}
+
+.store-qty-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.store-qty {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  min-height: 44px;
+  border-radius: 8px;
+  background: var(--s-orange);
+  color: var(--s-ink);
+}
+
+.store-qty button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.store-qty button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.store-qty output {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* The orange controls take an ink focus ring: orange text on orange would not be visible. */
+.store-add:focus-visible,
+.store-qty button:focus-visible,
+.store-button:focus-visible {
+  outline: 2px solid var(--s-ink);
+  outline-offset: 2px;
+}
+
+.store-card .store-qty__max {
+  color: var(--s-muted);
+  font-size: 14px;
+}
+
+/* ---- Sections, shelves, listing (09-05) ---------------------------------------------------- */
+
+.store-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.store-section__head {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.store-section__head h2 {
+  min-width: 0;
+  font-family: var(--font-marketing-display), sans-serif;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.store-see-all,
+.store-text-link {
+  display: inline-flex;
+  min-height: 44px;
+  flex: none;
+  align-items: center;
+  color: var(--s-orange-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ascend-storefront .store-see-all,
+.ascend-storefront .store-text-link {
+  color: var(--s-orange-text);
+}
+
+.ascend-storefront .store-shelf {
+  margin: 0;
+  padding: 0 0 8px;
+  list-style: none;
+}
+
+.store-listing {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.store-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.store-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.store-filter {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-filter select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: var(--s-surface);
+  color: var(--s-ink);
+  font: inherit;
+  font-size: 16px; /* under 16px makes iOS Safari zoom on focus */
+  font-weight: 400;
+}
+
+.store-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 120ms;
+}
+
+.store-results[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.ascend-storefront .store-results__count {
+  color: var(--s-muted);
+  font-size: 14px;
+}
+
+.store-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.store-pager a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 16px;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.store-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.store-state h2 {
+  font-family: var(--font-marketing-display), sans-serif;
+  font-size: 20px;
+}
+
+/* Reserved-size placeholders, so a loading list does not shift when products arrive. */
+.store-skeleton-card {
+  min-height: 292px;
+  gap: 12px;
+}
+
+.store-skeleton-tile {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background: var(--s-surface-alt);
+}
+
+.store-skeleton-bar {
+  height: 14px;
+  border-radius: 4px;
+  background: var(--s-surface-alt);
+}
+
+.store-skeleton-bar--short {
+  width: 60%;
+}
+
+.store-skeleton-bar--button {
+  height: 44px;
+  border-radius: 8px;
+}
+
+/* Category tiles: a restrained backdrop, no second accent colour. */
+.store-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-category-tile {
+  display: flex;
+  min-height: 44px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.store-category-tile__art {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--s-surface-alt);
+  color: var(--s-muted);
+}
+
+.store-category-tile__art img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.store-category-tile__name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.store-search__clear {
+  display: inline-flex;
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: var(--s-surface);
+  color: var(--s-ink);
+  cursor: pointer;
+}
+
 @media (min-width: 768px) {
   .store-sheet-backdrop {
     align-items: center;
@@ -620,5 +976,11 @@
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .store-filters {
+    max-width: 560px;
   }
 }
