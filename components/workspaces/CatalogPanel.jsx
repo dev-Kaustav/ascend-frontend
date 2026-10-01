@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SectionCard from "@/components/layout/SectionCard";
+import CategoriesSection from "@/components/workspaces/CategoriesSection";
 import DataTable from "@/components/tables/DataTable";
 import {
   AddRowButton,
@@ -291,6 +292,7 @@ export default function AdminCatalog() {
 
   return (
     <div className="space-y-6">
+      <CategoriesSection categories={categories} onSaved={loadCategories} />
       <SectionCard
         title="SKU Catalog"
         subtitle={`${filteredSkus.length} of ${skuRows.length} SKUs`}
