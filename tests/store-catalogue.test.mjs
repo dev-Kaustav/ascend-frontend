@@ -15,12 +15,22 @@ import {
   MAX_QUERY_LENGTH,
   clampQuantity,
   createRequestGate,
+  FEATURE_BRAND_NAME,
+  HOME_MAX_PAGES,
+  HOME_SHELF_LIMIT,
+  createPositionMemory,
+  createTraversalTracker,
   decideAddResume,
   displayPrice,
+  findFeatureBrand,
+  groupShelves,
   isAvailable,
   listingHref,
+  loadProductPages,
   pageOffset,
   parseListingParams,
+  parseProductId,
+  routeKeyOf,
   productQuery,
   productsPath,
   purchaseState,
@@ -327,4 +337,188 @@ test("a held add resumes only for a ready retailer once a cart can take it", () 
     decideAddResume({ intent: { type: "add", skuId: 9, quantity: 5000 }, viewer: ready, cartAvailable: true }),
     { skuId: 9, quantity: MAX_LINE_QUANTITY }
   );
+});
+
+test("a product id from the URL is a positive whole number or nothing", () => {
+  assert.equal(parseProductId("7"), 7);
+  for (const bad of ["0", "-1", "07", "1.5", "abc", "7/../8", "", undefined, null]) assert.equal(parseProductId(bad), null, String(bad));
+});
+
+// ---- the home -------------------------------------------------------------------------------------------
+
+const withCategory = (id, categoryId, extra = {}) => product(id, { category: { id: categoryId, name: `Cat ${categoryId}` }, ...extra });
+
+test("loadProductPages reads every page, stops when complete and returns each product once", async () => {
+  const all = Array.from({ length: 230 }, (_, i) => product(i + 1));
+  const calls = [];
+  const result = await loadProductPages(async ({ limit, offset }) => {
+    calls.push({ limit, offset });
+    return { items: all.slice(offset, offset + limit), total: all.length };
+  });
+  assert.equal(result.items.length, 230);
+  assert.equal(result.total, 230);
+  assert.equal(result.complete, true);
+  assert.deepEqual(calls, [{ limit: 100, offset: 0 }, { limit: 100, offset: 100 }, { limit: 100, offset: 200 }]);
+  assert.equal(new Set(result.items.map((p) => p.id)).size, 230);
+});
+
+test("loadProductPages makes one request when the catalogue fits in a page", async () => {
+  let calls = 0;
+  const result = await loadProductPages(async () => {
+    calls += 1;
+    return { items: [product(1), product(2)], total: 2 };
+  });
+  assert.equal(calls, 1);
+  assert.equal(result.complete, true);
+});
+
+test("loadProductPages is bounded: a server that never finishes cannot make it loop", async () => {
+  let calls = 0;
+  const result = await loadProductPages(async ({ limit, offset }) => {
+    calls += 1;
+    return { items: Array.from({ length: limit }, (_, i) => product(offset + i + 1)), total: 1000000 };
+  });
+  assert.equal(calls, HOME_MAX_PAGES);
+  assert.equal(result.complete, false);
+  assert.equal(result.items.length, HOME_MAX_PAGES * 100);
+});
+
+test("loadProductPages stops on an empty or short page and when the result is abandoned", async () => {
+  let calls = 0;
+  const empty = await loadProductPages(async () => {
+    calls += 1;
+    return { items: [], total: 50 };
+  });
+  assert.equal(calls, 1);
+  assert.deepEqual(empty, { items: [], total: 50, complete: false });
+
+  let stale = 0;
+  const abandoned = await loadProductPages(
+    async ({ limit, offset }) => {
+      stale += 1;
+      return { items: Array.from({ length: limit }, (_, i) => product(offset + i + 1)), total: 500 };
+    },
+    { isCurrent: () => stale < 1 }
+  );
+  assert.equal(abandoned, null);
+  assert.equal(stale, 1, "no further pages are fetched once the result is stale");
+});
+
+test("loadProductPages lets a failed page reject instead of returning a partial list as complete", async () => {
+  await assert.rejects(
+    loadProductPages(async ({ offset }) => {
+      if (offset > 0) throw new Error("down");
+      return { items: Array.from({ length: 100 }, (_, i) => product(i + 1)), total: 150 };
+    }),
+    /down/
+  );
+});
+
+test("shelves: one per category that has products, API order, no filler, none empty", () => {
+  const products = [
+    withCategory(1, 4),
+    withCategory(2, 4, { in_stock: false }),
+    withCategory(3, 4),
+    withCategory(4, 6),
+    withCategory(5, 9) // a category the categories endpoint did not list
+  ];
+  const categories = [{ id: 6, name: "Namkeen" }, { id: 5, name: "Empty category" }, { id: 4, name: "Dry fruits" }];
+  const shelves = groupShelves(products, categories);
+  assert.deepEqual(shelves.map((s) => s.category.id), [6, 4], "empty category omitted, API order kept");
+  assert.deepEqual(shelves[1].products.map((p) => p.id), [1, 3, 2], "unavailable last, nothing repeated");
+  assert.equal(shelves[1].total, 3);
+  assert.deepEqual(groupShelves([], categories), []);
+  assert.deepEqual(groupShelves(products, []), []);
+});
+
+test("a shelf is capped, not padded", () => {
+  const products = Array.from({ length: 25 }, (_, i) => withCategory(i + 1, 4));
+  const [shelf] = groupShelves(products, [{ id: 4, name: "Cat" }]);
+  assert.equal(shelf.products.length, HOME_SHELF_LIMIT);
+  assert.equal(shelf.total, 25);
+  const [one] = groupShelves([withCategory(1, 4)], [{ id: 4, name: "Cat" }]);
+  assert.equal(one.products.length, 1, "one product is one card, not a repeated row");
+});
+
+test("the featured brand is found by the returned name, with its real count and images", () => {
+  const brands = [{ id: 22, name: "Other" }, { id: 90, name: "jabsons " }];
+  const products = [
+    product(1, { brand: { id: 90, name: "Jabsons" }, image_url: "https://img/a.png" }),
+    product(2, { brand: { id: 90, name: "Jabsons" }, image_url: "https://img/a.png" }), // same image
+    product(3, { brand: { id: 90, name: "Jabsons" }, image_url: "http://insecure/b.png" }),
+    product(4, { brand: { id: 90, name: "Jabsons" }, image_url: null }),
+    product(5, { brand: { id: 90, name: "Jabsons" }, image_url: "https://img/c.png", in_stock: false }),
+    product(6, { brand: { id: 22, name: "Other" }, image_url: "https://img/z.png" })
+  ];
+  const feature = findFeatureBrand(brands, products);
+  assert.equal(FEATURE_BRAND_NAME, "Jabsons");
+  assert.equal(feature.brand.id, 90, "the id comes from the data, not a constant");
+  assert.equal(feature.count, 5);
+  assert.deepEqual(feature.thumbs, ["https://img/a.png", "https://img/c.png"], "https only, no repeats, available first");
+  assert.equal(findFeatureBrand([{ id: 1, name: "Other" }], products), null, "an absent brand is no feature, not a guess");
+  assert.equal(findFeatureBrand(undefined, undefined), null);
+});
+
+// ---- returning to where you were ---------------------------------------------------------------------------
+
+function memoryStorage(initial = {}) {
+  const data = new Map(Object.entries(initial));
+  return { data, getItem: (k) => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, String(v)) };
+}
+
+test("a position is remembered per route and per shelf", () => {
+  const memory = createPositionMemory();
+  memory.set("/products?category_id=4", { y: 812, shelves: { "category-4": 240 } });
+  assert.deepEqual(memory.get("/products?category_id=4"), { y: 812, shelves: { "category-4": 240 } });
+  assert.equal(memory.get("/products?category_id=5"), null, "another filter is another position");
+  assert.equal(routeKeyOf("/products", "?q=a"), "/products?q=a");
+});
+
+test("positions survive a reload through storage, and bad data is ignored", () => {
+  const storage = memoryStorage();
+  const first = createPositionMemory({ storage });
+  first.set("/", { y: 1500, shelves: { "category-6": 96 } });
+  first.persist();
+  const reloaded = createPositionMemory({ storage });
+  assert.deepEqual(reloaded.get("/"), { y: 1500, shelves: { "category-6": 96 } });
+
+  const corrupt = createPositionMemory({ storage: memoryStorage({ ascend_store_positions: "{not json" }) });
+  assert.equal(corrupt.get("/"), null);
+  const hostile = createPositionMemory({ storage: memoryStorage({ ascend_store_positions: JSON.stringify([["/", { y: "x" }], ["/a", { y: -5 }], [7, { y: 1 }]]) }) });
+  assert.equal(hostile.get("/"), null);
+  assert.equal(hostile.get("/a"), null);
+});
+
+test("storage that throws never breaks the in-memory position", () => {
+  const broken = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("full"); } };
+  const memory = createPositionMemory({ storage: broken });
+  memory.set("/", { y: 10, shelves: {} });
+  assert.doesNotThrow(() => memory.persist());
+  assert.equal(memory.get("/").y, 10);
+});
+
+test("the memory is bounded and keeps the most recent routes", () => {
+  const memory = createPositionMemory({ limit: 3 });
+  for (const route of ["/a", "/b", "/c", "/d"]) memory.set(route, { y: 1, shelves: {} });
+  assert.equal(memory.get("/a"), null);
+  assert.ok(memory.get("/b") && memory.get("/c") && memory.get("/d"));
+  memory.set("/not-a-position", { y: Number.NaN, shelves: {} });
+  assert.equal(memory.get("/not-a-position"), null);
+});
+
+test("only a Back/Forward arrival restores, once, and the mark expires", () => {
+  let now = 1000;
+  const tracker = createTraversalTracker(() => now, 10000);
+  assert.equal(tracker.consume(), false, "a direct visit or reload has no traversal");
+  tracker.markTraversal();
+  assert.equal(tracker.consume(), true);
+  assert.equal(tracker.consume(), false, "consumed once");
+
+  tracker.markTraversal();
+  tracker.markNavigation(); // the visitor then followed a link
+  assert.equal(tracker.consume(), false);
+
+  tracker.markTraversal();
+  now += 10001; // a stale Back, such as closing a sheet, long before this navigation
+  assert.equal(tracker.consume(), false);
 });

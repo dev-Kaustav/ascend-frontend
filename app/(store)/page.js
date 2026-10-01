@@ -1,7 +1,10 @@
-import Link from "next/link";
-import ProductImage from "@/components/store/ProductImage";
+import Home from "@/components/store/Home";
 import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+import { loadProductPages, productsPath } from "@/lib/store/catalogue.mjs";
 
+// Public, identity-free seed: categories, brands and the whole published range as an anonymous
+// visitor sees it (MRP only). A signed-in retailer's prices are fetched by the client after
+// readiness; nothing private is rendered or cached on the server. Never statically cached.
 export const dynamic = "force-dynamic";
 
 // Own metadata: the store is not the marketing page, so it must not carry its 60-minute claim.
@@ -25,47 +28,20 @@ export const metadata = {
   twitter: { card: "summary", title, description, images: [image.url] }
 };
 
-const mrp = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" });
-
-async function loadSeedProduct() {
+async function seed(load, id) {
   try {
-    const page = await storeFetch(`${storeEndpoints.products}?limit=1`, { public: true });
-    return { product: page?.items?.[0] ?? null, failed: false };
+    return { id, data: await load() };
   } catch {
-    return { product: null, failed: true };
+    return null;
   }
 }
 
 export default async function StoreHomePage() {
-  const { product, failed } = await loadSeedProduct();
-
-  return (
-    <section className="store-state" aria-labelledby="store-home-heading">
-      <h1 id="store-home-heading">Ascend range</h1>
-
-      {failed ? (
-        <div className="store-state" role="alert">
-          <p>We couldn&apos;t load products. Please try again.</p>
-          <Link className="store-button" href="/">
-            Try again
-          </Link>
-        </div>
-      ) : !product ? (
-        <p>No products found. Check back soon.</p>
-      ) : (
-        <article
-          className="store-card"
-          style={{ maxWidth: 240 }}
-          data-store-product-id={product.id}
-          aria-label={product.name}
-        >
-          <ProductImage src={product.image_url} />
-          <h2>{product.name}</h2>
-          {product.pack_size ? <p>{product.pack_size}</p> : null}
-          <p>MRP {mrp.format(product.mrp)}</p>
-          <p>{product.in_stock ? "In stock" : "Out of stock"}</p>
-        </article>
-      )}
-    </section>
-  );
+  const publicGet = (path) => storeFetch(path, { public: true });
+  const [categories, brands, range] = await Promise.all([
+    seed(() => publicGet(storeEndpoints.categories), "categories"),
+    seed(() => publicGet(storeEndpoints.brands), "brands"),
+    seed(() => loadProductPages(({ limit, offset }) => publicGet(productsPath({ limit, offset }))), "home-range")
+  ]);
+  return <Home seed={{ categories, brands, range }} />;
 }

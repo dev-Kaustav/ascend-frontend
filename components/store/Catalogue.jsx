@@ -11,7 +11,9 @@ import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.m
 import {
   DEFAULT_LISTING_LIMIT,
   clampQuantity,
+  createPositionMemory,
   createRequestGate,
+  createTraversalTracker,
   decideAddResume,
   displayPrice,
   listingHref,
@@ -41,8 +43,9 @@ export function useViewer() {
 /**
  * One catalogue request, tied to who is asking.
  *   id:     what is being asked for (a query string); a new id is a new request.
- *   load:   (get) => Promise; call get(path) to fetch with the right identity (anonymous, or the
- *           ready retailer's bearer). Receives no stale results: only the latest request may win.
+ *   load:   (get, isCurrent) => Promise; call get(path) to fetch with the right identity
+ *           (anonymous, or the ready retailer's bearer). isCurrent() turns false once the request
+ *           is superseded, so a multi-page load can stop. Only the latest request may win.
  *   viewer: from useViewer(). "pending" waits for readiness; a new key (login, logout, account
  *           switch) discards the previous results at once, so nobody sees another identity's data.
  *   seed:   { id, data } from the server, public shape, used as the first result for that id.
@@ -68,7 +71,7 @@ export function useViewerResource({ id, load, viewer, seed = null, enabled = tru
     const token = gate.begin();
     const get = (path) => storeFetch(path, viewer.mode === "private" ? {} : { public: true });
     loadRef
-      .current(get)
+      .current(get, () => gate.isCurrent(token))
       .then((data) => {
         if (gate.isCurrent(token)) setResult({ phase: "ready", key: viewer.key, id, reload, data, error: null });
       })
@@ -89,6 +92,122 @@ export function useViewerResource({ id, load, viewer, seed = null, enabled = tru
     return { phase: "ready", data: result.data, error: null, busy: true, retry };
   }
   return { phase: "loading", data: null, error: null, busy: false, retry };
+}
+
+// ---- returning to where you were -------------------------------------------------------------------
+
+// One memory and one traversal tracker for the whole tab. They live at module level, so they
+// outlive the page components (the store layout persists across navigation) and, through
+// sessionStorage, a reload.
+let positionMemory = null;
+let traversal = null;
+
+function getMemory() {
+  if (!positionMemory) {
+    let storage = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = null;
+    }
+    positionMemory = createPositionMemory({ storage });
+  }
+  return positionMemory;
+}
+
+// A Back/Forward arrival (popstate) restores; a followed link cancels that mark. The click listener
+// is capture-phase so it runs before the link navigates.
+function getTraversal() {
+  if (!traversal) {
+    traversal = createTraversalTracker();
+    window.addEventListener("popstate", () => traversal.markTraversal());
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (event.target instanceof Element && event.target.closest("a[href]")) traversal.markNavigation();
+      },
+      true
+    );
+  }
+  return traversal;
+}
+
+const readShelves = () => {
+  const shelves = {};
+  for (const shelf of document.querySelectorAll("[data-shelf-id]")) {
+    if (shelf.scrollLeft > 0) shelves[shelf.getAttribute("data-shelf-id")] = Math.round(shelf.scrollLeft);
+  }
+  return shelves;
+};
+
+/**
+ * Remembers where the visitor was on this route (vertical, and each shelf's horizontal position)
+ * and puts them back when they return by Back/Forward once the content is on screen.
+ * A fresh link, a typed URL or a reload starts at the top as usual.
+ *   routeKey: path plus query of this page (stable per list/filter/page).
+ *   ready:    true when the page's content is rendered (data loaded).
+ * The position is saved on scroll and when a link is followed, and never overwritten by the
+ * scroll-to-top of the navigation itself.
+ */
+export function useScrollRetention(routeKey, ready) {
+  const restoredFor = useRef(null);
+
+  useEffect(() => {
+    const memory = getMemory();
+    getTraversal();
+    let frame = 0;
+    let leaving = false;
+    let timer = 0;
+    const snapshot = () => memory.set(routeKey, { y: window.scrollY, shelves: readShelves() });
+    const onScroll = () => {
+      if (leaving || frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!leaving) snapshot();
+      });
+    };
+    const onClick = (event) => {
+      if (!(event.target instanceof Element) || !event.target.closest("a[href]")) return;
+      snapshot();
+      leaving = true;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        leaving = false;
+      }, 1000);
+    };
+    const onHide = () => {
+      if (!leaving) snapshot();
+      memory.persist();
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    document.addEventListener("click", onClick, true);
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      document.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("pagehide", onHide);
+      memory.persist();
+    };
+  }, [routeKey]);
+
+  useEffect(() => {
+    if (!ready || restoredFor.current === routeKey) return undefined;
+    restoredFor.current = routeKey;
+    if (!getTraversal().consume()) return undefined;
+    const saved = getMemory().get(routeKey);
+    if (!saved) return undefined;
+    const frame = requestAnimationFrame(() => {
+      for (const shelf of document.querySelectorAll("[data-shelf-id]")) {
+        const x = saved.shelves[shelf.getAttribute("data-shelf-id")];
+        if (x) shelf.scrollLeft = x;
+      }
+      // The page sets scroll-behavior: smooth; a restored position must not animate from the top.
+      window.scrollTo({ top: saved.y, left: 0, behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ready, routeKey]);
 }
 
 // The cart arrives with 09-07 as retailer.cart = { quantityOf(skuId), setQuantity(skuId, qty) }.
@@ -407,6 +526,8 @@ export function ProductListing({ params, seed = null }) {
   const items = sortAvailableLast(products.data?.items || []);
   const total = products.data?.total ?? 0;
   const pages = totalPages(total, limit);
+
+  useScrollRetention(listingHref(params), showChooser ? categories.phase === "ready" : products.phase === "ready" && !products.busy);
 
   return (
     <section className="store-listing" aria-labelledby={headingId}>

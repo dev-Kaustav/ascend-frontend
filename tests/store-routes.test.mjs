@@ -23,15 +23,48 @@ async function html(path) {
   return response.text();
 }
 
-test("/ renders a real public product from /store/products", opts, async () => {
-  const api = await (await fetch(`${API}/store/products?limit=1`)).json();
+test("/ renders the real published range in the approved section order", opts, async () => {
+  const api = await (await fetch(`${API}/store/products?limit=100`)).json();
   assert.ok(api.items.length > 0, "the test catalogue needs at least one published product");
+  assert.ok(api.total <= 100, "this check compares against a single API page");
   const page = await html("/");
-  const ids = [...page.matchAll(/data-store-product-id="(\d+)"/g)].map((m) => m[1]);
-  assert.deepEqual(ids, [String(api.items[0].id)]);
+  const ids = [...new Set([...page.matchAll(/data-store-product-id="(\d+)"/g)].map((m) => m[1]))].sort();
+  assert.deepEqual(ids, api.items.map((item) => String(item.id)).sort(), "every published product appears, and no other");
   assert.match(page, /MRP/);
-  assert.match(page, /In stock|Out of stock/);
-  assert.doesNotMatch(page, /trade[_ ]price/i, "anonymous HTML must not carry trade prices");
+  assert.match(page, /Out of stock|Add/);
+  assert.doesNotMatch(page, /trade[_ ]price(?!s)|per packet/i, "anonymous HTML must not carry trade prices");
+
+  // D-06: promo, categories, featured brand, category shelves, full range. A section with no data
+  // is absent, so only the order of those that appear is asserted.
+  const order = ["promo", "categories", "feature", "shelves", "range"];
+  const found = order.map((name) => ({ name, at: page.indexOf(`data-home-section="${name}"`) })).filter((s) => s.at >= 0);
+  assert.ok(found.length >= 3, `expected the home sections, found ${found.map((s) => s.name)}`);
+  for (let i = 1; i < found.length; i += 1) {
+    assert.ok(found[i].at > found[i - 1].at, `${found[i].name} should come after ${found[i - 1].name}`);
+  }
+  assert.match(page, /Featured/i);
+  assert.doesNotMatch(page, /bestseller|best seller|% off|\d+% discount/i, "no invented popularity or discount claim");
+});
+
+test("/products and /products/{id} render real products for an anonymous visitor", opts, async () => {
+  const api = await (await fetch(`${API}/store/products?limit=100`)).json();
+  const first = api.items[0];
+  const list = await html("/products");
+  assert.equal((list.match(/data-store-product-id="/g) || []).length, api.total);
+  assert.match(list, /Log in for trade prices/);
+
+  const detail = await html(`/products/${first.id}`);
+  assert.match(detail, new RegExp(`data-store-product-id="${first.id}"`));
+  assert.ok(detail.includes(first.name.replace(/&/g, "&amp;")) || detail.includes(first.name), "full product name");
+  assert.match(detail, /rel="canonical"[^>]*href="https:\/\/ascendfoods\.in\/products\/\d+"/);
+  assert.doesNotMatch(detail, /per packet/i);
+  const similar = [...detail.matchAll(/data-store-product-id="(\d+)"/g)].map((m) => m[1]);
+  assert.equal(similar.filter((id) => id === String(first.id)).length, 1, "the product is not in its own similar shelf");
+
+  const missing = await fetch(`${BASE}/products/99999999`);
+  assert.equal(missing.status, 404, "an unknown product is a real 404");
+  assert.match(await missing.text(), /Browse products/);
+  assert.equal((await fetch(`${BASE}/products/abc`)).status, 404);
 });
 
 test("/landing keeps the marketing composition in its original order", opts, async () => {
