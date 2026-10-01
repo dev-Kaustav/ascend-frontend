@@ -30,18 +30,25 @@ export default async function StoreHomePage() {
   const { product, failed } = await loadSeedProduct();
 
   return (
-    <section aria-labelledby="store-home-heading">
+    <section className="store-state" aria-labelledby="store-home-heading">
       <h1 id="store-home-heading">Ascend range</h1>
 
       {failed ? (
-        <div role="alert">
+        <div className="store-state" role="alert">
           <p>We couldn&apos;t load products. Please try again.</p>
-          <Link href="/">Try again</Link>
+          <Link className="store-button" href="/">
+            Try again
+          </Link>
         </div>
       ) : !product ? (
         <p>No products found. Check back soon.</p>
       ) : (
-        <article data-store-product-id={product.id} aria-label={product.name}>
+        <article
+          className="store-card"
+          style={{ maxWidth: 240 }}
+          data-store-product-id={product.id}
+          aria-label={product.name}
+        >
           <ProductImage src={product.image_url} />
           <h2>{product.name}</h2>
           {product.pack_size ? <p>{product.pack_size}</p> : null}
