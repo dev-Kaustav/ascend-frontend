@@ -12,9 +12,13 @@ import { test } from "node:test";
 import {
   ORDER_PAGE_SIZE,
   ORDER_STAGES,
+  describeInvoiceError,
   describeOrderError,
+  downloadInvoice,
   formatOrderDate,
   formatShipTo,
+  invoiceFilename,
+  invoiceNote,
   normalizeOrderDetail,
   normalizeOrderList,
   orderHref,
@@ -346,4 +350,219 @@ test("returning to the tab refreshes, but not again straight away", () => {
   assert.equal(shouldRefreshOnFocus({ lastAt: 1000, now: 4000 }), false);
   assert.equal(shouldRefreshOnFocus({ lastAt: 1000, now: 11000 }), true);
   assert.equal(shouldRefreshOnFocus({ lastAt: 1000, now: 2000, minGap: 500 }), true);
+});
+
+// ======================================================================================================
+// Issued invoice: when it is offered, what it is called, how it is handed to the browser
+// ======================================================================================================
+
+const PDF_COPY = "Your invoice will be available after dispatch.";
+
+test("an issued invoice is offered for download", () => {
+  for (const status of ["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY", "DELIVERED", "RETURNED", "CANCELLED"]) {
+    assert.deepEqual(invoiceNote({ status, invoice_available: true }), { kind: "download" }, status);
+  }
+});
+
+test("before dispatch, no invoice is explained, not hidden", () => {
+  for (const status of ["PENDING", "READY_TO_SHIP"]) {
+    assert.deepEqual(invoiceNote({ status, invoice_available: false }), { kind: "pending", text: PDF_COPY }, status);
+  }
+});
+
+test("where no dispatch is coming or it has already happened, no promise is made", () => {
+  for (const status of ["CANCELLED", "RETURNED", "OUT_FOR_DELIVERY", "DELIVERED", "SOMETHING_NEW"]) {
+    assert.deepEqual(invoiceNote({ status, invoice_available: false }), { kind: "none" }, status);
+  }
+});
+
+test("an invoice is only offered on the server's say-so, never inferred from status", () => {
+  assert.equal(invoiceNote({ status: "DELIVERED" }).kind, "none");
+  assert.equal(invoiceNote({ status: "DELIVERED", invoice_available: "yes" }).kind, "none");
+  assert.equal(invoiceNote(null).kind, "none");
+});
+
+test("the server's filename is kept", () => {
+  assert.equal(invoiceFilename("INV-2026-0042.pdf", 12), "INV-2026-0042.pdf");
+});
+
+test("with no usable filename the order id names the file", () => {
+  for (const missing of [undefined, null, "", "download", "   "]) {
+    assert.equal(invoiceFilename(missing, 12), "invoice-12.pdf", JSON.stringify(missing));
+  }
+});
+
+test("a filename can never carry a path, control characters or a missing extension", () => {
+  assert.equal(invoiceFilename("../../etc/passwd", 12), "passwd.pdf");
+  assert.equal(invoiceFilename("C:\\temp\\INV-7.pdf", 12), "INV-7.pdf");
+  assert.equal(invoiceFilename("INV\u0000-7\n.pdf", 12), "INV-7.pdf");
+  assert.equal(invoiceFilename("INV-7", 12), "INV-7.pdf");
+  assert.equal(invoiceFilename("INV-7.PDF", 12), "INV-7.PDF");
+  assert.ok(invoiceFilename("x".repeat(500) + ".pdf", 12).length <= 120);
+  assert.match(invoiceFilename("/", 12), /^invoice-12\.pdf$/);
+});
+
+// An injected browser: a document that records the anchor it is given, and a URL that records what
+// was created and revoked. Nothing here is a real DOM; it is exactly the surface downloadInvoice uses.
+function fakeBrowser({ clickThrows = false } = {}) {
+  const events = [];
+  const anchor = {
+    style: {},
+    set href(value) { this._href = value; },
+    get href() { return this._href; },
+    click() {
+      events.push("click");
+      if (clickThrows) throw new Error("click blocked");
+    },
+    remove() { events.push("remove"); },
+    setAttribute() {}
+  };
+  const document = {
+    createElement(tag) { events.push(`create:${tag}`); return anchor; },
+    body: { appendChild(node) { events.push(node === anchor ? "append" : "append?"); } }
+  };
+  let counter = 0;
+  const URLApi = {
+    createObjectURL(blob) { counter += 1; events.push(`url:${blob.size}`); return `blob:mock/${counter}`; },
+    revokeObjectURL(url) { events.push(`revoke:${url}`); }
+  };
+  return { document, URL: URLApi, anchor, events };
+}
+
+const pdfBlob = () => new Blob(["%PDF-1.4 mock"], { type: "application/pdf" });
+
+test("the invoice is fetched from the order's own PDF path with the store transport", async () => {
+  const browser = fakeBrowser();
+  const paths = [];
+  await downloadInvoice({
+    orderId: 12,
+    fetchBlob: async (path) => { paths.push(path); return { blob: pdfBlob(), filename: "INV-12.pdf" }; },
+    document: browser.document,
+    URL: browser.URL,
+    defer: (run) => run()
+  });
+  assert.deepEqual(paths, ["/store/orders/12/invoice.pdf"]);
+});
+
+test("the Blob is handed to the browser as a download with the server's filename", async () => {
+  const browser = fakeBrowser();
+  const result = await downloadInvoice({
+    orderId: 12,
+    fetchBlob: async () => ({ blob: pdfBlob(), filename: "INV-2026-12.pdf" }),
+    document: browser.document,
+    URL: browser.URL,
+    defer: (run) => run()
+  });
+  assert.equal(browser.anchor.download, "INV-2026-12.pdf");
+  assert.equal(browser.anchor.href, "blob:mock/1");
+  assert.equal(result.filename, "INV-2026-12.pdf");
+  assert.deepEqual(browser.events.slice(0, 5), ["url:13", "create:a", "append", "click", "remove"]);
+});
+
+test("with only the placeholder name from the transport, the invoice is named by its order", async () => {
+  const browser = fakeBrowser();
+  await downloadInvoice({
+    orderId: 31,
+    fetchBlob: async () => ({ blob: pdfBlob(), filename: "download" }),
+    document: browser.document,
+    URL: browser.URL,
+    defer: (run) => run()
+  });
+  assert.equal(browser.anchor.download, "invoice-31.pdf");
+});
+
+test("the object URL is revoked after the click, not before it", async () => {
+  const browser = fakeBrowser();
+  const deferred = [];
+  await downloadInvoice({
+    orderId: 12,
+    fetchBlob: async () => ({ blob: pdfBlob(), filename: "a.pdf" }),
+    document: browser.document,
+    URL: browser.URL,
+    defer: (run) => deferred.push(run)
+  });
+  assert.equal(browser.events.some((e) => e.startsWith("revoke")), false, "not revoked while the browser may still be reading it");
+  assert.equal(deferred.length, 1);
+  deferred[0]();
+  assert.equal(browser.events.at(-1), "revoke:blob:mock/1");
+});
+
+test("the object URL is revoked even when the browser refuses the click", async () => {
+  const browser = fakeBrowser({ clickThrows: true });
+  const deferred = [];
+  await assert.rejects(
+    downloadInvoice({
+      orderId: 12,
+      fetchBlob: async () => ({ blob: pdfBlob(), filename: "a.pdf" }),
+      document: browser.document,
+      URL: browser.URL,
+      defer: (run) => deferred.push(run)
+    }),
+    /click blocked/
+  );
+  assert.ok(browser.events.includes("revoke:blob:mock/1"), "revoked straight away on a failed click");
+  assert.ok(browser.events.includes("remove"), "the temporary link does not stay in the page");
+});
+
+test("a failed request creates no URL and touches no page element", async () => {
+  const browser = fakeBrowser();
+  await assert.rejects(
+    downloadInvoice({
+      orderId: 12,
+      fetchBlob: async () => { throw Object.assign(new Error("Network error"), { reason: "network" }); },
+      document: browser.document,
+      URL: browser.URL,
+      defer: (run) => run()
+    }),
+    /Network error/
+  );
+  assert.deepEqual(browser.events, []);
+});
+
+test("an empty or non-PDF answer is a failure, not a download of nothing", async () => {
+  for (const blob of [new Blob([], { type: "application/pdf" }), new Blob(['{"detail":"x"}'], { type: "application/json" }), new Blob(["<html>"], { type: "text/html" })]) {
+    const browser = fakeBrowser();
+    await assert.rejects(
+      downloadInvoice({
+        orderId: 12,
+        fetchBlob: async () => ({ blob, filename: "a.pdf" }),
+        document: browser.document,
+        URL: browser.URL,
+        defer: (run) => run()
+      }),
+      (error) => error.reason === "not-a-pdf"
+    );
+    assert.deepEqual(browser.events, [], "no URL, no link");
+  }
+});
+
+test("a PDF served without a content type is still accepted", async () => {
+  const browser = fakeBrowser();
+  await downloadInvoice({
+    orderId: 12,
+    fetchBlob: async () => ({ blob: new Blob(["%PDF-1.4"]), filename: "a.pdf" }),
+    document: browser.document,
+    URL: browser.URL,
+    defer: (run) => run()
+  });
+  assert.ok(browser.events.includes("click"));
+});
+
+test("something that is not a Blob at all is a failure", async () => {
+  const browser = fakeBrowser();
+  await assert.rejects(
+    downloadInvoice({ orderId: 12, fetchBlob: async () => ({ blob: "text", filename: "a.pdf" }), document: browser.document, URL: browser.URL, defer: (run) => run() }),
+    (error) => error.reason === "not-a-pdf"
+  );
+});
+
+test("a failed invoice is worded locally; a stale or ended session is not", () => {
+  const failed = describeInvoiceError({ status: 500 });
+  assert.equal(failed.kind, "failed");
+  assert.equal(failed.message, "We couldn't download your invoice. Please try again.");
+  assert.equal(describeInvoiceError({ status: 404 }).kind, "failed", "even a 404 stays on the order and offers Retry");
+  assert.equal(describeInvoiceError({ reason: "network" }).kind, "failed");
+  assert.equal(describeInvoiceError({ reason: "not-a-pdf" }).kind, "failed");
+  assert.equal(describeInvoiceError({ reason: "stale" }).kind, "stale");
+  assert.equal(describeInvoiceError({ status: 401, reason: "session-expired" }).kind, "signed-out");
 });
