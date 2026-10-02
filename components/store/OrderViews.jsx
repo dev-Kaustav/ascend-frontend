@@ -8,9 +8,12 @@ import { formatCurrency } from "@/lib/format";
 import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 import { createRequestGate } from "@/lib/store/catalogue.mjs";
 import {
+  describeInvoiceError,
   describeOrderError,
+  downloadInvoice,
   formatOrderDate,
   formatShipTo,
+  invoiceNote,
   normalizeOrderDetail,
   normalizeOrderList,
   orderHref,
@@ -427,6 +430,58 @@ function Totals({ order }) {
   );
 }
 
+// The issued invoice. Offered only when the server says one exists; before dispatch the page says
+// when to expect it. A failed download stays on this page with its own Retry and never replaces the
+// order. One download at a time: the guard is a ref (synchronous), so a double tap cannot start two.
+// What a download left behind belongs to the identity it ran under and is dropped with it.
+function InvoiceSection({ order, owner }) {
+  const note = invoiceNote(order);
+  const [record, setRecord] = useState(null); // { owner, busy, failure }
+  const running = useRef(false);
+  const mine = record && record.owner === owner ? record : null;
+
+  const start = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    setRecord({ owner, busy: true, failure: null });
+    try {
+      await downloadInvoice({ orderId: order.id });
+      setRecord({ owner, busy: false, failure: null });
+    } catch (error) {
+      const described = describeInvoiceError(error);
+      setRecord(described.kind === "stale" ? null : { owner, busy: false, failure: described });
+    } finally {
+      running.current = false;
+    }
+  }, [owner, order.id]);
+
+  if (note.kind === "none") return null;
+  return (
+    <div className="store-order-block" aria-labelledby="store-order-invoice">
+      <h2 id="store-order-invoice">Invoice</h2>
+      {note.kind === "pending" ? <p>{note.text}</p> : null}
+      {note.kind === "download" ? (
+        <div className="store-state__actions">
+          {mine?.failure?.kind === "failed" ? (
+            <button type="button" className="store-button" onClick={start} disabled={mine.busy} aria-label="Retry invoice download">
+              {mine.busy ? "Downloading" : "Retry"}
+            </button>
+          ) : (
+            <button type="button" className="store-button" onClick={start} disabled={mine?.busy === true} aria-label={`Download invoice for ${orderReference(order.id)}`}>
+              {mine?.busy ? "Downloading" : "Download invoice"}
+            </button>
+          )}
+        </div>
+      ) : null}
+      {mine?.failure ? (
+        <p className="store-form-error" role="alert">
+          {mine.failure.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Confirmation({ order }) {
   const { lines } = formatShipTo(order.ship_to);
   return (
@@ -555,6 +610,8 @@ function Detail({ id, placed }) {
         <Totals order={order} />
         <p className="store-hint">Pay on delivery: cash or UPI</p>
       </div>
+
+      <InvoiceSection order={order} owner={`${generation}:${retailerId}`} />
 
       <ShipTo shipTo={order.ship_to} />
     </section>
