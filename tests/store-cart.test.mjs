@@ -19,7 +19,9 @@ import {
   describeQuoteError,
   emptyCart,
   freeDeliveryRemaining,
+  performReorder,
   quoteMatchesCart,
+  reconcileReorder,
   quoteRequestBody,
   readStoredCart,
   removeCartLine,
@@ -478,4 +480,101 @@ test("anything else, a lost connection included, is the approved failure copy", 
     assert.equal(described.message, "We couldn't update your total. Try again before placing your order.");
     assert.deepEqual(described.skuIds, []);
   }
+});
+
+// ---- reorder: a past order's intent merged into the cart at today's availability (09-10) --------------------------------
+
+const product = (id, extra = {}) => ({ id, name: `Snack ${id}`, in_stock: true, mrp: 120, trade_price: 100, max_orderable: 10, ...extra });
+// What an order detail carries. The money on it is history and must never reach the cart.
+const pastLine = (skuId, quantity, extra = {}) => ({ sku_id: skuId, quantity, name: `Snack ${skuId}`, line_total: 999, ...extra });
+
+test("an existing 2 and a past 3 of the same product become 5 packets", () => {
+  const result = reconcileReorder(cartOf([7, 2]), [pastLine(7, 3)], [product(7)]);
+  assert.deepEqual(result.lines, [{ sku_id: 7, quantity: 5 }]);
+  assert.equal(cartQuantity(result.cart, 7), 5);
+  assert.equal(result.changed, true);
+  assert.deepEqual(result.skipped, []);
+  assert.deepEqual(result.reduced, []);
+  assert.deepEqual(result.added, [{ sku_id: 7, name: "Snack 7", quantity: 3 }]);
+});
+
+test("the merge stops at the product's current max_orderable and says so", () => {
+  const result = reconcileReorder(cartOf([7, 2]), [pastLine(7, 3)], [product(7, { max_orderable: 4 })]);
+  assert.equal(cartQuantity(result.cart, 7), 4);
+  assert.deepEqual(result.reduced, [{ sku_id: 7, name: "Snack 7", wanted: 5, quantity: 4 }]);
+  assert.deepEqual(result.added, [{ sku_id: 7, name: "Snack 7", quantity: 2 }]);
+});
+
+test("a cart line the past order does not mention survives untouched", () => {
+  const result = reconcileReorder(cartOf([3, 4], [7, 2]), [pastLine(7, 3)], [product(7)]);
+  assert.equal(cartQuantity(result.cart, 3), 4);
+  assert.equal(cartQuantity(result.cart, 7), 5);
+  assert.deepEqual(
+    result.lines.map((line) => line.sku_id),
+    [3, 7]
+  );
+});
+
+test("a past product that is not in the cart is added after the lines already there", () => {
+  const result = reconcileReorder(cartOf([3, 4]), [pastLine(7, 3)], [product(7)]);
+  assert.deepEqual(result.lines, [
+    { sku_id: 3, quantity: 4 },
+    { sku_id: 7, quantity: 3 }
+  ]);
+});
+
+test("a historic line_total, name or price never becomes part of the cart", () => {
+  const result = reconcileReorder(emptyCart(), [pastLine(7, 3, { mrp: 1, trade_price: 1, unit_price: 1 })], [product(7)]);
+  assert.deepEqual(Object.keys(result.lines[0]).sort(), ["quantity", "sku_id"]);
+  assert.equal(JSON.stringify(result.cart.lines).includes("999"), false);
+  assert.deepEqual(quoteRequestBody(result.cart), { items: [{ sku_id: 7, quantity: 3 }] });
+});
+
+test("a reorder that changes the cart is a new revision, so it is quoted again", () => {
+  const before = cartOf([7, 2]);
+  const result = reconcileReorder(before, [pastLine(7, 3)], [product(7)]);
+  assert.equal(result.cart.revision, before.revision + 1);
+});
+
+// One reorder, run against stand-ins for the two reads it is allowed to make. The recording transport
+// is how these tests prove that nothing but a GET of an order and of products is ever asked.
+function reorderHarness({ order = { lines: [pastLine(7, 3)] }, products = { 7: product(7) }, cart = cartOf([7, 2]), generation = { value: 1 } } = {}) {
+  const asked = [];
+  const owner = { generation: 1, retailerId: 5 };
+  const current = { cart };
+  const options = {
+    owner,
+    orderId: 40,
+    getGeneration: () => generation.value,
+    getOrder: async (id) => {
+      asked.push(`GET order ${id}`);
+      return order;
+    },
+    getProduct: async (id) => {
+      asked.push(`GET product ${id}`);
+      if (!products[id]) throw Object.assign(new Error("not found"), { status: 404 });
+      return products[id];
+    },
+    apply: (lines, found) => {
+      const result = reconcileReorder(current.cart, lines, found);
+      current.cart = result.cart;
+      return result;
+    }
+  };
+  return { options, asked, current, generation };
+}
+
+test("a history reorder reads the order, then the current products, and sends nothing else", async () => {
+  const harness = reorderHarness();
+  const outcome = await performReorder(harness.options);
+  assert.equal(outcome.status, "done");
+  assert.deepEqual(harness.asked, ["GET order 40", "GET product 7"]);
+  assert.equal(cartQuantity(harness.current.cart, 7), 5);
+});
+
+test("a detail reorder uses the lines it already has and does not read the order again", async () => {
+  const harness = reorderHarness();
+  const outcome = await performReorder({ ...harness.options, lines: [pastLine(7, 3)] });
+  assert.equal(outcome.status, "done");
+  assert.deepEqual(harness.asked, ["GET product 7"]);
 });
