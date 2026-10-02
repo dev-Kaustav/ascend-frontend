@@ -232,6 +232,10 @@ export function ReorderSummary({ view }) {
   );
 }
 
+// A button that removes the notice it sits in would drop keyboard focus to the page. The page's heading
+// takes it instead (it is the start of the content the notice was announced above).
+const focusPageHeading = () => document.querySelector("main h1")?.focus();
+
 // What a reorder says when it did not open the cart: nothing could be added (the cart is as it was), or it
 // could not be checked. The success path is told in the cart, where the review happens.
 function ReorderNotice({ lines }) {
@@ -245,11 +249,25 @@ function ReorderNotice({ lines }) {
       <ReorderSummary view={detail} />
       <div className="store-reorder__actions">
         {detail.retry ? (
-          <button type="button" className="store-link-button" onClick={() => reorder.run({ orderId: view.orderId, lines })}>
+          <button
+            type="button"
+            className="store-link-button"
+            onClick={() => {
+              reorder.run({ orderId: view.orderId, lines });
+              focusPageHeading();
+            }}
+          >
             Try again
           </button>
         ) : null}
-        <button type="button" className="store-link-button" onClick={reorder.dismiss}>
+        <button
+          type="button"
+          className="store-link-button"
+          onClick={() => {
+            reorder.dismiss();
+            focusPageHeading();
+          }}
+        >
           Dismiss
         </button>
       </div>
@@ -308,7 +326,9 @@ function History({ page }) {
   return (
     <section className="store-orders" aria-labelledby="store-orders-title" aria-busy={request.loading || request.refreshing ? "true" : undefined}>
       <div className="store-orders__head">
-        <h1 id="store-orders-title">Your orders</h1>
+        <h1 id="store-orders-title" tabIndex={-1}>
+          Your orders
+        </h1>
         {data ? <RefreshButton onClick={request.refresh} busy={request.refreshing} label="Refresh orders" /> : null}
       </div>
 
@@ -659,7 +679,9 @@ function Detail({ id, placed }) {
       </p>
       <div className="store-orders__head">
         <div className="store-order__title">
-          <h1 id="store-order-title">{orderReference(order.id)}</h1>
+          <h1 id="store-order-title" tabIndex={-1}>
+            {orderReference(order.id)}
+          </h1>
           {date ? <p className="store-hint">Placed {date}</p> : null}
         </div>
         <RefreshButton onClick={request.refresh} busy={request.refreshing} label="Refresh order" />

@@ -200,7 +200,16 @@ export default function CartSheet({ onClose }) {
             <div className="store-reorder store-cart__reorder" role="status" data-reorder="review">
               <p>{reorderReview.message}</p>
               <ReorderSummary view={reorderReview} />
-              <button type="button" className="store-link-button" onClick={reorder.dismiss}>
+              <button
+                type="button"
+                className="store-link-button"
+                onClick={(event) => {
+                  const dialog = event.currentTarget.closest("[role=dialog]");
+                  reorder.dismiss();
+                  // The notice is about to leave; keep keyboard focus inside the cart.
+                  dialog?.querySelector(".store-sheet__close")?.focus();
+                }}
+              >
                 Dismiss
               </button>
             </div>
