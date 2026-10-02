@@ -210,9 +210,9 @@ export function useScrollRetention(routeKey, ready) {
   }, [ready, routeKey]);
 }
 
-// The cart arrives with 09-07 as retailer.cart = { quantityOf(skuId), setQuantity(skuId, qty) }.
-// Until then a ready retailer's controls keep a local, non-persistent quantity per card so the
-// whole control can be exercised; a held add stays held (see useResumePendingAdd).
+// The cart is the provider's retailer.cart = { quantityOf(skuId), setQuantity(skuId, qty), ... }, which
+// exists for a ready retailer once their own cart is restored (09-07). The local quantity below only
+// covers the moment before that; a held add waits for the cart (see useResumePendingAdd).
 function useCart() {
   const retailer = useRetailer();
   return { retailer, cart: retailer.cart || null };

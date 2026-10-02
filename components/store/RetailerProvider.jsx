@@ -4,12 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import SheetHost from "@/components/store/SheetHost";
 import {
   cartQuantity,
+  acceptStockChanges,
   cartReadiness,
   cartUnitCount,
+  describeQuoteError,
   emptyCart,
   quoteRequestBody,
   readStoredCart,
   removeCartLine,
+  removeCartLines,
   updateCartQuantity,
   writeStoredCart
 } from "@/lib/store/cart.mjs";
@@ -180,8 +183,12 @@ function useCartState({ ready, retailerId, generation }) {
         setQuote(null);
         setRetries((count) => count + 1);
       },
+      // Explicit, user-approved changes only: lower or drop the lines the quote says are short, or
+      // drop products the server says are no longer sold. Each is a new revision, so it is re-quoted.
+      acceptStock: () => commit((current) => acceptStockChanges(current, readiness.quote)),
+      removeLines: (skuIds) => commit((current) => removeCartLines(current, skuIds)),
       readiness,
-      quoteError: quote?.phase === "error" ? quote.error : null,
+      problem: readiness.state === "error" ? describeQuoteError(quote?.error) : null,
       known: knownLines
     };
   }, [cart, commit, readiness, quote, knownLines]);

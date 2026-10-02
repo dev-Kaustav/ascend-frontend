@@ -8,6 +8,7 @@ import BottomNavigation, { STORE_NAV_ITEMS } from "@/components/store/BottomNavi
 import { useRetailer, useRetailerLinkGate } from "@/components/store/RetailerProvider";
 import { listingHref, parseListingParams } from "@/lib/store/catalogue.mjs";
 import { formatCurrency } from "@/lib/format";
+import { cartBarSummary } from "@/lib/store/cart.mjs";
 import { headerAddressLabel } from "@/lib/store/maps.mjs";
 
 // Native GET form, so search works before any client code runs; once hydrated it navigates in
@@ -80,17 +81,17 @@ function HeaderSearch() {
 // sheet through the provider, which keeps one sheet on screen.
 function CartBar() {
   const { cart, openSheet } = useRetailer();
-  if (!cart || cart.lines.length === 0) return null;
-  const { ready, quote } = cart.readiness;
-  const units = quote ? quote.lines.reduce((sum, line) => sum + line.quantity, 0) : cart.unitCount;
-  const total = quote ? formatCurrency(quote.total) : null;
+  if (!cart) return null;
+  const { visible, units, total: quoted } = cartBarSummary({ cart: { lines: cart.lines }, readiness: cart.readiness });
+  if (!visible) return null;
+  const total = quoted === null ? null : formatCurrency(quoted);
   return (
     <div className="store-cart-bar">
       <button
         type="button"
         onClick={() => openSheet("cart")}
         aria-label={`View cart, ${units} ${units === 1 ? "packet" : "packets"}${total ? `, ${total}` : ""}`}
-        data-quote-current={ready ? "true" : "false"}
+        data-quote-current={cart.readiness.ready ? "true" : "false"}
       >
         <span className="store-cart-bar__label">
           <ShoppingCart size={20} strokeWidth={2} aria-hidden="true" />
@@ -107,7 +108,7 @@ function CartBar() {
 
 function HeaderCart() {
   const { cart, openSheet, requireRetailer, readiness } = useRetailer();
-  const units = cart ? cart.unitCount : 0;
+  const units = cart ? cartBarSummary({ cart: { lines: cart.lines }, readiness: cart.readiness }).units : 0;
   return (
     <button
       type="button"

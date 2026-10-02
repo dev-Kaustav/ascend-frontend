@@ -15,8 +15,10 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 /**
  * title/titleId: the visible heading and the id that labels the dialog.
  * onDismiss: Escape, Back and the close control all call it, once.
+ * footer: optional content fixed under a body that scrolls on its own (the cart's totals).
+ * backdropClass: extra class on the backdrop (the cart is a side drawer on wide screens).
  */
-export default function SheetFrame({ title, titleId, closeLabel, onDismiss, children, className = "" }) {
+export default function SheetFrame({ title, titleId, closeLabel, onDismiss, children, className = "", backdropClass = "", footer = null }) {
   const [host] = useState(() => {
     if (typeof document === "undefined") return null;
     const element = document.createElement("div");
@@ -114,7 +116,7 @@ export default function SheetFrame({ title, titleId, closeLabel, onDismiss, chil
   if (!host) return null;
 
   return createPortal(
-    <div className="store-sheet-backdrop">
+    <div className={`store-sheet-backdrop ${backdropClass}`}>
       <div ref={dialogRef} className={`store-sheet store-sheet--form ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="store-sheet__head">
           <h2 id={titleId}>{title}</h2>
@@ -132,6 +134,7 @@ export default function SheetFrame({ title, titleId, closeLabel, onDismiss, chil
           </button>
         </div>
         <div className="store-sheet__body">{children}</div>
+        {footer ? <div className="store-sheet__foot">{footer}</div> : null}
       </div>
     </div>,
     host
