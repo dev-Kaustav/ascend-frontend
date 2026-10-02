@@ -23,6 +23,7 @@ import {
   decideAddResume,
   displayPrice,
   findFeatureBrand,
+  categoryCovers,
   groupShelves,
   isAvailable,
   listingHref,
@@ -521,4 +522,19 @@ test("only a Back/Forward arrival restores, once, and the mark expires", () => {
   tracker.markTraversal();
   now += 10001; // a stale Back, such as closing a sheet, long before this navigation
   assert.equal(tracker.consume(), false);
+});
+
+test("categoryCovers gives each category one https pack shot, in-stock first, and omits categories without one", () => {
+  const products = [
+    { id: 1, name: "A", category: { id: 10 }, image_url: "https://img.example/sold-out.png", in_stock: false },
+    { id: 2, name: "B", category: { id: 10 }, image_url: "https://img.example/in-stock.png", in_stock: true },
+    { id: 3, name: "C", category: { id: 11 }, image_url: "http://insecure.example/a.png", in_stock: true },
+    { id: 4, name: "D", category: { id: 12 }, in_stock: true },
+    { id: 5, name: "E", category: { id: 13 }, image_url: "https://img.example/e.png", in_stock: true }
+  ];
+  assert.deepEqual(categoryCovers(products), {
+    10: "https://img.example/in-stock.png",
+    13: "https://img.example/e.png"
+  });
+  assert.deepEqual(categoryCovers(null), {});
 });

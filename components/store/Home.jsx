@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useId } from "react";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/components/store/Catalogue";
 import { storeEndpoints } from "@/lib/store/api.mjs";
 import {
+  categoryCovers,
   findFeatureBrand,
   groupShelves,
   listingHref,
@@ -51,6 +53,7 @@ export default function Home({ seed = null }) {
   const total = rangeReady ? range.data.total : 0;
   const shelves = rangeReady ? groupShelves(items, categoryList) : [];
   const feature = rangeReady ? findFeatureBrand(brands.data, items) : null;
+  const covers = rangeReady ? categoryCovers(items) : {};
 
   useScrollRetention("/", rangeReady && !range.busy);
 
@@ -59,15 +62,18 @@ export default function Home({ seed = null }) {
   return (
     <div className="store-home">
       <section className="store-promo" data-home-section="promo" aria-labelledby="store-home-heading">
-        <div>
+        <div className="store-promo__copy">
           <h1 id="store-home-heading">Stock your shop with Ascend</h1>
           <p>
             {facts ? `${facts} to choose from. ` : ""}Pay on delivery: cash or UPI.
           </p>
+          <Link className="store-button" href="/products">
+            Browse products
+          </Link>
         </div>
-        <Link className="store-button" href="/products">
-          Browse products
-        </Link>
+        <div className="store-promo__art" aria-hidden="true">
+          <Image src="/store/hero-snacks.jpg" alt="" fill priority sizes="(min-width: 1280px) 1200px, 100vw" />
+        </div>
       </section>
 
       {categoryList.length > 0 ? (
@@ -80,7 +86,7 @@ export default function Home({ seed = null }) {
           </div>
           <ul className="store-category-row" data-shelf-id="categories">
             {categoryList.map((category) => (
-              <CategoryTile key={category.id} category={category} />
+              <CategoryTile key={category.id} category={category} coverUrl={covers[category.id]} />
             ))}
           </ul>
         </section>

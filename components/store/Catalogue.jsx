@@ -430,13 +430,17 @@ export function CatalogueError({ onRetry }) {
 
 // ---- categories -------------------------------------------------------------------------------------
 
-// A category's own icon when it has one, otherwise a neutral local illustration. Matched on the
-// real name; unknown names get the package.
-function CategoryIllustration({ category }) {
+// A category's own image when the admin set one (a photo that fills the tile), otherwise a real
+// pack shot from the category, otherwise a neutral local illustration matched on the real name.
+function CategoryArt({ category, coverUrl }) {
   const url = category.icon_url;
   if (typeof url === "string" && url.startsWith("https://")) {
     // eslint-disable-next-line @next/next/no-img-element -- remote host is not whitelisted for next/image
-    return <img src={url} alt="" width={56} height={56} loading="lazy" />;
+    return <img className="store-category-tile__img store-category-tile__img--photo" src={url} alt="" loading="lazy" />;
+  }
+  if (typeof coverUrl === "string" && coverUrl.startsWith("https://")) {
+    // eslint-disable-next-line @next/next/no-img-element -- remote host is not whitelisted for next/image
+    return <img className="store-category-tile__img store-category-tile__img--pack" src={coverUrl} alt="" loading="lazy" />;
   }
   const name = String(category.name || "").toLowerCase();
   const Icon = /nut|seed|fruit/.test(name)
@@ -451,12 +455,12 @@ function CategoryIllustration({ category }) {
   return <Icon size={32} strokeWidth={1.5} aria-hidden="true" />;
 }
 
-export function CategoryTile({ category }) {
+export function CategoryTile({ category, coverUrl }) {
   return (
     <li>
       <Link href={listingHref({ categoryId: category.id })} className="store-category-tile">
         <span className="store-category-tile__art">
-          <CategoryIllustration category={category} />
+          <CategoryArt category={category} coverUrl={coverUrl} />
         </span>
         <span className="store-category-tile__name">{category.name}</span>
       </Link>
