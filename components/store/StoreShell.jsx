@@ -5,12 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MapPin, Search, X } from "lucide-react";
 import { Suspense, useRef, useState } from "react";
 import BottomNavigation, { STORE_NAV_ITEMS } from "@/components/store/BottomNavigation";
-import { useRetailerLinkGate } from "@/components/store/RetailerProvider";
+import { useRetailer, useRetailerLinkGate } from "@/components/store/RetailerProvider";
 import { listingHref, parseListingParams } from "@/lib/store/catalogue.mjs";
-
-// The delivery address picker and retailer login arrive with later slices; until then the
-// header only advertises the empty state and stays fully navigable without any permission.
-const LOCATION_PLACEHOLDER = "Select delivery address";
+import { headerAddressLabel } from "@/lib/store/maps.mjs";
 
 // Native GET form, so search works before any client code runs; once hydrated it navigates in
 // place (the persistent layout keeps the cart and sheets). The box shows the q in the URL on
@@ -80,6 +77,11 @@ function HeaderSearch() {
 export default function StoreShell({ children }) {
   const pathname = usePathname() || "/";
   const gate = useRetailerLinkGate();
+  // The header shows the delivery address the retailer chose (the full text is in the picker) and
+  // asks for one otherwise. It never asks the browser for a position: only the sheet's Detect my
+  // location button does, and only when pressed.
+  const { selectedAddress, openAddresses, readiness } = useRetailer();
+  const locationLabel = headerAddressLabel(selectedAddress);
 
   return (
     <div className="ascend-storefront">
@@ -96,9 +98,16 @@ export default function StoreShell({ children }) {
             <span>ASCEND</span>
           </Link>
 
-          <button type="button" className="store-location" disabled title={LOCATION_PLACEHOLDER}>
+          <button
+            type="button"
+            className="store-location"
+            onClick={openAddresses}
+            disabled={readiness === "loading"}
+            title={locationLabel}
+            aria-label={selectedAddress ? `Delivery address: ${locationLabel}. Change` : locationLabel}
+          >
             <MapPin size={20} strokeWidth={1.75} aria-hidden="true" />
-            <span>{LOCATION_PLACEHOLDER}</span>
+            <span>{locationLabel}</span>
           </button>
 
           {/* useSearchParams is confined to this boundary, so the rest of the shell never bails out

@@ -33,6 +33,7 @@ import {
 // Loaded only when a sheet opens, so public browsing never downloads them (or Firebase, or Maps).
 const RetailerLoginSheet = dynamic(() => import("@/components/store/RetailerLoginSheet"), { ssr: false });
 const ShopSheet = dynamic(() => import("@/components/store/ShopSheet"), { ssr: false });
+const AddressSheet = dynamic(() => import("@/components/store/AddressSheet"), { ssr: false });
 
 const SHEETS = ["login", "shop", "address", "cart"];
 const getServerSnapshot = () => undefined;
@@ -332,6 +333,7 @@ export function RetailerProvider({ children }) {
       {activeSheet === "login" ? <RetailerLoginSheet intent={pendingIntent} onClose={dismissLogin} /> : null}
       {/* Keyed by identity: a switched account starts a fresh form, never the previous one's draft. */}
       {activeSheet === "shop" ? <ShopSheet key={generation} intent={pendingIntent} onClose={dismissLogin} /> : null}
+      {activeSheet === "address" ? <AddressSheet key={generation} onClose={closeSheet} /> : null}
     </RetailerContext.Provider>
   );
 }
