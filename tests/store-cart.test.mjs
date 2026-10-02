@@ -17,13 +17,15 @@ import {
   cartReadiness,
   cartStorageKey,
   describeQuoteError,
+  describeReorder,
   emptyCart,
   freeDeliveryRemaining,
   performReorder,
   quoteMatchesCart,
-  reconcileReorder,
   quoteRequestBody,
   readStoredCart,
+  reconcileReorder,
+  reorderSkipText,
   removeCartLine,
   removeCartLines,
   restoreCart,
@@ -577,4 +579,274 @@ test("a detail reorder uses the lines it already has and does not read the order
   const outcome = await performReorder({ ...harness.options, lines: [pastLine(7, 3)] });
   assert.equal(outcome.status, "done");
   assert.deepEqual(harness.asked, ["GET product 7"]);
+});
+
+// ---- reorder: what changed in the catalogue since the order was placed (09-10 task 2) --------------------------------------
+
+const names = (list) => list.map((item) => item.name);
+
+test("a product that is unlisted, sold out or unpriced is skipped by name, and the rest is added", () => {
+  const cart = cartOf([3, 1]);
+  const result = reconcileReorder(
+    cart,
+    [pastLine(7, 2), pastLine(8, 1), pastLine(9, 1), pastLine(10, 4), pastLine(11, 1, { name: "Retired Crisps" })],
+    [product(7), product(8, { in_stock: false, max_orderable: 0 }), product(9, { trade_price: undefined }), product(10, { max_orderable: 3 })]
+  );
+  assert.deepEqual(result.lines, [
+    { sku_id: 3, quantity: 1 },
+    { sku_id: 7, quantity: 2 },
+    { sku_id: 10, quantity: 3 }
+  ]);
+  assert.deepEqual(
+    result.skipped.map(({ sku_id, reason }) => [sku_id, reason]),
+    [[8, "out-of-stock"], [9, "unavailable"], [11, "unlisted"]]
+  );
+  assert.equal(result.skipped.find((item) => item.sku_id === 11).name, "Retired Crisps");
+  assert.deepEqual(names(result.reduced), ["Snack 10"]);
+  assert.equal(result.outcome, "partial");
+  assert.equal(describeReorder(result, 40).message, "Some items changed. Review your cart before ordering.");
+});
+
+test("a product the store lists with no cap, or a cap of zero, is not added", () => {
+  const result = reconcileReorder(emptyCart(), [pastLine(7, 1), pastLine(8, 1)], [product(7, { max_orderable: undefined }), product(8, { max_orderable: 0 })]);
+  assert.deepEqual(result.lines, []);
+  assert.deepEqual(
+    result.skipped.map((item) => item.sku_id),
+    [7, 8]
+  );
+});
+
+test("when nothing can be added the very same cart comes back, with the approved copy", () => {
+  const cart = cartOf([3, 4], [7, 2]);
+  const result = reconcileReorder(cart, [pastLine(8, 1), pastLine(11, 2)], [product(8, { in_stock: false, max_orderable: 0 })]);
+  assert.equal(result.cart, cart);
+  assert.equal(result.changed, false);
+  assert.equal(result.outcome, "none");
+  assert.deepEqual(result.lines, [
+    { sku_id: 3, quantity: 4 },
+    { sku_id: 7, quantity: 2 }
+  ]);
+  const told = describeReorder(result, 40);
+  assert.equal(told.kind, "none");
+  assert.equal(told.message, "These items are currently unavailable. Your cart hasn't changed.");
+  assert.equal(told.skipped.length, 2);
+});
+
+test("a reorder never lowers a line that is already above what is available", () => {
+  const cart = cartOf([7, 8]);
+  const result = reconcileReorder(cart, [pastLine(7, 3)], [product(7, { max_orderable: 5 })]);
+  assert.equal(cartQuantity(result.cart, 7), 8);
+  assert.equal(result.cart, cart);
+  assert.equal(result.outcome, "none");
+  assert.deepEqual(result.reduced, [{ sku_id: 7, name: "Snack 7", wanted: 11, quantity: 8 }]);
+});
+
+test("a line stops at 999 packets even when the product's cap is higher", () => {
+  const result = reconcileReorder(cartOf([7, 990]), [pastLine(7, 20)], [product(7, { max_orderable: 5000 })]);
+  assert.equal(cartQuantity(result.cart, 7), MAX_LINE_QUANTITY);
+  assert.deepEqual(result.reduced, [{ sku_id: 7, name: "Snack 7", wanted: 1010, quantity: 999 }]);
+  const fresh = reconcileReorder(emptyCart(), [pastLine(8, 5000)], [product(8, { max_orderable: 5000 })]);
+  assert.equal(cartQuantity(fresh.cart, 8), MAX_LINE_QUANTITY);
+});
+
+test("a cart already at 50 products takes more of a product it has, and skips a new one by name", () => {
+  const full = Array.from({ length: MAX_CART_LINES }, (_, index) => [100 + index, 1]).reduce((cart, [id, quantity]) => updateCartQuantity(cart, id, quantity), emptyCart());
+  assert.equal(full.lines.length, MAX_CART_LINES);
+  const result = reconcileReorder(full, [pastLine(100, 2), pastLine(7, 1)], [product(100), product(7)]);
+  assert.equal(cartQuantity(result.cart, 100), 3);
+  assert.equal(result.cart.lines.length, MAX_CART_LINES);
+  assert.deepEqual(
+    result.skipped.map(({ sku_id, reason }) => [sku_id, reason]),
+    [[7, "cart-full"]]
+  );
+  assert.equal(result.outcome, "partial");
+});
+
+test("the 50-product limit is met exactly: the 50th is added and the 51st is skipped", () => {
+  const nearly = Array.from({ length: MAX_CART_LINES - 1 }, (_, index) => [100 + index, 1]).reduce((cart, [id, quantity]) => updateCartQuantity(cart, id, quantity), emptyCart());
+  const result = reconcileReorder(nearly, [pastLine(7, 1), pastLine(8, 1)], [product(7), product(8)]);
+  assert.equal(result.cart.lines.length, MAX_CART_LINES);
+  assert.deepEqual(names(result.added), ["Snack 7"]);
+  assert.deepEqual(names(result.skipped), ["Snack 8"]);
+});
+
+test("one product listed twice in the order is one line with both quantities", () => {
+  const result = reconcileReorder(emptyCart(), [pastLine(7, 2), pastLine(7, 3)], [product(7)]);
+  assert.deepEqual(result.lines, [{ sku_id: 7, quantity: 5 }]);
+});
+
+test("junk past lines and junk products are ignored, never added", () => {
+  const junk = [null, {}, { sku_id: 0, quantity: 1 }, { sku_id: 7, quantity: 0 }, { sku_id: 7, quantity: 1.5 }, { sku_id: "7", quantity: 1 }, pastLine(8, 1)];
+  const result = reconcileReorder(emptyCart(), junk, [null, { id: "8" }, product(8)]);
+  assert.deepEqual(result.lines, [{ sku_id: 8, quantity: 1 }]);
+  assert.deepEqual(reconcileReorder(emptyCart(), "no", "no").lines, []);
+});
+
+test("a full reorder is told as such and names nothing as skipped", () => {
+  const told = describeReorder(reconcileReorder(emptyCart(), [pastLine(7, 2)], [product(7)]), 40);
+  assert.equal(told.kind, "review");
+  assert.equal(told.message, "Items from Order #40 are in your cart. Review your cart before ordering.");
+  assert.deepEqual(told.skipped, []);
+  assert.deepEqual(told.reduced, []);
+});
+
+test("each skip reason has words that follow the product's name", () => {
+  assert.equal(reorderSkipText("unlisted"), "no longer listed");
+  assert.equal(reorderSkipText("out-of-stock"), "out of stock");
+  assert.match(reorderSkipText("cart-full"), /cart is full \(50 products\)/);
+  assert.equal(reorderSkipText("unavailable"), "not available to order right now");
+});
+
+// ---- performReorder: failures and races ---------------------------------------------------------------------------------------
+
+test("a product the store no longer lists (404) is skipped, and the others are still added", async () => {
+  const harness = reorderHarness({ order: { lines: [pastLine(7, 3), pastLine(8, 1)] }, products: { 7: product(7) } });
+  const outcome = await performReorder(harness.options);
+  assert.equal(outcome.status, "done");
+  assert.equal(outcome.view.kind, "review");
+  assert.deepEqual(
+    outcome.result.skipped.map((item) => item.sku_id),
+    [8]
+  );
+  assert.equal(cartQuantity(harness.current.cart, 7), 5);
+});
+
+test("a lookup that fails for any other reason stops the reorder with nothing changed", async () => {
+  for (const status of [500, 503, 0, 401]) {
+    const harness = reorderHarness({ order: { lines: [pastLine(7, 3), pastLine(8, 1)] }, products: { 7: product(7), 8: product(8) } });
+    const original = harness.options.getProduct;
+    harness.options.getProduct = async (id) => {
+      if (id === 8) throw Object.assign(new Error("boom"), { status });
+      return original(id);
+    };
+    const before = harness.current.cart;
+    const outcome = await performReorder(harness.options);
+    assert.equal(outcome.status, "failed", `status ${status}`);
+    assert.equal(outcome.view.retry, true);
+    assert.equal(outcome.view.message, "We couldn't check what's available right now. Your cart hasn't changed. Try again.");
+    assert.equal(harness.current.cart, before);
+  }
+});
+
+test("an order that is gone, empty or unreadable is told, and the cart is untouched", async () => {
+  const gone = reorderHarness();
+  gone.options.getOrder = async () => {
+    throw Object.assign(new Error("not found"), { status: 404 });
+  };
+  const goneOutcome = await performReorder(gone.options);
+  assert.equal(goneOutcome.status, "failed");
+  assert.equal(goneOutcome.view.message, "This order isn't available.");
+  assert.equal(goneOutcome.view.retry, false);
+
+  const empty = reorderHarness({ order: { lines: [] } });
+  const emptyOutcome = await performReorder(empty.options);
+  assert.equal(emptyOutcome.status, "failed");
+  assert.equal(emptyOutcome.view.message, "This order has no items to add. Your cart hasn't changed.");
+
+  const odd = reorderHarness({ order: null });
+  assert.equal((await performReorder(odd.options)).status, "failed");
+});
+
+test("nothing is looked up for a product twice, and only four are in flight at once", async () => {
+  const lines = Array.from({ length: 12 }, (_, index) => pastLine(index + 1, 1));
+  const products = Object.fromEntries(lines.map((line) => [line.sku_id, product(line.sku_id)]));
+  const harness = reorderHarness({ order: { lines: [...lines, pastLine(1, 1)] }, products, cart: emptyCart() });
+  let inFlight = 0;
+  let peak = 0;
+  const original = harness.options.getProduct;
+  harness.options.getProduct = async (id) => {
+    inFlight += 1;
+    peak = Math.max(peak, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    inFlight -= 1;
+    return original(id);
+  };
+  const outcome = await performReorder(harness.options);
+  assert.equal(outcome.status, "done");
+  assert.equal(harness.asked.filter((entry) => entry.startsWith("GET product")).length, 12);
+  assert.equal(peak, 4);
+  assert.equal(cartQuantity(harness.current.cart, 1), 2);
+});
+
+test("an account switch while the order is being read drops the whole result", async () => {
+  const harness = reorderHarness();
+  const original = harness.options.getOrder;
+  harness.options.getOrder = async (id) => {
+    const order = await original(id);
+    harness.generation.value = 2;
+    return order;
+  };
+  let applied = false;
+  const apply = harness.options.apply;
+  harness.options.apply = (...args) => {
+    applied = true;
+    return apply(...args);
+  };
+  const before = harness.current.cart;
+  assert.deepEqual(await performReorder(harness.options), { status: "stale" });
+  assert.equal(applied, false);
+  assert.equal(harness.current.cart, before);
+  assert.deepEqual(harness.asked, ["GET order 40"]);
+});
+
+test("an account switch while products are being read drops the result and changes no cart", async () => {
+  const harness = reorderHarness();
+  const original = harness.options.getProduct;
+  harness.options.getProduct = async (id) => {
+    const found = await original(id);
+    harness.generation.value = 2;
+    return found;
+  };
+  let applied = false;
+  const apply = harness.options.apply;
+  harness.options.apply = (...args) => {
+    applied = true;
+    return apply(...args);
+  };
+  const before = harness.current.cart;
+  assert.deepEqual(await performReorder(harness.options), { status: "stale" });
+  assert.equal(applied, false);
+  assert.equal(harness.current.cart, before);
+});
+
+test("a session that ends during a lookup is a stale reorder, not a failed one", async () => {
+  for (const reason of ["stale", "session-expired", "needs-login"]) {
+    const harness = reorderHarness();
+    harness.options.getProduct = async () => {
+      throw Object.assign(new Error("ended"), { reason });
+    };
+    assert.deepEqual(await performReorder(harness.options), { status: "stale" }, reason);
+    const orderHarness = reorderHarness();
+    orderHarness.options.getOrder = async () => {
+      throw Object.assign(new Error("ended"), { reason });
+    };
+    assert.deepEqual(await performReorder(orderHarness.options), { status: "stale" }, reason);
+  }
+});
+
+test("if apply says the owner is gone, the reorder is stale and nothing is claimed", async () => {
+  const harness = reorderHarness();
+  harness.options.apply = () => null;
+  assert.deepEqual(await performReorder(harness.options), { status: "stale" });
+});
+
+test("a cart edited while the products were being read is merged into, never replaced", async () => {
+  const harness = reorderHarness({ cart: cartOf([7, 2]) });
+  const original = harness.options.getProduct;
+  harness.options.getProduct = async (id) => {
+    const found = await original(id);
+    // The retailer changed their cart in the meantime: sku 7 is now 6, and a new product was added.
+    harness.current.cart = updateCartQuantity(updateCartQuantity(harness.current.cart, 7, 6), 3, 4);
+    return found;
+  };
+  const outcome = await performReorder(harness.options);
+  assert.equal(outcome.status, "done");
+  assert.equal(cartQuantity(harness.current.cart, 7), 9);
+  assert.equal(cartQuantity(harness.current.cart, 3), 4);
+});
+
+test("a product that answers with another product's id is not trusted", async () => {
+  const harness = reorderHarness({ products: { 7: product(99) } });
+  const outcome = await performReorder(harness.options);
+  assert.equal(outcome.status, "failed");
 });
