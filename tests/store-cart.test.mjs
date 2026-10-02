@@ -11,14 +11,19 @@ import { test } from "node:test";
 import {
   MAX_CART_LINES,
   MAX_LINE_QUANTITY,
+  acceptStockChanges,
+  cartBarSummary,
   cartQuantity,
   cartReadiness,
   cartStorageKey,
+  describeQuoteError,
   emptyCart,
+  freeDeliveryRemaining,
   quoteMatchesCart,
   quoteRequestBody,
   readStoredCart,
   removeCartLine,
+  removeCartLines,
   restoreCart,
   serializeCart,
   stockLines,
@@ -357,4 +362,120 @@ test("an empty cart is empty whatever the record says", () => {
   const record = recordFor(cart, quoteFor(cart));
   assert.equal(cartReadiness({ cart: emptyCart(), identity, record }).state, "empty");
   assert.equal(cartReadiness({ cart: null, identity, record }).state, "empty");
+});
+
+// ---- accepting a shortage is explicit, and exact ---------------------------------------------------------
+
+const shortQuote = (cart, shortages) => {
+  const quote = quoteFor(cart);
+  quote.lines = quote.lines.map((line) => (shortages[line.sku_id] === undefined ? line : { ...line, within_stock: false, max_orderable: shortages[line.sku_id] }));
+  return quote;
+};
+
+test("accepting a shortage lowers short lines to what is available and removes sold-out ones", () => {
+  const cart = cartOf([12, 5], [40, 2], [77, 9]);
+  const next = acceptStockChanges(cart, shortQuote(cart, { 12: 3, 40: 0 }));
+  assert.deepEqual(next.lines, [
+    { sku_id: 12, quantity: 3 },
+    { sku_id: 77, quantity: 9 }
+  ]);
+  assert.ok(next.revision > cart.revision, "the changed cart is a new revision, so it is re-quoted");
+});
+
+test("accepting changes nothing when nothing is short, and does not touch other lines", () => {
+  const cart = cartOf([12, 5]);
+  assert.equal(acceptStockChanges(cart, quoteFor(cart)), cart);
+  assert.equal(acceptStockChanges(cart, null), cart);
+});
+
+test("removeCartLines drops exactly the named products and ignores unknown ones", () => {
+  const cart = cartOf([1, 1], [2, 2], [3, 3]);
+  assert.deepEqual(removeCartLines(cart, [2, 99]).lines, [
+    { sku_id: 1, quantity: 1 },
+    { sku_id: 3, quantity: 3 }
+  ]);
+  assert.equal(removeCartLines(cart, [99]), cart);
+  assert.equal(removeCartLines(cart, "nope"), cart);
+});
+
+// ---- free delivery, in rupees from the server's own numbers ---------------------------------------------
+
+test("free-delivery progress is the threshold minus the server's subtotal, in rupees", () => {
+  assert.equal(freeDeliveryRemaining({ subtotal: 320.5, free_delivery_above: 500 }), 179.5);
+  assert.equal(freeDeliveryRemaining({ subtotal: 499.99, free_delivery_above: 500 }), 0.01);
+});
+
+test("no progress once the threshold is met, when there is no threshold, or for unusable numbers", () => {
+  assert.equal(freeDeliveryRemaining({ subtotal: 500, free_delivery_above: 500 }), null);
+  assert.equal(freeDeliveryRemaining({ subtotal: 900, free_delivery_above: 500 }), null);
+  assert.equal(freeDeliveryRemaining({ subtotal: 100, free_delivery_above: null }), null);
+  assert.equal(freeDeliveryRemaining({ subtotal: 100 }), null);
+  assert.equal(freeDeliveryRemaining({ subtotal: 100, free_delivery_above: 0 }), null);
+  assert.equal(freeDeliveryRemaining({ subtotal: "100", free_delivery_above: 500 }), null);
+  assert.equal(freeDeliveryRemaining(null), null);
+});
+
+test("floating-point drift never leaks into the rupees shown", () => {
+  assert.equal(freeDeliveryRemaining({ subtotal: 0.1 + 0.2, free_delivery_above: 1 }), 0.7);
+});
+
+// ---- the View cart bar ----------------------------------------------------------------------------------------
+
+test("an empty cart hides the bar", () => {
+  const readiness = cartReadiness({ cart: emptyCart(), identity, record: null });
+  assert.deepEqual(cartBarSummary({ cart: emptyCart(), readiness }), { visible: false, units: 0, total: null });
+  assert.equal(cartBarSummary({ cart: null, readiness }).visible, false);
+});
+
+test("a current quote supplies the packet count and the total", () => {
+  const cart = cartOf([12, 3], [40, 2]);
+  const quote = quoteFor(cart, { total: 321.5 });
+  const readiness = cartReadiness({ cart, identity, record: recordFor(cart, quote) });
+  assert.deepEqual(cartBarSummary({ cart, readiness }), { visible: true, units: 5, total: 321.5 });
+});
+
+test("while the quote is not current the bar counts the cart's packets and shows no total", () => {
+  const cart = cartOf([12, 3], [40, 2]);
+  const old = recordFor(cart, quoteFor(cart, { total: 321.5 }));
+  const changed = updateCartQuantity(cart, 12, 6);
+  const readiness = cartReadiness({ cart: changed, identity, record: old });
+  assert.deepEqual(cartBarSummary({ cart: changed, readiness }), { visible: true, units: 8, total: null });
+});
+
+test("a failed quote still shows the cart, with no total", () => {
+  const cart = cartOf([12, 3]);
+  const readiness = cartReadiness({ cart, identity, record: recordFor(cart, null, { phase: "error" }) });
+  assert.deepEqual(cartBarSummary({ cart, readiness }), { visible: true, units: 3, total: null });
+});
+
+test("a stock review still shows the quote's own count and total", () => {
+  const cart = cartOf([12, 3]);
+  const readiness = cartReadiness({ cart, identity, record: recordFor(cart, shortQuote(cart, { 12: 1 })) });
+  assert.equal(readiness.state, "stock");
+  assert.equal(cartBarSummary({ cart, readiness }).units, 3);
+});
+
+// ---- quote failures are reviewable messages, never an empty cart ---------------------------------------------------
+
+test("a 422 that names products is the unavailable case, with those ids", () => {
+  const error = { status: 422, payload: { detail: { message: "Some products are not available", sku_ids: [3, 9, "x", -1] } } };
+  const described = describeQuoteError(error);
+  assert.equal(described.kind, "unavailable");
+  assert.deepEqual(described.skuIds, [3, 9]);
+  assert.match(described.message, /no longer available/);
+});
+
+test("a 503 is a closed store and says the cart is saved", () => {
+  const described = describeQuoteError({ status: 503, payload: { detail: "Store is not taking orders right now" } });
+  assert.equal(described.kind, "closed");
+  assert.match(described.message, /cart is saved/);
+});
+
+test("anything else, a lost connection included, is the approved failure copy", () => {
+  for (const error of [{ status: 500 }, { status: 422, payload: { detail: [{ msg: "x" }] } }, { reason: "network" }, null, undefined]) {
+    const described = describeQuoteError(error);
+    assert.equal(described.kind, "failed");
+    assert.equal(described.message, "We couldn't update your total. Try again before placing your order.");
+    assert.deepEqual(described.skuIds, []);
+  }
 });
