@@ -1488,3 +1488,160 @@
 .store-account .store-link-button {
   align-self: flex-start;
 }
+
+/* ---- Cart (09-07) ------------------------------------------------------------------------- */
+
+/* View cart: above the bottom navigation and its safe-area padding, so the two never overlap. The
+   footer already reserves clearance for both. Phones only; from 768px the header Cart control
+   takes over (media query below). */
+.store-cart-bar {
+  position: fixed;
+  right: 0;
+  bottom: calc(var(--s-nav-h) + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  z-index: 30;
+  height: var(--s-cart-h);
+  padding: 8px var(--s-gutter);
+  border-top: 1px solid var(--s-border);
+  background: var(--s-surface);
+}
+
+.store-cart-bar button {
+  display: flex;
+  width: 100%;
+  height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--s-orange);
+  color: var(--s-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.store-cart-bar button:focus-visible {
+  outline: 2px solid var(--s-ink);
+  outline-offset: 2px;
+}
+
+.store-cart-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.store-cart-bar__sum {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.store-header__cart {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--s-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.store-header__cart:disabled {
+  color: var(--s-muted);
+  cursor: not-allowed;
+}
+
+.store-header__count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--s-orange);
+  color: var(--s-ink);
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.store-cart__empty {
+  padding: 24px 0;
+}
+
+.store-cart__lines {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  list-style: none;
+}
+
+.store-cart__line {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--s-border);
+}
+
+.store-cart__thumb .store-product-image {
+  width: 64px;
+}
+
+.ascend-storefront .store-cart__name {
+  font-weight: 600;
+}
+
+.ascend-storefront .store-cart__pack,
+.ascend-storefront .store-cart__qty {
+  color: var(--s-muted);
+  font-size: 14px;
+}
+
+.ascend-storefront .store-cart__total {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.store-cart__summary {
+  margin-top: 16px;
+}
+
+.store-cart__totals {
+  display: flex;
+  margin: 8px 0 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.store-cart__totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.store-cart__totals dt,
+.store-cart__totals dd {
+  margin: 0;
+}
+
+.store-cart__grand {
+  padding-top: 8px;
+  border-top: 1px solid var(--s-border);
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .store-cart-bar {
+    display: none;
+  }
+}

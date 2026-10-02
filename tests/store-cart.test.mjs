@@ -12,6 +12,7 @@ import {
   MAX_CART_LINES,
   MAX_LINE_QUANTITY,
   cartQuantity,
+  cartReadiness,
   cartStorageKey,
   emptyCart,
   quoteMatchesCart,
@@ -20,6 +21,7 @@ import {
   removeCartLine,
   restoreCart,
   serializeCart,
+  stockLines,
   updateCartQuantity,
   writeStoredCart
 } from "../lib/store/cart.mjs";
@@ -280,4 +282,79 @@ test("no record, an error record or a malformed quote never matches", () => {
   assert.equal(quoteMatchesCart(recordFor(cart, null), cart, identity), false);
   assert.equal(quoteMatchesCart(recordFor(cart, quoteFor(cart), { phase: "error" }), cart, identity), false);
   assert.equal(quoteMatchesCart(recordFor(cart, { lines: "x" }), cart, identity), false);
+});
+
+// ---- within_stock false is an explicit review state ---------------------------------------------------
+
+test("a current quote with every line in stock is the only ready state", () => {
+  const cart = cartOf([12, 3]);
+  const state = cartReadiness({ cart, identity, record: recordFor(cart, quoteFor(cart)) });
+  assert.equal(state.state, "ready");
+  assert.equal(state.ready, true);
+});
+
+test("within_stock false is a stock review, never ready, and names what is short", () => {
+  const cart = cartOf([12, 3], [40, 1]);
+  const quote = quoteFor(cart);
+  quote.lines[0] = { ...quote.lines[0], within_stock: false, max_orderable: 2, name: "Short snack" };
+  quote.lines[1] = { ...quote.lines[1], within_stock: false, max_orderable: 0 };
+  const state = cartReadiness({ cart, identity, record: recordFor(cart, quote) });
+  assert.equal(state.state, "stock");
+  assert.equal(state.ready, false);
+  assert.deepEqual(state.stock, [
+    { sku_id: 12, name: "Short snack", quantity: 3, max_orderable: 2 },
+    { sku_id: 40, name: null, quantity: 1, max_orderable: 0 }
+  ]);
+  assert.ok(state.quote, "the quote stays available so the lines can be shown");
+});
+
+test("stockLines reads only within_stock false and never invents a cap", () => {
+  assert.deepEqual(stockLines(null), []);
+  assert.deepEqual(stockLines({ lines: "x" }), []);
+  const lines = stockLines({
+    lines: [
+      { sku_id: 1, quantity: 1, within_stock: true, max_orderable: 5 },
+      { sku_id: 2, quantity: 4, within_stock: false, max_orderable: -3 },
+      { sku_id: 3, quantity: 4, within_stock: false, max_orderable: 2.5 }
+    ]
+  });
+  assert.deepEqual(
+    lines.map((line) => [line.sku_id, line.max_orderable]),
+    [
+      [2, 0],
+      [3, 0]
+    ]
+  );
+});
+
+test("an earlier quote never makes a changed cart ready", () => {
+  const cart = cartOf([12, 3]);
+  const record = recordFor(cart, quoteFor(cart));
+  const changed = updateCartQuantity(cart, 12, 4);
+  const state = cartReadiness({ cart: changed, identity, record });
+  assert.equal(state.state, "updating");
+  assert.equal(state.ready, false);
+  assert.equal(state.quote, null, "the earlier quote's totals are not exposed");
+});
+
+test("a quote for another identity or an error is never ready", () => {
+  const cart = cartOf([12, 3]);
+  const record = recordFor(cart, quoteFor(cart));
+  assert.equal(cartReadiness({ cart, identity: { generation: 9, retailerId: 6 }, record }).ready, false);
+  assert.equal(cartReadiness({ cart, identity, record: { ...record, phase: "error", quote: null } }).state, "error");
+  assert.equal(cartReadiness({ cart, identity, record: { ...record, phase: "updating", quote: null } }).state, "updating");
+  assert.equal(cartReadiness({ cart, identity, record: null }).state, "updating");
+});
+
+test("a server quote that does not price the cart's lines is an error, not a total", () => {
+  const cart = cartOf([12, 3]);
+  const wrong = recordFor(cart, quoteFor(cartOf([12, 2])));
+  assert.equal(cartReadiness({ cart, identity, record: wrong }).state, "error");
+});
+
+test("an empty cart is empty whatever the record says", () => {
+  const cart = cartOf([12, 3]);
+  const record = recordFor(cart, quoteFor(cart));
+  assert.equal(cartReadiness({ cart: emptyCart(), identity, record }).state, "empty");
+  assert.equal(cartReadiness({ cart: null, identity, record }).state, "empty");
 });

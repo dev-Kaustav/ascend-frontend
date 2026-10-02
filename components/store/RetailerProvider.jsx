@@ -1,7 +1,19 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import dynamic from "next/dynamic";
+import SheetHost from "@/components/store/SheetHost";
+import {
+  cartQuantity,
+  cartReadiness,
+  cartUnitCount,
+  emptyCart,
+  quoteRequestBody,
+  readStoredCart,
+  removeCartLine,
+  updateCartQuantity,
+  writeStoredCart
+} from "@/lib/store/cart.mjs";
+import { createRequestGate } from "@/lib/store/catalogue.mjs";
 import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
@@ -30,14 +42,10 @@ import {
 // The provider never blocks rendering: whatever the state (loading, anonymous, expired, error)
 // the shell and the public catalogue stay usable.
 
-// Loaded only when a sheet opens, so public browsing never downloads them (or Firebase, or Maps).
-const RetailerLoginSheet = dynamic(() => import("@/components/store/RetailerLoginSheet"), { ssr: false });
-const ShopSheet = dynamic(() => import("@/components/store/ShopSheet"), { ssr: false });
-const AddressSheet = dynamic(() => import("@/components/store/AddressSheet"), { ssr: false });
-
 const SHEETS = ["login", "shop", "address", "cart"];
 const getServerSnapshot = () => undefined;
 const NO_ADDRESSES = [];
+const NO_LINES = {};
 
 // The remembered address id lives in localStorage, an external store: other tabs change it (the
 // storage event) and this tab's own writes notify the same subscribers.
@@ -71,6 +79,7 @@ const RetailerContext = createContext({
   pendingIntent: null,
   addresses: [],
   selectedAddress: null,
+  cart: null,
   refreshMe: () => {},
   reloadMe: async () => null,
   applyMe: () => false,
@@ -83,6 +92,100 @@ const RetailerContext = createContext({
   closeSheet: () => {},
   logout: () => {}
 });
+
+// ---- Cart -----------------------------------------------------------------------------------------
+// The cart is the retailer's intent (SKU ids and whole packets) under ascend_store_cart:<retailer_id>.
+// It exists only for a ready retailer and only for the identity it was restored under: a new
+// generation or retailer drops the visible cart at once and restores that retailer's own. Prices come
+// only from POST /store/cart/quote, asked for one cart revision under one session generation; an
+// answer that is not for the cart now on screen is ignored (see cartReadiness).
+const QUOTE_DELAY_MS = 150; // quick taps on a stepper become one request
+
+function useCartState({ ready, retailerId, generation }) {
+  const ownerKey = ready && retailerId != null && generation != null ? `${generation}:${retailerId}` : null;
+  const identity = useMemo(() => (ownerKey ? { generation, retailerId } : null), [ownerKey, generation, retailerId]);
+  const [record, setRecord] = useState(null); // { owner, retailerId, cart }
+  const recordRef = useRef(null);
+  const ownerRef = useRef(null);
+  const [quote, setQuote] = useState(null); // the latest quote request: { phase, identity, revision, quote, error }
+  const [known, setKnown] = useState({ owner: null, lines: {} }); // last quoted product data, for display only
+  const [retries, setRetries] = useState(0);
+
+  // The owner changed (sign-in, sign-out, a switched account): drop the old cart from view in this
+  // very render and restore the new owner's own, so another retailer's lines are never shown. A ready
+  // retailer exists only in the browser, so the server render and hydration never read storage here.
+  if (ownerKey !== (record?.owner ?? null)) {
+    setRecord(ownerKey ? { owner: ownerKey, retailerId, cart: readStoredCart(browserStorage(), retailerId) } : null);
+  }
+  useEffect(() => {
+    recordRef.current = record;
+    ownerRef.current = ownerKey;
+  });
+
+  const cart = record && record.owner === ownerKey ? record.cart : null;
+
+  useEffect(() => {
+    if (!cart || !identity || cart.lines.length === 0) return undefined;
+    const asked = { identity, revision: cart.revision };
+    const gate = createRequestGate();
+    const token = gate.begin();
+    const timer = setTimeout(() => {
+      storeFetch(storeEndpoints.quote, { method: "POST", body: JSON.stringify(quoteRequestBody(cart)) })
+        .then((answer) => {
+          if (!gate.isCurrent(token) || getSessionGeneration() !== identity.generation) return;
+          setQuote({ phase: "ready", ...asked, quote: answer, error: null });
+          const owner = `${identity.generation}:${identity.retailerId}`;
+          const lines = {};
+          for (const line of Array.isArray(answer?.lines) ? answer.lines : []) lines[line.sku_id] = line;
+          setKnown((previous) => ({ owner, lines: { ...(previous.owner === owner ? previous.lines : {}), ...lines } }));
+        })
+        .catch((error) => {
+          if (!gate.isCurrent(token) || isStaleStoreError(error)) return;
+          // The session ended while this ran: the provider is about to go anonymous and drop the cart.
+          if (error?.reason === "session-expired" || error?.reason === "needs-login") return;
+          setQuote({ phase: "error", ...asked, quote: null, error });
+        });
+    }, QUOTE_DELAY_MS);
+    return () => {
+      clearTimeout(timer);
+      gate.invalidate();
+    };
+  }, [cart, identity, retries]);
+
+  // Applies a change to the cart on screen, if it still belongs to the current owner, and remembers
+  // it. A change that does nothing returns the same cart and is not re-quoted.
+  const commit = useCallback((change) => {
+    const current = recordRef.current;
+    if (!current || current.owner !== ownerRef.current) return;
+    const next = change(current.cart);
+    if (next === current.cart) return;
+    recordRef.current = { ...current, cart: next };
+    writeStoredCart(browserStorage(), current.retailerId, next);
+    setRecord(recordRef.current);
+  }, []);
+
+  const readiness = useMemo(() => cartReadiness({ cart: cart ?? emptyCart(), identity, record: quote }), [cart, identity, quote]);
+  const knownLines = known.owner === ownerKey ? known.lines : NO_LINES;
+
+  return useMemo(() => {
+    if (!cart) return null;
+    return {
+      lines: cart.lines,
+      revision: cart.revision,
+      unitCount: cartUnitCount(cart),
+      quantityOf: (skuId) => cartQuantity(cart, skuId),
+      setQuantity: (skuId, quantity, max) => commit((current) => updateCartQuantity(current, skuId, quantity, max)),
+      removeLine: (skuId) => commit((current) => removeCartLine(current, skuId)),
+      retryQuote: () => {
+        setQuote(null);
+        setRetries((count) => count + 1);
+      },
+      readiness,
+      quoteError: quote?.phase === "error" ? quote.error : null,
+      known: knownLines
+    };
+  }, [cart, commit, readiness, quote, knownLines]);
+}
 
 export function RetailerProvider({ children }) {
   const snapshot = useSyncExternalStore(subscribeRetailerSession, getRetailerSession, getServerSnapshot);
@@ -180,7 +283,7 @@ export function RetailerProvider({ children }) {
   // without asking (onboarding is the server's answer, so a reload resumes it).
   let activeSheet = null;
   if (sheetState && (sheetState.name === "login" || sheetState.generation === generation)) activeSheet = sheetState.name;
-  if (activeSheet === "address" && readiness !== "ready") activeSheet = null;
+  if ((activeSheet === "address" || activeSheet === "cart") && readiness !== "ready") activeSheet = null;
   if (activeSheet === "shop" && readiness === "anonymous") activeSheet = null;
   if (activeSheet === null && needsShop && promptDone !== generation) activeSheet = "shop";
 
@@ -196,6 +299,10 @@ export function RetailerProvider({ children }) {
     () => null
   );
   const selectedAddress = useMemo(() => resolveSelectedAddress({ addresses, storedId }), [addresses, storedId]);
+
+  // The cart seam Catalogue's controls read: { quantityOf, setQuantity, ... }, null until a ready
+  // retailer's own cart has been restored.
+  const cart = useCartState({ ready: state.canPurchase, retailerId, generation });
 
   // list defaults to what is rendered; a caller that has just reloaded passes the fresh list, since
   // its own render has not happened yet. An id the server does not list is never selected.
@@ -284,6 +391,7 @@ export function RetailerProvider({ children }) {
       pendingIntent,
       addresses,
       selectedAddress,
+      cart,
       refreshMe,
       reloadMe,
       applyMe,
@@ -303,6 +411,7 @@ export function RetailerProvider({ children }) {
       pendingIntent,
       addresses,
       selectedAddress,
+      cart,
       refreshMe,
       reloadMe,
       applyMe,
@@ -330,10 +439,7 @@ export function RetailerProvider({ children }) {
       >
         {children}
       </div>
-      {activeSheet === "login" ? <RetailerLoginSheet intent={pendingIntent} onClose={dismissLogin} /> : null}
-      {/* Keyed by identity: a switched account starts a fresh form, never the previous one's draft. */}
-      {activeSheet === "shop" ? <ShopSheet key={generation} intent={pendingIntent} onClose={dismissLogin} /> : null}
-      {activeSheet === "address" ? <AddressSheet key={generation} onClose={closeSheet} /> : null}
+      <SheetHost active={activeSheet} generation={generation} intent={pendingIntent} onDismissLogin={dismissLogin} onClose={closeSheet} />
     </RetailerContext.Provider>
   );
 }

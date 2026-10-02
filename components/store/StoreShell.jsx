@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MapPin, Search, X } from "lucide-react";
+import { MapPin, Search, ShoppingCart, X } from "lucide-react";
 import { Suspense, useRef, useState } from "react";
 import BottomNavigation, { STORE_NAV_ITEMS } from "@/components/store/BottomNavigation";
 import { useRetailer, useRetailerLinkGate } from "@/components/store/RetailerProvider";
 import { listingHref, parseListingParams } from "@/lib/store/catalogue.mjs";
+import { formatCurrency } from "@/lib/format";
 import { headerAddressLabel } from "@/lib/store/maps.mjs";
 
 // Native GET form, so search works before any client code runs; once hydrated it navigates in
@@ -74,6 +75,57 @@ function HeaderSearch() {
   );
 }
 
+// The cart is reached from two places: the View cart bar above the bottom navigation on phones and a
+// Cart control in the header from 768px up (store.css shows one at a time). Both open the same cart
+// sheet through the provider, which keeps one sheet on screen.
+function CartBar() {
+  const { cart, openSheet } = useRetailer();
+  if (!cart || cart.lines.length === 0) return null;
+  const { ready, quote } = cart.readiness;
+  const units = quote ? quote.lines.reduce((sum, line) => sum + line.quantity, 0) : cart.unitCount;
+  const total = quote ? formatCurrency(quote.total) : null;
+  return (
+    <div className="store-cart-bar">
+      <button
+        type="button"
+        onClick={() => openSheet("cart")}
+        aria-label={`View cart, ${units} ${units === 1 ? "packet" : "packets"}${total ? `, ${total}` : ""}`}
+        data-quote-current={ready ? "true" : "false"}
+      >
+        <span className="store-cart-bar__label">
+          <ShoppingCart size={20} strokeWidth={2} aria-hidden="true" />
+          View cart
+        </span>
+        <span className="store-cart-bar__sum">
+          {units} {units === 1 ? "packet" : "packets"}
+          {total ? ` · ${total}` : ""}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function HeaderCart() {
+  const { cart, openSheet, requireRetailer, readiness } = useRetailer();
+  const units = cart ? cart.unitCount : 0;
+  return (
+    <button
+      type="button"
+      className="store-header__cart"
+      disabled={readiness === "loading"}
+      aria-label={units > 0 ? `Cart, ${units} ${units === 1 ? "packet" : "packets"}` : "Cart"}
+      onClick={() => {
+        if (cart) openSheet("cart");
+        else requireRetailer(null);
+      }}
+    >
+      <ShoppingCart size={20} strokeWidth={1.75} aria-hidden="true" />
+      Cart
+      {units > 0 ? <span className="store-header__count">{units}</span> : null}
+    </button>
+  );
+}
+
 export default function StoreShell({ children }) {
   const pathname = usePathname() || "/";
   const gate = useRetailerLinkGate();
@@ -122,6 +174,7 @@ export default function StoreShell({ children }) {
                 {label}
               </Link>
             ))}
+            <HeaderCart />
           </nav>
         </div>
       </header>
@@ -135,6 +188,7 @@ export default function StoreShell({ children }) {
         <Link href="/login">Staff sign in</Link>
       </footer>
 
+      <CartBar />
       <BottomNavigation />
     </div>
   );
