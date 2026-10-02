@@ -2062,3 +2062,111 @@
 .store-order-placed__line {
   display: block;
 }
+
+/* ---- Checkout (09-08) ---------------------------------------------------------------------- */
+/* Inside the cart's fixed footer: the chosen address, the payment line and the one Place order. The
+   footer scrolls on its own when an outcome message makes it taller than a short phone screen, so
+   the lines above it are never pushed out of reach. */
+
+.store-sheet--cart .store-sheet__foot {
+  max-height: 60vh;
+  max-height: 60dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.store-checkout {
+  display: flex;
+  margin-top: 8px;
+  padding-top: 10px;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--s-border);
+}
+
+.store-checkout__address {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.store-checkout__where {
+  min-width: 0;
+}
+
+.ascend-storefront .store-checkout__label {
+  color: var(--s-muted);
+  font-size: 12px;
+}
+
+.ascend-storefront .store-checkout__name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ascend-storefront .store-checkout__rest {
+  overflow: hidden;
+  color: var(--s-muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ascend-storefront .store-checkout__hint,
+.ascend-storefront .store-checkout__payment {
+  font-size: 14px;
+}
+
+.ascend-storefront .store-checkout__payment {
+  color: var(--s-muted);
+}
+
+.store-checkout__address .store-link-button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 8px;
+}
+
+.store-checkout__place {
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+}
+
+.store-checkout__place:disabled {
+  background: #ececea;
+  color: var(--s-muted);
+  cursor: not-allowed;
+}
+
+.store-checkout__uncertain,
+.store-checkout__placed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.store-checkout__uncertain {
+  padding: 12px;
+  border: 1px solid var(--s-destructive);
+  border-radius: 8px;
+  background: #fdf3ed;
+}
+
+.store-checkout__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

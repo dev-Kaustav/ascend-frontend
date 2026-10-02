@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
+import Checkout from "@/components/store/Checkout";
 import ProductImage from "@/components/store/ProductImage";
 import { useRetailer } from "@/components/store/RetailerProvider";
 import SheetFrame from "@/components/store/SheetFrame";
@@ -149,6 +150,7 @@ export default function CartSheet({ onClose }) {
           </>
         ) : null}
         {quote ? <Totals quote={quote} /> : null}
+        <Checkout />
       </div>
     );
   }

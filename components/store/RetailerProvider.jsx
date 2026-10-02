@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import SheetHost from "@/components/store/SheetHost";
 import {
@@ -7,17 +8,29 @@ import {
   acceptStockChanges,
   cartReadiness,
   cartUnitCount,
+  clearCart,
   describeQuoteError,
   emptyCart,
   quoteRequestBody,
   readStoredCart,
   removeCartLine,
   removeCartLines,
+  sameCartLines,
+  storedCartMatches,
   updateCartQuantity,
   writeStoredCart
 } from "@/lib/store/cart.mjs";
 import { createRequestGate } from "@/lib/store/catalogue.mjs";
-import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+import {
+  IDLE_CHECKOUT,
+  checkoutGate,
+  checkoutView,
+  createCheckoutController,
+  isStaleStoreError,
+  storeEndpoints,
+  storeFetch
+} from "@/lib/store/api.mjs";
+import { historyEntry } from "@/lib/store/sheet-history";
 import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
   clearSelectedAddressId,
@@ -83,6 +96,7 @@ const RetailerContext = createContext({
   addresses: [],
   selectedAddress: null,
   cart: null,
+  checkout: null,
   refreshMe: () => {},
   reloadMe: async () => null,
   applyMe: () => false,
@@ -167,10 +181,31 @@ function useCartState({ ready, retailerId, generation }) {
     setRecord(recordRef.current);
   }, []);
 
+  // A confirmed order empties the cart it was placed for, and only that cart, only while it is still
+  // what was ordered. On screen for the same session: the revision must be the one that was sent (a
+  // change made while the order was in flight is later intent and stays). Otherwise (signed out or
+  // another account since): the stored cart of the ordering retailer, if its lines are unchanged.
+  const settleOrdered = useCallback(
+    ({ owner, items }) => {
+      const current = recordRef.current;
+      if (current && current.owner === `${owner.generation}:${owner.retailerId}`) {
+        commit((cart) => (cart.revision === owner.revision ? clearCart(cart) : cart));
+        return;
+      }
+      const storage = browserStorage();
+      if (!storedCartMatches(storage, owner.retailerId, items)) return;
+      writeStoredCart(storage, owner.retailerId, emptyCart());
+      if (current && String(current.retailerId) === String(owner.retailerId)) {
+        commit((cart) => (sameCartLines(cart, items) ? clearCart(cart) : cart));
+      }
+    },
+    [commit]
+  );
+
   const readiness = useMemo(() => cartReadiness({ cart: cart ?? emptyCart(), identity, record: quote }), [cart, identity, quote]);
   const knownLines = known.owner === ownerKey ? known.lines : NO_LINES;
 
-  return useMemo(() => {
+  const cartApi = useMemo(() => {
     if (!cart) return null;
     return {
       lines: cart.lines,
@@ -192,9 +227,12 @@ function useCartState({ ready, retailerId, generation }) {
       known: knownLines
     };
   }, [cart, commit, readiness, quote, knownLines]);
+
+  return { cart: cartApi, identity, settleOrdered };
 }
 
 export function RetailerProvider({ children }) {
+  const router = useRouter();
   const snapshot = useSyncExternalStore(subscribeRetailerSession, getRetailerSession, getServerSnapshot);
   // Stamped with the generation it was requested under, so the result for a previous account
   // is never shown after a logout or an account switch (see deriveRetailerState).
@@ -206,6 +244,9 @@ export function RetailerProvider({ children }) {
   const [promptDone, setPromptDone] = useState(null); // generation whose shop prompt was answered
   const [pendingIntent, setPendingIntent] = useState(null);
   const intentRef = useRef(null);
+  // Set when the address sheet was opened from the cart: closing it returns to the cart (the order
+  // is not resumed by itself, Place order is still pressed again).
+  const returnToCartRef = useRef(false);
 
   const state = useMemo(() => deriveRetailerState(snapshot, meRecord), [snapshot, meRecord]);
   const generation = snapshot?.generation ?? null;
@@ -272,12 +313,17 @@ export function RetailerProvider({ children }) {
 
   const openSheet = useCallback((name) => {
     // One active sheet: opening one replaces the other instead of stacking behind it.
+    returnToCartRef.current = false;
     setSheetState(SHEETS.includes(name) ? { name, generation: getSessionGeneration() } : null);
   }, []);
   // Closing also answers the shop prompt for this identity, so a dismissed shop sheet is not
-  // pushed back at the person until they reload or try something that needs a shop.
+  // pushed back at the person until they reload or try something that needs a shop. An address
+  // sheet that was opened from the cart hands back to the cart instead of leaving the person at the
+  // page behind it.
   const closeSheet = useCallback(() => {
-    setSheetState(null);
+    const backToCart = returnToCartRef.current;
+    returnToCartRef.current = false;
+    setSheetState((current) => (backToCart && current?.name === "address" ? { name: "cart", generation: getSessionGeneration() } : null));
     setPromptDone(getSessionGeneration());
   }, []);
 
@@ -309,7 +355,18 @@ export function RetailerProvider({ children }) {
 
   // The cart seam Catalogue's controls read: { quantityOf, setQuantity, ... }, null until a ready
   // retailer's own cart has been restored.
-  const cart = useCartState({ ready: state.canPurchase, retailerId, generation });
+  const { cart, identity: cartIdentity, settleOrdered } = useCartState({ ready: state.canPurchase, retailerId, generation });
+
+  // ---- Placing the order -----------------------------------------------------------------------
+  // One controller for the whole provider, so an order in flight survives the cart sheet closing and
+  // is still the only one. It decides nothing about prices: the order carries SKU ids, packets and the
+  // address id, and everything shown afterwards is what the server returned or what the order page
+  // reads back.
+  const [checkoutController] = useState(() => createCheckoutController({ getGeneration: getSessionGeneration }));
+  const checkoutState = useSyncExternalStore(checkoutController.subscribe, checkoutController.getState, () => IDLE_CHECKOUT);
+  useEffect(() => {
+    checkoutController.sync(cartIdentity);
+  }, [checkoutController, cartIdentity]);
 
   // list defaults to what is rendered; a caller that has just reloaded passes the fresh list, since
   // its own render has not happened yet. An id the server does not list is never selected.
@@ -359,13 +416,87 @@ export function RetailerProvider({ children }) {
 
   // Header location and Account: a ready retailer picks an address; anyone else is taken to the
   // sheet that gets them there (login, or finishing the shop). Nothing is held to resume.
-  const openAddresses = useCallback(() => {
-    if (state.readiness === "ready") openSheet("address");
-    else if (state.readiness === "error") refreshMe();
-    else if (state.readiness === "anonymous" || state.readiness === "new" || state.readiness === "confirm") {
-      requireRetailer(null);
-    }
-  }, [state.readiness, requireRetailer, refreshMe, openSheet]);
+  // options.returnTo "cart": closing the address sheet goes back to the cart it was opened from.
+  const openAddresses = useCallback(
+    (options) => {
+      if (state.readiness === "ready") {
+        openSheet("address");
+        returnToCartRef.current = options?.returnTo === "cart";
+      } else if (state.readiness === "error") {
+        refreshMe();
+      } else if (state.readiness === "anonymous" || state.readiness === "new" || state.readiness === "confirm") {
+        requireRetailer(null);
+      }
+    },
+    [state.readiness, requireRetailer, refreshMe, openSheet]
+  );
+
+  // ---- Checkout actions ------------------------------------------------------------------------
+  // What Place order reads at the moment it is pressed, not what the last render saw: the latest cart,
+  // quote readiness, selected address and identity, kept in a ref that every render refreshes.
+  const liveRef = useRef({ identity: null, cart: null, address: null });
+  useEffect(() => {
+    liveRef.current = { identity: cartIdentity, cart, address: selectedAddress };
+  });
+
+  const view = useMemo(() => checkoutView(checkoutState, cartIdentity, cart?.revision ?? null), [checkoutState, cartIdentity, cart]);
+  const gate = useMemo(
+    () =>
+      checkoutGate({
+        canPurchase: state.canPurchase,
+        lineCount: cart?.lines.length ?? 0,
+        readiness: cart?.readiness ?? null,
+        address: selectedAddress,
+        addresses,
+        view
+      }),
+    [state.canPurchase, cart, selectedAddress, addresses, view]
+  );
+
+  const placeOrder = useCallback(() => {
+    const live = liveRef.current;
+    if (!live.identity || !live.cart || !live.cart.readiness.ready || !live.address) return Promise.resolve({ sent: false, reason: "not-ready" });
+    const addressId = live.address.id;
+    const owner = { generation: live.identity.generation, retailerId: live.identity.retailerId, revision: live.cart.revision };
+    return checkoutController.submit({
+      owner,
+      items: live.cart.lines,
+      addressId,
+      // The list is asked for again after the lock is taken and before the send: an address deleted
+      // elsewhere (or another tab) must not receive an order. null means the account changed meanwhile.
+      confirmAddress: async () => {
+        const fresh = await reloadMe();
+        if (!fresh) return null;
+        return (fresh.addresses ?? []).some((address) => String(address.id) === String(addressId));
+      },
+      isCurrent: () => {
+        const now = liveRef.current;
+        return (
+          now.identity?.generation === owner.generation &&
+          now.cart?.revision === owner.revision &&
+          now.cart.readiness.ready &&
+          String(now.address?.id) === String(addressId)
+        );
+      }
+    });
+  }, [checkoutController, reloadMe]);
+
+  // A confirmed order: its cart is settled (cleared only if unchanged) for whoever placed it, and the
+  // retailer who is still signed in is taken to the durable order page, which reads the order back.
+  useEffect(() => {
+    checkoutController.setOnConfirmed(({ order, owner, items }) => {
+      settleOrdered({ owner, items });
+      const live = liveRef.current;
+      if (live.identity && live.identity.generation === owner.generation && String(live.identity.retailerId) === String(owner.retailerId)) {
+        // The sheet's history entry is replaced by the order page, so Back returns to where the cart was opened.
+        historyEntry.open = false;
+        router.replace(`/orders/${order.id}?placed=1`);
+        closeSheet();
+      }
+    });
+  });
+
+  const checkout = useMemo(() => (cart ? { view, gate, placeOrder } : null), [cart, view, gate, placeOrder]);
 
   // Clears the retailer session only; the staff session is a different storage key and is not
   // read or touched. No navigation: the visitor returns to browsing where they are.
@@ -399,6 +530,7 @@ export function RetailerProvider({ children }) {
       addresses,
       selectedAddress,
       cart,
+      checkout,
       refreshMe,
       reloadMe,
       applyMe,
@@ -419,6 +551,7 @@ export function RetailerProvider({ children }) {
       addresses,
       selectedAddress,
       cart,
+      checkout,
       refreshMe,
       reloadMe,
       applyMe,
