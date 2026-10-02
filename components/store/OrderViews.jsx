@@ -6,6 +6,7 @@ import ProductImage from "@/components/store/ProductImage";
 import { useRetailer } from "@/components/store/RetailerProvider";
 import { formatCurrency } from "@/lib/format";
 import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
+import { reorderSkipText } from "@/lib/store/cart.mjs";
 import { createRequestGate } from "@/lib/store/catalogue.mjs";
 import {
   describeInvoiceError,
@@ -184,6 +185,72 @@ function RefreshButton({ onClick, busy, label }) {
   );
 }
 
+// ---- reorder ---------------------------------------------------------------------------------------------
+// Reorder reads the order and today's products, merges them into the cart already on screen and opens the
+// cart for review (RetailerProvider.reorder). It is a button of its own, never part of the link to the
+// order, and it never places anything: the retailer still reviews the cart and presses Place order.
+
+function ReorderButton({ orderId, lines, className = "store-button store-button--secondary" }) {
+  const { reorder } = useRetailer();
+  const working = reorder?.view?.phase === "working";
+  const mine = working && reorder.view.orderId === orderId;
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled={!reorder || working}
+      aria-label={`Reorder ${orderReference(orderId)}`}
+      onClick={() => reorder.run({ orderId, lines })}
+    >
+      {mine ? "Adding to cart" : "Reorder"}
+    </button>
+  );
+}
+
+/** The named products a reorder skipped or lowered. Used on the order pages and in the cart review. */
+export function ReorderSummary({ view }) {
+  if (!view || (view.skipped.length === 0 && view.reduced.length === 0)) return null;
+  return (
+    <ul className="store-reorder__list">
+      {view.skipped.map((item) => (
+        <li key={`s${item.sku_id}`}>
+          {item.name}: {reorderSkipText(item.reason)}
+        </li>
+      ))}
+      {view.reduced.map((item) => (
+        <li key={`r${item.sku_id}`}>
+          {item.name}: only {item.quantity} available, you asked for {item.wanted}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// What a reorder says when it did not open the cart: nothing could be added (the cart is as it was), or it
+// could not be checked. The success path is told in the cart, where the review happens.
+function ReorderNotice({ lines }) {
+  const { reorder } = useRetailer();
+  const view = reorder?.view;
+  if (!view || (view.phase !== "none" && view.phase !== "failed")) return null;
+  const detail = view.view;
+  return (
+    <div className="store-reorder store-order-notice" role={view.phase === "failed" ? "alert" : "status"} data-reorder={view.phase}>
+      <p>{detail.message}</p>
+      <ReorderSummary view={detail} />
+      <div className="store-reorder__actions">
+        {detail.retry ? (
+          <button type="button" className="store-link-button" onClick={() => reorder.run({ orderId: view.orderId, lines })}>
+            Try again
+          </button>
+        ) : null}
+        <button type="button" className="store-link-button" onClick={reorder.dismiss}>
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---- history ---------------------------------------------------------------------------------------------
 
 function OrderRow({ order }) {
@@ -199,6 +266,9 @@ function OrderRow({ order }) {
         <span className="store-order-card__meta">{[date, products].filter(Boolean).join(" · ")}</span>
         <span className="store-order-card__total">{order.total === null ? "" : formatCurrency(order.total)}</span>
       </Link>
+      <div className="store-order-card__actions">
+        <ReorderButton orderId={order.id} />
+      </div>
     </li>
   );
 }
@@ -255,6 +325,8 @@ function History({ page }) {
           ) : null}
         </div>
       ) : null}
+
+      <ReorderNotice />
 
       {data && error && error.kind === "failed" ? (
         <div className="store-order-notice" role="alert">
@@ -602,7 +674,14 @@ function Detail({ id, placed }) {
           <StatusChip status={order.status} />
         </p>
         <ProgressSteps status={order.status} />
+        {order.lines.length > 0 ? (
+          <div className="store-order-block__actions">
+            <ReorderButton orderId={order.id} lines={order.lines.map(({ sku_id, quantity, name }) => ({ sku_id, quantity, name }))} />
+          </div>
+        ) : null}
       </div>
+
+      <ReorderNotice lines={order.lines.map(({ sku_id, quantity, name }) => ({ sku_id, quantity, name }))} />
 
       <div className="store-order-block" aria-labelledby="store-order-items">
         <h2 id="store-order-items">Items</h2>

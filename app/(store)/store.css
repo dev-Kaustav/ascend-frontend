@@ -2199,3 +2199,55 @@
   width: 100%;
   text-align: center;
 }
+
+/* ---- Reorder (09-10) ------------------------------------------------------------------------- */
+
+.store-order-card__actions {
+  display: flex;
+  padding: 0 16px 12px;
+}
+
+.store-order-card__actions .store-button {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.store-order-block__actions {
+  display: flex;
+  margin-top: 12px;
+}
+
+.store-reorder {
+  min-width: 0;
+}
+
+.store-order-notice.store-reorder {
+  display: block;
+  color: var(--s-ink);
+  border-color: var(--s-border);
+}
+
+.store-reorder__list {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.store-reorder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+
+.store-cart__reorder {
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: var(--s-surface-alt);
+}
+
+.store-cart__reorder p {
+  margin: 0;
+}

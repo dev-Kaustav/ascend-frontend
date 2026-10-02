@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
 import Checkout from "@/components/store/Checkout";
+import { ReorderSummary } from "@/components/store/OrderViews";
 import ProductImage from "@/components/store/ProductImage";
 import { useRetailer } from "@/components/store/RetailerProvider";
 import SheetFrame from "@/components/store/SheetFrame";
@@ -124,7 +125,8 @@ function reviewItems(cart, review) {
 }
 
 export default function CartSheet({ onClose }) {
-  const { cart, checkout } = useRetailer();
+  const { cart, checkout, reorder } = useRetailer();
+  const reorderReview = reorder?.view?.phase === "review" ? reorder.view.view : null;
   const readiness = cart?.readiness;
   const quote = readiness?.quote ?? null;
   const priced = new Map((quote?.lines ?? []).map((line) => [line.sku_id, line]));
@@ -194,6 +196,15 @@ export default function CartSheet({ onClose }) {
         </div>
       ) : (
         <>
+          {reorderReview ? (
+            <div className="store-reorder store-cart__reorder" role="status" data-reorder="review">
+              <p>{reorderReview.message}</p>
+              <ReorderSummary view={reorderReview} />
+              <button type="button" className="store-link-button" onClick={reorder.dismiss}>
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           {reviewing ? (
             <div className="store-cart__review" role="alert">
               <p>Availability changed. Review these items before placing your order.</p>

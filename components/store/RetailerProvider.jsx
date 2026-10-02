@@ -12,7 +12,9 @@ import {
   clearCart,
   describeQuoteError,
   emptyCart,
+  performReorder,
   quoteRequestBody,
+  reconcileReorder,
   readStoredCart,
   removeCartLine,
   removeCartLines,
@@ -31,7 +33,7 @@ import {
   storeEndpoints,
   storeFetch
 } from "@/lib/store/api.mjs";
-import { normalizeOrderList } from "@/lib/store/orders.mjs";
+import { normalizeOrderDetail, normalizeOrderList } from "@/lib/store/orders.mjs";
 import { historyEntry } from "@/lib/store/sheet-history";
 import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
@@ -99,6 +101,7 @@ const RetailerContext = createContext({
   selectedAddress: null,
   cart: null,
   checkout: null,
+  reorder: null,
   refreshMe: () => {},
   reloadMe: async () => null,
   applyMe: () => false,
@@ -204,6 +207,21 @@ function useCartState({ ready, retailerId, generation }) {
     [commit]
   );
 
+  // A reorder is merged into the cart that is on screen when its reads finish, not the one there was when it
+  // began, so a change made in between is kept. It counts only for the owner that asked: for anyone else
+  // (signed out or another account since) nothing is touched and null comes back.
+  const reorderInto = useCallback((lines, products, owner) => {
+    const current = recordRef.current;
+    if (!current || current.owner !== ownerRef.current || current.owner !== `${owner.generation}:${owner.retailerId}`) return null;
+    const result = reconcileReorder(current.cart, lines, products);
+    if (result.changed) {
+      recordRef.current = { ...current, cart: result.cart };
+      writeStoredCart(browserStorage(), current.retailerId, result.cart);
+      setRecord(recordRef.current);
+    }
+    return result;
+  }, []);
+
   const readiness = useMemo(() => cartReadiness({ cart: cart ?? emptyCart(), identity, record: quote }), [cart, identity, quote]);
   const knownLines = known.owner === ownerKey ? known.lines : NO_LINES;
 
@@ -234,7 +252,7 @@ function useCartState({ ready, retailerId, generation }) {
     };
   }, [cart, commit, readiness, quote, knownLines]);
 
-  return { cart: cartApi, identity, settleOrdered };
+  return { cart: cartApi, identity, settleOrdered, reorderInto };
 }
 
 export function RetailerProvider({ children }) {
@@ -361,7 +379,7 @@ export function RetailerProvider({ children }) {
 
   // The cart seam Catalogue's controls read: { quantityOf, setQuantity, ... }, null until a ready
   // retailer's own cart has been restored.
-  const { cart, identity: cartIdentity, settleOrdered } = useCartState({ ready: state.canPurchase, retailerId, generation });
+  const { cart, identity: cartIdentity, settleOrdered, reorderInto } = useCartState({ ready: state.canPurchase, retailerId, generation });
 
   // ---- Placing the order -----------------------------------------------------------------------
   // One controller for the whole provider, so an order in flight survives the cart sheet closing and
@@ -494,6 +512,7 @@ export function RetailerProvider({ children }) {
   useEffect(() => {
     checkoutController.setOnConfirmed(({ order, owner, items }) => {
       settleOrdered({ owner, items });
+      setReorderState((previous) => (previous?.owner === `${owner.generation}:${owner.retailerId}` ? null : previous));
       const live = liveRef.current;
       if (live.identity && live.identity.generation === owner.generation && String(live.identity.retailerId) === String(owner.retailerId)) {
         // The sheet's history entry is replaced by the order page, so Back returns to where the cart was opened.
@@ -520,6 +539,61 @@ export function RetailerProvider({ children }) {
     const live = liveRef.current;
     if (checkoutController.resolveUncertain()) live.cart?.clear();
   }, [checkoutController]);
+
+  // ---- Reorder -----------------------------------------------------------------------------------------
+  // Reads a past order's lines and today's products, merges them into the cart on screen and opens the cart
+  // for review. It only ever reads: no order is sent from here, and the totals that follow are the server's
+  // quote for the merged cart. What is told about it belongs to the identity that asked (reorderState.owner),
+  // so a sign-out or an account switch while it runs leaves the next account with nothing of it.
+  const [reorderState, setReorderState] = useState(null); // { owner, orderId, phase, view }
+  const reorderRunning = useRef(null);
+  const ownerKey = cartIdentity ? `${cartIdentity.generation}:${cartIdentity.retailerId}` : null;
+  const reorderView = reorderState && reorderState.owner === ownerKey ? reorderState : null;
+
+  const reorderOrder = useCallback(
+    async ({ orderId, lines }) => {
+      const live = liveRef.current;
+      if (!live.identity || !live.cart) return { started: false, reason: "not-ready" };
+      const owner = { generation: live.identity.generation, retailerId: live.identity.retailerId };
+      const key = `${owner.generation}:${owner.retailerId}`;
+      if (reorderRunning.current === key) return { started: false, reason: "busy" };
+      reorderRunning.current = key;
+      setReorderState({ owner: key, orderId, phase: "working", view: null });
+      try {
+        const outcome = await performReorder({
+          owner,
+          orderId,
+          lines,
+          getGeneration: getSessionGeneration,
+          getOrder: (id) => storeFetch(storeEndpoints.order(id)).then(normalizeOrderDetail),
+          getProduct: (id) => storeFetch(storeEndpoints.product(id)),
+          apply: (past, products) => reorderInto(past, products, owner)
+        });
+        if (outcome.status === "stale") {
+          setReorderState((previous) => (previous?.owner === key ? null : previous));
+          return { started: true, status: "stale" };
+        }
+        if (outcome.status === "failed") {
+          setReorderState({ owner: key, orderId, phase: "failed", view: outcome.view });
+          return { started: true, status: "failed" };
+        }
+        const review = outcome.view.kind === "review";
+        setReorderState({ owner: key, orderId, phase: review ? "review" : "none", view: outcome.view });
+        // The cart is opened only when something was added; with nothing added the cart is as it was.
+        if (review) openSheet("cart");
+        return { started: true, status: review ? "review" : "none" };
+      } finally {
+        if (reorderRunning.current === key) reorderRunning.current = null;
+      }
+    },
+    [reorderInto, openSheet]
+  );
+
+  const dismissReorder = useCallback(() => setReorderState(null), []);
+  const reorder = useMemo(
+    () => (cart ? { view: reorderView, run: reorderOrder, dismiss: dismissReorder } : null),
+    [cart, reorderView, reorderOrder, dismissReorder]
+  );
 
   const checkout = useMemo(
     () =>
@@ -571,6 +645,7 @@ export function RetailerProvider({ children }) {
       selectedAddress,
       cart,
       checkout,
+      reorder,
       refreshMe,
       reloadMe,
       applyMe,
@@ -592,6 +667,7 @@ export function RetailerProvider({ children }) {
       selectedAddress,
       cart,
       checkout,
+      reorder,
       refreshMe,
       reloadMe,
       applyMe,
