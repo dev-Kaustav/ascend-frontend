@@ -5,6 +5,12 @@ import dynamic from "next/dynamic";
 import { isStaleStoreError, storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
+  clearSelectedAddressId,
+  readSelectedAddressId,
+  resolveSelectedAddress,
+  saveSelectedAddressId
+} from "@/lib/store/maps.mjs";
+import {
   clearRetailerTokens,
   deriveRetailerState,
   getRetailerSession,
@@ -24,11 +30,34 @@ import {
 // The provider never blocks rendering: whatever the state (loading, anonymous, expired, error)
 // the shell and the public catalogue stay usable.
 
-// Loaded only when the login sheet opens, so public browsing never downloads it (or Firebase).
+// Loaded only when a sheet opens, so public browsing never downloads them (or Firebase, or Maps).
 const RetailerLoginSheet = dynamic(() => import("@/components/store/RetailerLoginSheet"), { ssr: false });
+const ShopSheet = dynamic(() => import("@/components/store/ShopSheet"), { ssr: false });
 
 const SHEETS = ["login", "shop", "address", "cart"];
 const getServerSnapshot = () => undefined;
+const NO_ADDRESSES = [];
+
+// The remembered address id lives in localStorage, an external store: other tabs change it (the
+// storage event) and this tab's own writes notify the same subscribers.
+const selectionListeners = new Set();
+const notifySelection = () => selectionListeners.forEach((listener) => listener());
+function subscribeSelection(listener) {
+  selectionListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    selectionListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function browserStorage() {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
 
 const RetailerContext = createContext({
   status: "loading",
@@ -39,7 +68,14 @@ const RetailerContext = createContext({
   generation: null,
   activeSheet: null,
   pendingIntent: null,
+  addresses: [],
+  selectedAddress: null,
   refreshMe: () => {},
+  reloadMe: async () => null,
+  applyMe: () => false,
+  selectAddress: () => false,
+  forgetAddress: () => {},
+  openAddresses: () => {},
   requireRetailer: () => false,
   takeIntent: () => null,
   openSheet: () => {},
@@ -53,7 +89,10 @@ export function RetailerProvider({ children }) {
   // is never shown after a logout or an account switch (see deriveRetailerState).
   const [meRecord, setMeRecord] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [activeSheet, setActiveSheet] = useState(null);
+  // The sheet someone asked for, and the identity it was asked under. Shop and address sheets show
+  // an account's data, so they only count for that identity (see activeSheet below).
+  const [sheetState, setSheetState] = useState(null);
+  const [promptDone, setPromptDone] = useState(null); // generation whose shop prompt was answered
   const [pendingIntent, setPendingIntent] = useState(null);
   const intentRef = useRef(null);
 
@@ -97,11 +136,87 @@ export function RetailerProvider({ children }) {
     setReloadKey((key) => key + 1);
   }, []);
 
+  // A fresh /store/me without going back to "loading" (an address was added, edited or deleted),
+  // so the open sheet stays on screen. Bound to the identity it started under: the answer for a
+  // previous account is dropped. Rejects with the transport's error for the caller to word.
+  const reloadMe = useCallback(async () => {
+    const started = getSessionGeneration();
+    try {
+      const me = await storeFetch(storeEndpoints.me);
+      if (getSessionGeneration() !== started) return null;
+      setMeRecord({ generation: started, me });
+      return me;
+    } catch (error) {
+      if (isStaleStoreError(error)) return null;
+      throw error;
+    }
+  }, []);
+
+  // The shop sheet's PUT already returns the new /store/me; take it as it is.
+  const applyMe = useCallback((me, started) => {
+    if (getSessionGeneration() !== started) return false;
+    setMeRecord({ generation: started, me });
+    return true;
+  }, []);
+
   const openSheet = useCallback((name) => {
     // One active sheet: opening one replaces the other instead of stacking behind it.
-    setActiveSheet(SHEETS.includes(name) ? name : null);
+    setSheetState(SHEETS.includes(name) ? { name, generation: getSessionGeneration() } : null);
   }, []);
-  const closeSheet = useCallback(() => setActiveSheet(null), []);
+  // Closing also answers the shop prompt for this identity, so a dismissed shop sheet is not
+  // pushed back at the person until they reload or try something that needs a shop.
+  const closeSheet = useCallback(() => {
+    setSheetState(null);
+    setPromptDone(getSessionGeneration());
+  }, []);
+
+  const readiness = state.readiness;
+  const needsShop = readiness === "new" || readiness === "confirm";
+
+  // What is on screen. Login follows the visitor through the identity change it causes; the shop
+  // and address sheets only count for the identity that opened them and only while that identity is
+  // in the state they are for. A new or confirm retailer is shown the shop sheet once per identity
+  // without asking (onboarding is the server's answer, so a reload resumes it).
+  let activeSheet = null;
+  if (sheetState && (sheetState.name === "login" || sheetState.generation === generation)) activeSheet = sheetState.name;
+  if (activeSheet === "address" && readiness !== "ready") activeSheet = null;
+  if (activeSheet === "shop" && readiness === "anonymous") activeSheet = null;
+  if (activeSheet === null && needsShop && promptDone !== generation) activeSheet = "shop";
+
+  // ---- Selected delivery address -------------------------------------------------------------
+  // The server owns the addresses (state.me.addresses). The browser remembers one id, per
+  // retailer, and it only counts while the server still lists it: membership in the list is the
+  // check, so a deleted or foreign id is simply not a selection.
+  const addresses = useMemo(() => state.me?.addresses ?? NO_ADDRESSES, [state.me]);
+  const retailerId = state.retailerId;
+  const storedId = useSyncExternalStore(
+    subscribeSelection,
+    useCallback(() => readSelectedAddressId(browserStorage(), retailerId), [retailerId]),
+    () => null
+  );
+  const selectedAddress = useMemo(() => resolveSelectedAddress({ addresses, storedId }), [addresses, storedId]);
+
+  // list defaults to what is rendered; a caller that has just reloaded passes the fresh list, since
+  // its own render has not happened yet. An id the server does not list is never selected.
+  const selectAddress = useCallback(
+    (id, list = addresses) => {
+      if (!list.some((address) => String(address.id) === String(id))) return false;
+      saveSelectedAddressId(browserStorage(), retailerId, id);
+      notifySelection();
+      return true;
+    },
+    [addresses, retailerId]
+  );
+
+  // Called once a delete has succeeded: the remembered id goes with the address.
+  const forgetAddress = useCallback(
+    (id) => {
+      if (String(readSelectedAddressId(browserStorage(), retailerId)) !== String(id)) return;
+      clearSelectedAddressId(browserStorage(), retailerId);
+      notifySelection();
+    },
+    [retailerId]
+  );
 
   // Gate for an action that needs a signed-in retailer with a confirmed shop. Returns true when
   // the caller may proceed. Otherwise it keeps the one validated intent (an internal route or a
@@ -112,11 +227,11 @@ export function RetailerProvider({ children }) {
       const valid = validateRetailerIntent(intent);
       intentRef.current = valid;
       setPendingIntent(valid);
-      if (state.readiness === "anonymous") setActiveSheet("login");
-      else if (state.readiness === "new" || state.readiness === "confirm") setActiveSheet("shop");
+      if (state.readiness === "anonymous") openSheet("login");
+      else if (state.readiness === "new" || state.readiness === "confirm") openSheet("shop");
       return false;
     },
-    [state.canPurchase, state.readiness]
+    [state.canPurchase, state.readiness, openSheet]
   );
 
   // The retained intent is handed out once.
@@ -127,24 +242,34 @@ export function RetailerProvider({ children }) {
     return intent;
   }, []);
 
+  // Header location and Account: a ready retailer picks an address; anyone else is taken to the
+  // sheet that gets them there (login, or finishing the shop). Nothing is held to resume.
+  const openAddresses = useCallback(() => {
+    if (state.readiness === "ready") openSheet("address");
+    else if (state.readiness === "error") refreshMe();
+    else if (state.readiness === "anonymous" || state.readiness === "new" || state.readiness === "confirm") {
+      requireRetailer(null);
+    }
+  }, [state.readiness, requireRetailer, refreshMe, openSheet]);
+
   // Clears the retailer session only; the staff session is a different storage key and is not
   // read or touched. No navigation: the visitor returns to browsing where they are.
   const logout = useCallback(() => {
     intentRef.current = null;
     setPendingIntent(null);
-    setActiveSheet(null);
+    setSheetState(null);
     clearRetailerTokens();
     // The phone proof is only ever a bridge to the Ascend session; end it with the session.
     disposePhoneVerifier();
     signOutPhoneProof();
   }, []);
 
-  // Dismissing the login sheet (close, Escape, Back) discards the destination it was holding.
+  // Dismissing the login or shop sheet (close, Escape, Back) discards the destination it was holding.
   const dismissLogin = useCallback(() => {
     intentRef.current = null;
     setPendingIntent(null);
-    setActiveSheet(null);
-  }, []);
+    closeSheet();
+  }, [closeSheet]);
 
   const value = useMemo(
     () => ({
@@ -156,14 +281,39 @@ export function RetailerProvider({ children }) {
       generation,
       activeSheet,
       pendingIntent,
+      addresses,
+      selectedAddress,
       refreshMe,
+      reloadMe,
+      applyMe,
+      selectAddress,
+      forgetAddress,
+      openAddresses,
       requireRetailer,
       takeIntent,
       openSheet,
       closeSheet,
       logout
     }),
-    [state, generation, activeSheet, pendingIntent, refreshMe, requireRetailer, takeIntent, openSheet, closeSheet, logout]
+    [
+      state,
+      generation,
+      activeSheet,
+      pendingIntent,
+      addresses,
+      selectedAddress,
+      refreshMe,
+      reloadMe,
+      applyMe,
+      selectAddress,
+      forgetAddress,
+      openAddresses,
+      requireRetailer,
+      takeIntent,
+      openSheet,
+      closeSheet,
+      logout
+    ]
   );
 
   return (
@@ -180,6 +330,8 @@ export function RetailerProvider({ children }) {
         {children}
       </div>
       {activeSheet === "login" ? <RetailerLoginSheet intent={pendingIntent} onClose={dismissLogin} /> : null}
+      {/* Keyed by identity: a switched account starts a fresh form, never the previous one's draft. */}
+      {activeSheet === "shop" ? <ShopSheet key={generation} intent={pendingIntent} onClose={dismissLogin} /> : null}
     </RetailerContext.Provider>
   );
 }
@@ -189,20 +341,22 @@ export function useRetailer() {
 }
 
 // Retailer-only destinations. An anonymous visitor who picks one gets the login sheet in place
-// instead of a navigation, and is sent on once they are ready (never to the staff /login).
+// instead of a navigation, and a retailer whose shop is not confirmed gets the shop sheet; either
+// is sent on once they are ready (never to the staff /login).
 const RETAILER_ONLY = ["/orders", "/account"];
 const isRetailerOnly = (href) => RETAILER_ONLY.some((base) => href === base || href.startsWith(`${base}/`) || href.startsWith(`${base}?`));
 
 /**
  * Returns href => onClick handler for a store link. A plain left click on a retailer-only
- * destination by an anonymous visitor opens login with that destination held; every other click
+ * destination by an anonymous visitor opens login, and by a new or confirm retailer opens the shop
+ * sheet, with that destination held; every other click
  * (modified, other buttons, public destinations, signed-in visitors) navigates as normal.
  */
 export function useRetailerLinkGate() {
   const { readiness, requireRetailer } = useRetailer();
   return useCallback(
     (href) => (event) => {
-      if (readiness !== "anonymous" || !isRetailerOnly(href)) return;
+      if (!["anonymous", "new", "confirm"].includes(readiness) || !isRetailerOnly(href)) return;
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       requireRetailer({ type: "navigate", href });

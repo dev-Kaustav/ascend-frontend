@@ -1231,3 +1231,260 @@
     gap: 48px;
   }
 }
+
+/* ---- Shop, delivery address and Account (09-06) -------------------------------------------- */
+
+.store-sheet--form {
+  /* A form sheet is taller than the login one; the sheet scrolls inside itself, never the page. */
+  scroll-padding-bottom: 96px;
+}
+
+.store-button--secondary {
+  gap: 8px;
+  border: 1px solid var(--s-border);
+  background: var(--s-surface);
+  cursor: pointer;
+}
+
+.store-button--secondary:disabled {
+  color: var(--s-muted);
+  cursor: not-allowed;
+}
+
+.store-button--danger {
+  background: var(--s-destructive);
+  color: #ffffff;
+}
+
+.store-hint--tight {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.store-sheet__cancel {
+  display: flex;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.store-address-form .store-input {
+  margin-bottom: 4px;
+}
+
+.store-address-form .store-label {
+  margin-top: 16px;
+}
+
+.store-address-form__find {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.store-address-form__find .store-label {
+  margin-top: 0;
+}
+
+.store-address-form__find .store-button {
+  width: 100%;
+}
+
+.store-address-form__or {
+  margin: 8px 0;
+  color: var(--s-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.store-address-form__pin {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--s-surface-alt);
+  color: var(--s-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.store-address-form__pin[data-pinned="true"] {
+  color: var(--s-success);
+}
+
+.store-address-form__optional {
+  margin-top: 24px;
+  color: var(--s-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-address-form__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 12px;
+}
+
+.store-shop-field + .store-shop-field,
+.store-shop-field {
+  margin-bottom: 16px;
+}
+
+.store-address-form > .store-shop-field:last-of-type {
+  margin-top: 16px;
+}
+
+/* Google's own element: full width, light, and never wider than the sheet. */
+.store-place-search {
+  min-width: 0;
+}
+
+.store-place-search gmp-place-autocomplete {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color-scheme: light;
+}
+
+.store-address-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.store-address-actions .store-button {
+  flex: 1 1 160px;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.store-address-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-address-row {
+  min-width: 0;
+  border: 1px solid var(--s-border);
+  border-radius: 12px;
+  background: var(--s-surface);
+}
+
+.store-address-row[data-selected="true"] {
+  border-color: var(--s-orange-text);
+  box-shadow: inset 0 0 0 1px var(--s-orange-text);
+}
+
+.store-address-row__main {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--s-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.store-address-row__name,
+.store-account__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.store-address-row__badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--s-surface-alt);
+  color: var(--s-success);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-address-row__text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  color: var(--s-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.store-address-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 8px 4px;
+}
+
+.store-address-row__actions .store-link-button {
+  margin-top: 0;
+}
+
+.store-address-delete__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.store-account {
+  display: flex;
+  max-width: 640px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px var(--s-gutter);
+}
+
+.store-account h1 {
+  font-family: var(--font-marketing-display), sans-serif;
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.store-account__card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--s-border);
+  border-radius: 12px;
+}
+
+.store-account__card h2 {
+  margin-bottom: 8px;
+  color: var(--s-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-account__lines {
+  color: var(--s-ink);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.store-account__addresses {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.store-account .store-link-button {
+  align-self: flex-start;
+}

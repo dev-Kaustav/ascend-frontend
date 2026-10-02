@@ -19,6 +19,7 @@ import {
   saveRetailerTokens,
   startCooldown
 } from "@/lib/store/session.mjs";
+import { acquireHistoryEntry, historyEntry, releaseHistoryEntry } from "@/lib/store/sheet-history";
 import {
   confirmPhoneCode,
   disposePhoneVerifier,
@@ -32,31 +33,6 @@ import {
 // phone. Sheets never stack, so this replaces whichever sheet was open.
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])';
-
-// The sheet owns one history entry so the browser Back button closes it before leaving the page
-// underneath. Module-level because React Strict Mode mounts, unmounts and re-mounts in one tick,
-// and that must not push (or pop) a second entry.
-const historyEntry = { live: 0, open: false };
-
-function acquireHistoryEntry() {
-  historyEntry.live += 1;
-  if (!historyEntry.open) {
-    window.history.pushState({ ascendSheet: "login" }, "");
-    historyEntry.open = true;
-  }
-}
-
-function releaseHistoryEntry() {
-  historyEntry.live -= 1;
-  // Deferred, so a Strict Mode re-mount (live back to 1) keeps the entry. The popstate listener
-  // is already gone by the time this pop lands, so it cannot be mistaken for the Back button.
-  setTimeout(() => {
-    if (historyEntry.live === 0 && historyEntry.open) {
-      historyEntry.open = false;
-      window.history.back();
-    }
-  }, 0);
-}
 
 // "+91 98765 43210" for display; the number is only ever shown back to the person who typed it.
 const formatPhone = (digits) => `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
@@ -345,7 +321,8 @@ export default function RetailerLoginSheet({ intent, onClose }) {
       historyEntry.open = false;
       router.replace(decision.href);
       closeSheet();
-    } else if (decision.reason === "onboarding") {
+    } else if (readiness === "new" || readiness === "confirm") {
+      // The shop sheet is the answer for an unfinished shop, with or without a held destination.
       openSheet("shop");
     } else {
       closeSheet();
