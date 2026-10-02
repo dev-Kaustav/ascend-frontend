@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import SheetHost from "@/components/store/SheetHost";
 import {
   cartQuantity,
@@ -61,6 +61,9 @@ import {
 //
 // The provider never blocks rendering: whatever the state (loading, anonymous, expired, error)
 // the shell and the public catalogue stay usable.
+
+// useLayoutEffect warns when React renders on the server, where it can do nothing.
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 const SHEETS = ["login", "shop", "address", "cart"];
 const getServerSnapshot = () => undefined;
@@ -139,7 +142,10 @@ function useCartState({ ready, retailerId, generation }) {
   if (ownerKey !== (record?.owner ?? null)) {
     setRecord(ownerKey ? { owner: ownerKey, retailerId, cart: readStoredCart(browserStorage(), retailerId) } : null);
   }
-  useEffect(() => {
+  // Kept in step before any other effect runs. A page's own effect (the held Add that resumes after login)
+  // runs before this provider's effects; with a plain effect here it would still see the previous owner
+  // and its change would be dropped after the held Add was already consumed.
+  useIsomorphicLayoutEffect(() => {
     recordRef.current = record;
     ownerRef.current = ownerKey;
   });
