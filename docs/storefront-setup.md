@@ -66,6 +66,27 @@ temporarily unavailable" and sends nothing.
   (Authentication, Sign-in method, Phone numbers for testing). A test number sends no SMS and so
   costs nothing and reaches nobody.
 
+## Google Maps: shop and delivery address search
+
+The shop and address sheets use Google's own Maps JavaScript loader, the Places (New) autocomplete
+element and the JS Geocoder. No server credential and no REST geocoding call from the browser.
+
+| Name | Where it comes from |
+|---|---|
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Cloud, Credentials: a **browser key**, never a server key |
+
+The key is public by design (it ships in the page), so it is only safe if restricted. In Google Cloud:
+
+- Application restriction: **Websites**, allowing `https://ascendfoods.in/*` and, for local testing,
+  `http://localhost:3000/*` (a different local port is rejected).
+- API restriction: Maps JavaScript API, Places API (New) and Geocoding API; billing enabled.
+- Do not reuse this key for anything server-side, and do not paste its value anywhere.
+
+If the key is missing or rejected the sheets keep working: search says it is unavailable, Detect my
+location and typing the address still work (a pin needs Detect or a search result), and browsing is
+unaffected. Detect my location is the only thing that asks the browser for a position, and only when
+pressed.
+
 ## Approved package evidence
 
 | Item | Value |
