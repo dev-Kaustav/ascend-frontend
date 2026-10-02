@@ -50,6 +50,9 @@ export default function AccountView() {
         <button type="button" className="store-button" onClick={refreshMe}>
           Try again
         </button>
+        <button type="button" className="store-link-button" onClick={logout}>
+          Log out
+        </button>
       </section>
     );
   }
@@ -61,6 +64,9 @@ export default function AccountView() {
         <p>Finish setting up your shop to place orders.</p>
         <button type="button" className="store-button" onClick={() => openSheet("shop")}>
           Set up your shop
+        </button>
+        <button type="button" className="store-link-button" onClick={logout}>
+          Log out
         </button>
       </section>
     );
