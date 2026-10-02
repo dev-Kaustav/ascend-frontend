@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as api from "../lib/store/api.mjs";
 import * as cartModule from "../lib/store/cart.mjs";
+import { normalizeOrderList } from "../lib/store/orders.mjs";
 import { createRetailerSession } from "../lib/store/session.mjs";
 
 const { storeEndpoints } = api;
@@ -54,7 +55,7 @@ function deferred() {
 }
 
 // A controller wired to recording fakes. post(path, init) decides the answer; every send is kept.
-function harness({ post, storage = memoryStorage(), generation = 1 } = {}) {
+function harness({ post, get, storage = memoryStorage(), generation = 1 } = {}) {
   const state = { generation };
   const sent = [];
   const confirmed = [];
@@ -63,7 +64,8 @@ function harness({ post, storage = memoryStorage(), generation = 1 } = {}) {
       sent.push({ path, method: init.method, body: JSON.parse(init.body) });
       return post ? post(path, init) : Promise.resolve({ status: 201, body: ORDER });
     },
-    get: () => Promise.reject(new Error("the tracer never reads orders")),
+    get: (path, init) => (get ? get(path, init) : Promise.reject(new Error("this test never reads orders"))),
+    parseOrderList: normalizeOrderList,
     getStorage: () => storage,
     getGeneration: () => state.generation,
     onConfirmed: (info) => confirmed.push(info)
@@ -411,4 +413,513 @@ test("a lost response through the real transport is one send and is not claimed 
   assert.equal(calls.length, 1, "the transport does not resend an order");
   assert.notEqual(result.outcome, "confirmed");
   assert.notEqual(controller.getState().phase, "confirmed");
+});
+
+// =====================================================================================================
+// Task 2: stock conflicts, definite refusals and an outcome nobody saw (T-09-08-2, T-09-08-3)
+// =====================================================================================================
+
+const apiError = (status, payload, extra = {}) => new api.StoreApiError("x", { status, payload, ...extra });
+const classify = (status, payload, extra) => api.classifyPlacementError(apiError(status, payload, extra));
+const reject = (error) => async () => Promise.reject(error);
+
+// ---- reading what the server answered --------------------------------------------------------------------
+
+test("a top-level 409 STOCK_CHANGED names each affected product and its cap", () => {
+  const c = classify(409, { code: "STOCK_CHANGED", message: "Stock changed", items: [{ sku_id: 5, max_quantity: 1 }, { sku_id: 7, max_quantity: 0 }] });
+  assert.equal(c.outcome, "stock");
+  assert.deepEqual(c.items, [{ sku_id: 5, max_quantity: 1 }, { sku_id: 7, max_quantity: 0 }]);
+});
+
+test("a malformed STOCK_CHANGED line is dropped, the rest kept, and the conflict still stands", () => {
+  const c = classify(409, { code: "STOCK_CHANGED", items: [{ sku_id: 5, max_quantity: 2 }, { sku_id: "x", max_quantity: 1 }, { sku_id: 6, max_quantity: -3 }, { sku_id: 8 }, null, 4] });
+  assert.equal(c.outcome, "stock");
+  assert.deepEqual(c.items, [{ sku_id: 5, max_quantity: 2 }]);
+  assert.equal(classify(409, { code: "STOCK_CHANGED" }).outcome, "stock", "no items array at all");
+  assert.deepEqual(classify(409, { code: "STOCK_CHANGED" }).items, []);
+});
+
+test("a 409 that is not STOCK_CHANGED is a refusal, never a stock review", () => {
+  const c = classify(409, { detail: "conflict" });
+  assert.equal(c.outcome, "refused");
+  assert.notEqual(c.kind, "stock");
+});
+
+test("a nested 422 names the products that are no longer sold, a string 422 is an invalid cart", () => {
+  const gone = classify(422, { detail: { message: "Some products are not available", sku_ids: [3, 9, "x", 0] } });
+  assert.equal(gone.outcome, "refused");
+  assert.equal(gone.kind, "unavailable");
+  assert.deepEqual(gone.skuIds, [3, 9]);
+  const invalid = classify(422, { detail: "Cart is invalid" });
+  assert.equal(invalid.outcome, "refused");
+  assert.equal(invalid.kind, "invalid");
+  assert.deepEqual(invalid.skuIds, []);
+});
+
+test("the store being closed, an address that is gone, a forbidden account and a rate limit are definite refusals", () => {
+  assert.equal(classify(503, { detail: "Store is not taking orders right now" }).kind, "closed");
+  assert.equal(classify(404, { detail: "Address not found" }).kind, "address");
+  assert.equal(classify(403, { detail: "nope" }).kind, "denied");
+  assert.equal(classify(429, { detail: "slow down" }).kind, "busy");
+  for (const status of [403, 404, 422, 429]) assert.equal(classify(status, { detail: "x" }).outcome, "refused", String(status));
+});
+
+test("a refusal's words are fixed copy: nothing the server said is shown", () => {
+  const c = classify(422, { detail: "SELECT * FROM secrets; internal error 0xDEAD" });
+  assert.ok(c.message.length > 10);
+  assert.doesNotMatch(c.message, /SELECT|0xDEAD|secrets/);
+});
+
+test("a gateway 503, a 500, a 502, a 504, a network failure and a 401 are all outcomes nobody saw", () => {
+  const html = "<html>503 Service Unavailable</html>";
+  for (const c of [
+    classify(503, html),
+    classify(503, { detail: "something else" }),
+    classify(500, { detail: "boom" }),
+    classify(502, null),
+    classify(504, null),
+    classify(0, { cause: "fetch failed" }, { reason: "network" }),
+    classify(401, { detail: "Not authenticated" }),
+    classify(302, null),
+    api.classifyPlacementError(new Error("odd")),
+    api.classifyPlacementError(null)
+  ]) {
+    assert.equal(c.outcome, "uncertain", JSON.stringify(c));
+    assert.equal(c.message, api.PLACEMENT_COPY.uncertain);
+  }
+});
+
+test("a request the transport never sent is a refusal that says so, and a stale one is dropped", () => {
+  assert.equal(classify(0, null, { reason: "refresh-unavailable" }).kind, "not-sent");
+  assert.equal(classify(401, null, { reason: "session-expired" }).kind, "signed-out");
+  assert.equal(classify(401, null, { reason: "needs-login" }).kind, "signed-out");
+  assert.equal(classify(0, null, { reason: "stale" }).outcome, "stale");
+  for (const reason of ["refresh-unavailable", "session-expired", "needs-login"]) {
+    assert.equal(classify(0, null, { reason }).outcome, "refused", reason);
+  }
+});
+
+// ---- a stock conflict is reviewed, then the cart is requoted, then the person submits again -------------------
+
+const CONFLICT = { code: "STOCK_CHANGED", message: "Stock changed for some items. Please review your cart.", items: [{ sku_id: 5, max_quantity: 1 }] };
+
+test("a 409 puts the checkout in stock review and sends nothing more", async () => {
+  const { controller, sent } = harness({ post: reject(apiError(409, CONFLICT)) });
+  const result = await controller.submit(request());
+  assert.equal(result.outcome, "stock");
+  assert.equal(sent.length, 1);
+  const state = controller.getState();
+  assert.equal(state.phase, "stock-review");
+  assert.deepEqual(state.review, [{ sku_id: 5, max_quantity: 1 }]);
+  assert.equal(api.checkoutGate(gateInput({ view: state })).reason, "review");
+});
+
+test("while a stock review is open the same cart cannot be submitted again", async () => {
+  const { controller, sent } = harness({ post: reject(apiError(409, CONFLICT)) });
+  await controller.submit(request());
+  const again = await controller.submit(request());
+  assert.deepEqual([again.sent, again.reason], [false, "review-needed"]);
+  assert.equal(sent.length, 1);
+});
+
+test("an edited cart (a newer revision) is a fresh submission, an explicit one", async () => {
+  let calls = 0;
+  const { controller, sent } = harness({
+    post: async () => {
+      calls += 1;
+      if (calls === 1) throw apiError(409, CONFLICT);
+      return { status: 201, body: ORDER };
+    }
+  });
+  await controller.submit(request());
+  controller.acceptReview();
+  assert.equal(controller.getState().phase, "idle");
+  const second = await controller.submit(request({ owner: { ...OWNER, revision: OWNER.revision + 1 }, items: [{ sku_id: 5, quantity: 1 }] }));
+  assert.equal(second.outcome, "confirmed");
+  assert.equal(sent.length, 2, "one explicit send each, never an automatic one");
+  assert.deepEqual(sent[1].body.items, [{ sku_id: 5, quantity: 1 }]);
+});
+
+test("a review is shown only for the cart revision it was about", async () => {
+  const { controller } = harness({ post: reject(apiError(409, CONFLICT)) });
+  await controller.submit(request());
+  const state = controller.getState();
+  const me = { generation: 1, retailerId: 71 };
+  assert.equal(api.checkoutView(state, me, OWNER.revision).phase, "stock-review");
+  assert.equal(api.checkoutView(state, me, OWNER.revision + 1).phase, "idle", "the person edited the cart");
+});
+
+test("a refusal is shown for its cart, can be dismissed, and releases the lock", async () => {
+  const { controller, sent } = harness({ post: reject(apiError(422, { detail: { message: "x", sku_ids: [5] } })) });
+  const result = await controller.submit(request());
+  assert.equal(result.outcome, "refused");
+  assert.equal(controller.getState().phase, "refused");
+  assert.deepEqual(controller.getState().problem.skuIds, [5]);
+  controller.dismiss();
+  assert.equal(controller.getState().phase, "idle");
+  const again = await controller.submit(request());
+  assert.equal(again.sent, true, "a definite refusal may be retried by the person");
+  assert.equal(sent.length, 2);
+});
+
+// ---- applying a conflict to the cart: reduce or remove, never raise, never silently --------------------------------
+
+test("a conflict lowers a line to what is available and removes a line with none", () => {
+  let cart = updateCartQuantity(updateCartQuantity(updateCartQuantity(emptyCart(), 5, 4), 6, 2), 7, 3);
+  cart = cartModule.applyStockConflict(cart, [{ sku_id: 5, max_quantity: 1 }, { sku_id: 7, max_quantity: 0 }]);
+  assert.deepEqual(cart.lines.map((l) => [l.sku_id, l.quantity]), [[5, 1], [6, 2]]);
+});
+
+test("a conflict never raises a quantity and ignores products that are not in the cart", () => {
+  const cart = updateCartQuantity(emptyCart(), 5, 2);
+  const after = cartModule.applyStockConflict(cart, [{ sku_id: 5, max_quantity: 9 }, { sku_id: 99, max_quantity: 0 }, { sku_id: "x", max_quantity: 1 }, null]);
+  assert.equal(after, cart, "nothing to change, so the same cart (and no new quote)");
+});
+
+test("an applied conflict is a new revision, so the earlier quote cannot be believed", () => {
+  const cart = updateCartQuantity(emptyCart(), 5, 4);
+  const after = cartModule.applyStockConflict(cart, [{ sku_id: 5, max_quantity: 1 }]);
+  assert.ok(after.revision > cart.revision);
+});
+
+test("a quote that says a line is out of stock never enables Place order", () => {
+  const cart = updateCartQuantity(emptyCart(), 5, 4);
+  const quote = {
+    lines: [{ sku_id: 5, quantity: 4, within_stock: false, max_orderable: 1, name: "Chips", line_total: 64 }],
+    subtotal: 64,
+    delivery_charge: 40,
+    total: 104
+  };
+  const identity = { generation: 1, retailerId: 71 };
+  const readiness = cartModule.cartReadiness({ cart, identity, record: { phase: "ready", identity, revision: cart.revision, quote } });
+  assert.equal(readiness.state, "stock");
+  assert.equal(api.checkoutGate(gateInput({ readiness })).canPlace, false);
+});
+
+// ---- an outcome nobody saw: one send, cart kept, no resend until the orders were read back ----------------------
+
+const lostResponses = [
+  ["a network failure", () => apiError(0, { cause: "fetch failed" }, { reason: "network" })],
+  ["a 500", () => apiError(500, { detail: "boom" })],
+  ["a gateway 503", () => apiError(503, "<html>503</html>")],
+  ["a 401", () => apiError(401, { detail: "Not authenticated" })]
+];
+
+for (const [name, make] of lostResponses) {
+  test(`${name} leaves the cart alone, is one send, and is not claimed as success`, async () => {
+    const { controller, sent, confirmed } = harness({ post: reject(make()) });
+    const result = await controller.submit(request());
+    assert.equal(result.outcome, "uncertain");
+    assert.equal(controller.getState().phase, "uncertain");
+    assert.equal(confirmed.length, 0, "the cart is not cleared");
+    assert.equal(sent.length, 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(sent.length, 1, "the app never resends an order by itself");
+  });
+}
+
+test("after an outcome nobody saw, Place order is refused until the orders have been read back", async () => {
+  const { controller, sent } = harness({ post: reject(apiError(500, { detail: "boom" })) });
+  await controller.submit(request());
+  const again = await controller.submit(request());
+  assert.deepEqual([again.sent, again.reason], [false, "unverified"]);
+  assert.equal(sent.length, 1);
+  assert.equal(api.checkoutGate(gateInput({ view: controller.getState() })).reason, "unverified");
+});
+
+test("the attempt is written down before it is sent, so a reload cannot forget it", async () => {
+  const gate = deferred();
+  const storage = memoryStorage();
+  const { controller } = harness({ post: () => gate.promise, storage });
+  const pending = controller.submit(request());
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(storage.dump()["ascend_store_pending_order:71"], "written while the order is in flight");
+  assert.equal(JSON.parse(storage.dump()["ascend_store_pending_order:71"]).at.length > 10, true);
+  gate.resolve({ status: 201, body: ORDER });
+  await pending;
+  assert.equal(storage.dump()["ascend_store_pending_order:71"], undefined, "confirmed: nothing left to doubt");
+});
+
+test("a page reload during an unfinished order comes back as an unconfirmed order, and cannot resend", async () => {
+  const storage = memoryStorage();
+  const first = harness({ post: () => new Promise(() => {}), storage }); // never answers: the tab is closed
+  first.controller.submit(request());
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const reloaded = harness({ storage });
+  reloaded.controller.sync({ generation: 1, retailerId: 71 });
+  assert.equal(reloaded.controller.getState().phase, "uncertain");
+  const result = await reloaded.controller.submit(request());
+  assert.deepEqual([result.sent, result.reason], [false, "unverified"]);
+  assert.equal(reloaded.sent.length, 0);
+});
+
+test("the unconfirmed order belongs to the retailer, not to the browser: another retailer is not blocked", async () => {
+  const storage = memoryStorage();
+  const first = harness({ post: reject(apiError(500, null)), storage });
+  await first.controller.submit(request());
+  const other = harness({ storage });
+  other.controller.sync({ generation: 2, retailerId: 88 });
+  assert.equal(other.controller.getState().phase, "idle");
+  const result = await other.controller.submit({ ...request(), owner: { generation: 1, retailerId: 88, revision: 1 } });
+  assert.equal(result.outcome, "confirmed");
+});
+
+test("the same retailer signing in again is told about the unconfirmed order", async () => {
+  const storage = memoryStorage();
+  const first = harness({ post: reject(apiError(500, null)), storage });
+  await first.controller.submit(request());
+  first.controller.sync({ generation: 2, retailerId: 71 });
+  assert.equal(first.controller.getState().phase, "uncertain");
+  assert.equal(api.checkoutView(first.controller.getState(), { generation: 2, retailerId: 71 }, 1).phase, "uncertain");
+  assert.equal(api.checkoutView(first.controller.getState(), { generation: 2, retailerId: 72 }, 1).phase, "idle");
+});
+
+test("a definite answer clears the written-down attempt: 409, a refusal and a request never sent", async () => {
+  for (const error of [apiError(409, CONFLICT), apiError(422, { detail: "x" }), apiError(0, null, { reason: "refresh-unavailable" })]) {
+    const storage = memoryStorage();
+    const { controller } = harness({ post: reject(error), storage });
+    await controller.submit(request());
+    assert.equal(storage.dump()["ascend_store_pending_order:71"], undefined, `status ${error.status}`);
+  }
+});
+
+test("an address check that fails or is refused never writes an attempt down", async () => {
+  const storage = memoryStorage();
+  const { controller } = harness({ storage });
+  await controller.submit(request({ confirmAddress: async () => false }));
+  assert.equal(storage.dump()["ascend_store_pending_order:71"], undefined);
+});
+
+test("storage that refuses writes does not stop an order, and the in-memory state still blocks a resend", async () => {
+  const broken = {
+    getItem: () => {
+      throw new Error("denied");
+    },
+    setItem: () => {
+      throw new Error("denied");
+    },
+    removeItem: () => {
+      throw new Error("denied");
+    }
+  };
+  const { controller, sent } = harness({ post: reject(apiError(500, null)), storage: broken });
+  const result = await controller.submit(request());
+  assert.equal(result.outcome, "uncertain");
+  const again = await controller.submit(request());
+  assert.equal(again.reason, "unverified");
+  assert.equal(sent.length, 1);
+});
+
+test("a corrupt attempt record in storage is read as no attempt, not as a crash", () => {
+  for (const raw of ["not json", "{}", "[]", "null", '{"at":5}']) {
+    const storage = memoryStorage({ "ascend_store_pending_order:71": raw });
+    assert.doesNotThrow(() => api.readPendingOrder(storage, 71));
+  }
+  assert.equal(api.readPendingOrder(memoryStorage({ "ascend_store_pending_order:71": "not json" }), 71), null);
+  assert.equal(api.readPendingOrder(null, 71), null);
+  assert.equal(api.readPendingOrder(memoryStorage(), "abc"), null);
+});
+
+// ---- reading the orders back before any resend ---------------------------------------------------------------------
+
+const orderRow = (id, extra = {}) => ({ id, status: "PENDING", created_at: "2026-10-02T10:00:00Z", item_count: 1, total: 72, delivery_charge: 40, invoice_available: false, ...extra });
+
+async function uncertainHarness(options = {}) {
+  const calls = [];
+  const h = harness({
+    post: reject(apiError(500, null)),
+    get: options.get || (async (path) => {
+      calls.push(path);
+      return { items: [orderRow(5003), orderRow(5002), orderRow(5001), orderRow(5000)], total: 4 };
+    }),
+    storage: options.storage
+  });
+  await h.controller.submit(request());
+  return { ...h, getCalls: calls };
+}
+
+test("checking My orders asks for the newest three, once, with a read", async () => {
+  const { controller, getCalls } = await uncertainHarness();
+  await controller.checkOrders();
+  assert.equal(getCalls.length, 1);
+  assert.equal(getCalls[0], "/store/orders?limit=3&offset=0");
+  const { check } = controller.getState();
+  assert.equal(check.phase, "ready");
+  assert.deepEqual(check.orders.map((o) => o.id), [5003, 5002, 5001]);
+  assert.equal(controller.getState().phase, "uncertain", "reading is not deciding");
+});
+
+test("a failed read-back is an error that can be tried again, and nothing is inferred from it", async () => {
+  let fail = true;
+  const { controller } = await uncertainHarness({
+    get: async () => {
+      if (fail) throw apiError(0, null, { reason: "network" });
+      return { items: [], total: 0 };
+    }
+  });
+  await controller.checkOrders();
+  assert.equal(controller.getState().check.phase, "error");
+  assert.equal((await controller.resolveUncertain()), false, "an unread list cannot release the lock");
+  fail = false;
+  await controller.checkOrders();
+  assert.equal(controller.getState().check.phase, "ready");
+  assert.equal(controller.getState().check.total, 0);
+});
+
+test("an answer that is not an order list is an error, not an empty list", async () => {
+  const { controller } = await uncertainHarness({ get: async () => ({ nope: true }) });
+  await controller.checkOrders();
+  assert.equal(controller.getState().check.phase, "error");
+});
+
+test("a read-back only counts for the account that asked, and a late answer is dropped", async () => {
+  const gate = deferred();
+  const { controller, state } = await uncertainHarness({ get: () => gate.promise });
+  const reading = controller.checkOrders();
+  state.generation = 2;
+  controller.sync({ generation: 2, retailerId: 88 });
+  gate.resolve({ items: [orderRow(1)], total: 1 });
+  await reading;
+  assert.equal(controller.getState().phase, "idle");
+  assert.equal(controller.getState().check, null);
+});
+
+test("an order cannot be sent again until the person says so after a successful read-back", async () => {
+  const { controller, sent } = await uncertainHarness();
+  assert.equal(controller.resolveUncertain(), false, "nothing was read yet");
+  await controller.checkOrders();
+  assert.equal(controller.resolveUncertain(), true);
+  assert.equal(controller.getState().phase, "idle");
+  assert.equal(sent.length, 1, "resolving sends nothing");
+});
+
+test("after the read-back and an explicit release, the next Place order is one fresh send", async () => {
+  let calls = 0;
+  const h = harness({
+    post: async () => {
+      calls += 1;
+      if (calls === 1) throw apiError(500, null);
+      return { status: 201, body: ORDER };
+    },
+    get: async () => ({ items: [], total: 0 })
+  });
+  await h.controller.submit(request());
+  await h.controller.checkOrders();
+  h.controller.resolveUncertain();
+  const result = await h.controller.submit(request());
+  assert.equal(result.outcome, "confirmed");
+  assert.equal(h.sent.length, 2);
+  assert.equal(h.storage.dump()["ascend_store_pending_order:71"], undefined);
+});
+
+test("the release also clears the written-down attempt, so a reload does not bring the doubt back", async () => {
+  const storage = memoryStorage();
+  const { controller } = await uncertainHarness({ storage });
+  assert.ok(storage.dump()["ascend_store_pending_order:71"]);
+  await controller.checkOrders();
+  controller.resolveUncertain();
+  assert.equal(storage.dump()["ascend_store_pending_order:71"], undefined);
+});
+
+test("reading the orders is only possible while an outcome is unconfirmed", async () => {
+  const h = harness({ get: async () => assert.fail("nothing to check") });
+  await h.controller.checkOrders();
+  assert.equal(h.controller.getState().phase, "idle");
+});
+
+// ---- stale answers never touch another account (T-09-08-3) -------------------------------------------------------------
+
+test("a conflict, a refusal or a lost answer that arrives after the account changed shows nothing to the new account", async () => {
+  for (const error of [apiError(409, CONFLICT), apiError(422, { detail: "x" }), apiError(500, null)]) {
+    const gate = deferred();
+    const { controller, state } = harness({ post: () => gate.promise });
+    const pending = controller.submit(request());
+    state.generation = 2;
+    controller.sync({ generation: 2, retailerId: 88 });
+    gate.reject(error);
+    await pending;
+    assert.equal(controller.getState().phase, "idle", `status ${error.status}`);
+    assert.equal(controller.getState().owner, null);
+  }
+});
+
+test("an order that may have gone through while the account changed is still remembered for its retailer", async () => {
+  const storage = memoryStorage();
+  const gate = deferred();
+  const { controller, state } = harness({ post: () => gate.promise, storage });
+  const pending = controller.submit(request());
+  state.generation = 2;
+  gate.reject(new api.StoreApiError("changed", { reason: "stale" }));
+  await pending;
+  assert.ok(storage.dump()["ascend_store_pending_order:71"], "the transport dropped the answer; the order may exist");
+  const back = harness({ storage });
+  back.controller.sync({ generation: 3, retailerId: 71 });
+  assert.equal(back.controller.getState().phase, "uncertain");
+});
+
+// ---- the wire: what the real transport does with these answers -------------------------------------------------------------
+
+function realWire(route, { expired = false } = {}) {
+  const storage = memoryStorage();
+  const session = createRetailerSession({ getStorage: () => storage, eventTarget: null });
+  const exp = Math.floor(Date.now() / 1000) + (expired ? -100 : 3600);
+  const tok = `${b64url({ alg: "none" })}.${b64url({ user_id: 71, role: "RETAILER", tv: 0, exp })}.sig`;
+  session.save({ accessToken: tok, refreshToken: "refresh-1" });
+  const calls = [];
+  const transport = api.createStoreTransport({
+    session,
+    baseUrl: "http://api.test",
+    fetch: async (url, init = {}) => {
+      const call = { path: new URL(url).pathname + new URL(url).search, method: (init.method || "GET").toUpperCase() };
+      calls.push(call);
+      return route(call);
+    }
+  });
+  const controller = api.createCheckoutController({
+    post: transport.storeFetchResponse,
+    get: transport.storeFetch,
+    parseOrderList: normalizeOrderList,
+    getStorage: () => memoryStorage(),
+    getGeneration: () => session.getGeneration()
+  });
+  return { controller, calls, session };
+}
+
+const wireRequest = (session) => ({ owner: { generation: session.getGeneration(), retailerId: 71, revision: 1 }, items: ITEMS, addressId: 11 });
+
+test("a 401 on the order is one POST, never replayed, and is an outcome nobody saw", async () => {
+  const { controller, calls, session } = realWire((call) => {
+    if (call.path === "/auth/refresh") return json(200, { access_token: accessToken(), refresh_token: "refresh-2" });
+    return json(401, { detail: "Not authenticated" });
+  });
+  const result = await controller.submit(wireRequest(session));
+  assert.equal(result.outcome, "uncertain");
+  assert.equal(calls.filter((c) => c.path === "/store/orders").length, 1, "the order is not replayed after the refresh");
+});
+
+test("a refresh that fails before the send means the order was never sent, and says so", async () => {
+  const { controller, calls, session } = realWire(() => json(503, { detail: "down" }), { expired: true });
+  const result = await controller.submit(wireRequest(session));
+  assert.equal(calls.filter((c) => c.path === "/store/orders").length, 0);
+  assert.equal(result.outcome, "refused");
+  assert.equal(controller.getState().problem.kind, "not-sent");
+});
+
+test("a 409 through the real transport keeps its raw top-level items and opens a review", async () => {
+  const { controller, session } = realWire(() => json(409, CONFLICT));
+  const result = await controller.submit(wireRequest(session));
+  assert.equal(result.outcome, "stock");
+  assert.deepEqual(controller.getState().review, [{ sku_id: 5, max_quantity: 1 }]);
+});
+
+test("the read-back through the real transport is a GET that may be repeated, the order is not", async () => {
+  const { controller, calls, session } = realWire((call) => {
+    if (call.method === "POST") return json(500, { detail: "boom" });
+    return json(200, { items: [orderRow(5001)], total: 1 });
+  });
+  await controller.submit(wireRequest(session));
+  await controller.checkOrders();
+  assert.equal(calls.filter((c) => c.method === "POST").length, 1);
+  assert.deepEqual(calls.filter((c) => c.method === "GET").map((c) => c.path), ["/store/orders?limit=3&offset=0"]);
+  assert.equal(controller.getState().check.orders[0].id, 5001);
 });
