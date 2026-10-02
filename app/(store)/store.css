@@ -2230,6 +2230,7 @@
 .store-reorder__list {
   margin: 8px 0;
   padding-left: 20px;
+  list-style: disc;
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -2250,4 +2251,10 @@
 
 .store-cart__reorder p {
   margin: 0;
+}
+
+.store-order-card__actions .store-button[aria-disabled="true"],
+.store-order-block__actions .store-button[aria-disabled="true"] {
+  color: var(--s-muted);
+  cursor: not-allowed;
 }

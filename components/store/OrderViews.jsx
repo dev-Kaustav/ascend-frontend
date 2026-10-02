@@ -194,13 +194,19 @@ function ReorderButton({ orderId, lines, className = "store-button store-button-
   const { reorder } = useRetailer();
   const working = reorder?.view?.phase === "working";
   const mine = working && reorder.view.orderId === orderId;
+  // aria-disabled, not disabled: a disabled button loses keyboard focus, and the cart sheet this opens
+  // hands focus back to whatever had it when it opened.
+  const off = !reorder || working;
   return (
     <button
       type="button"
       className={className}
-      disabled={!reorder || working}
+      aria-disabled={off ? "true" : undefined}
+      aria-busy={mine ? "true" : undefined}
       aria-label={`Reorder ${orderReference(orderId)}`}
-      onClick={() => reorder.run({ orderId, lines })}
+      onClick={() => {
+        if (!off) reorder.run({ orderId, lines });
+      }}
     >
       {mine ? "Adding to cart" : "Reorder"}
     </button>
