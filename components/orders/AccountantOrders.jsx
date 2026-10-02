@@ -28,6 +28,7 @@ export default function AccountantOrders() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
+    channel: "ALL",
     status: "PENDING"
   });
   const { notify } = useToast();
@@ -39,6 +40,7 @@ export default function AccountantOrders() {
       params.set("limit", String(pageSize));
       params.set("offset", String((page - 1) * pageSize));
       if (filters.search) params.set("search", filters.search);
+      if (filters.channel !== "ALL") params.set("channel", filters.channel);
       if (filters.status !== "ALL") params.set("status", filters.status);
 
       const [ordersResponse, lookupsResponse] = await Promise.all([
@@ -67,6 +69,7 @@ export default function AccountantOrders() {
     try {
       const params = new URLSearchParams();
       if (filters.search) params.set("search", filters.search);
+      if (filters.channel !== "ALL") params.set("channel", filters.channel);
       if (filters.status !== "ALL") params.set("status", filters.status);
       const query = params.toString();
       const endpoint = query ? `${apiEndpoints.admin.ordersExport}?${query}` : apiEndpoints.admin.ordersExport;
@@ -121,6 +124,11 @@ export default function AccountantOrders() {
         header: "Warehouse",
         accessorKey: "from_entity_id",
         cell: ({ row }) => warehouseMap.get(row.original.from_entity_id) || row.original.from_entity_id || "—"
+      },
+      {
+        header: "Channel",
+        accessorKey: "channel",
+        cell: ({ row }) => row.original.channel === "ONLINE" ? "Online" : "Offline"
       },
       {
         header: "Status",
@@ -200,6 +208,18 @@ export default function AccountantOrders() {
               setPage(1);
             }}
           />
+          <SelectBar
+            aria-label="Order channel"
+            value={filters.channel}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, channel: event.target.value }));
+              setPage(1);
+            }}
+          >
+            <option value="ALL">All channels</option>
+            <option value="ONLINE">Online</option>
+            <option value="OFFLINE">Offline</option>
+          </SelectBar>
           <SelectBar
             value={filters.status}
             onChange={(event) => {

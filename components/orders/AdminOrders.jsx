@@ -29,6 +29,7 @@ export default function AdminOrders() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
+    channel: "ALL",
     status: "ALL",
     paymentStatus: "ALL",
     fromDate: "",
@@ -43,6 +44,7 @@ export default function AdminOrders() {
       params.set("limit", String(pageSize));
       params.set("offset", String((page - 1) * pageSize));
       if (filters.search) params.set("search", filters.search);
+      if (filters.channel !== "ALL") params.set("channel", filters.channel);
       if (filters.status !== "ALL") params.set("status", filters.status);
       if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
       if (filters.fromDate) params.set("from_date", filters.fromDate);
@@ -78,6 +80,7 @@ export default function AdminOrders() {
     try {
       const params = new URLSearchParams();
       if (filters.search) params.set("search", filters.search);
+      if (filters.channel !== "ALL") params.set("channel", filters.channel);
       if (filters.status !== "ALL") params.set("status", filters.status);
       if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
       if (filters.fromDate) params.set("from_date", filters.fromDate);
@@ -146,6 +149,11 @@ export default function AdminOrders() {
         cell: ({ row }) => (
           <InvoiceCell invoiceNumber={row.original.invoice_number} status={row.original.status} />
         )
+      },
+      {
+        header: "Channel",
+        accessorKey: "channel",
+        cell: ({ row }) => row.original.channel === "ONLINE" ? "Online" : "Offline"
       },
       {
         header: "Status",
@@ -249,6 +257,18 @@ export default function AdminOrders() {
               setPage(1);
             }}
           />
+          <SelectBar
+            aria-label="Order channel"
+            value={filters.channel}
+            onChange={(event) => {
+              setFilters((prev) => ({ ...prev, channel: event.target.value }));
+              setPage(1);
+            }}
+          >
+            <option value="ALL">All channels</option>
+            <option value="ONLINE">Online</option>
+            <option value="OFFLINE">Offline</option>
+          </SelectBar>
           <SelectBar
             value={filters.status}
             onChange={(event) => {
