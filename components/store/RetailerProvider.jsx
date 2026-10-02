@@ -6,6 +6,7 @@ import SheetHost from "@/components/store/SheetHost";
 import {
   cartQuantity,
   acceptStockChanges,
+  applyStockConflict,
   cartReadiness,
   cartUnitCount,
   clearCart,
@@ -30,6 +31,7 @@ import {
   storeEndpoints,
   storeFetch
 } from "@/lib/store/api.mjs";
+import { normalizeOrderList } from "@/lib/store/orders.mjs";
 import { historyEntry } from "@/lib/store/sheet-history";
 import { disposePhoneVerifier, signOutPhoneProof } from "@/lib/store/firebase";
 import {
@@ -214,6 +216,10 @@ function useCartState({ ready, retailerId, generation }) {
       quantityOf: (skuId) => cartQuantity(cart, skuId),
       setQuantity: (skuId, quantity, max) => commit((current) => updateCartQuantity(current, skuId, quantity, max)),
       removeLine: (skuId) => commit((current) => removeCartLine(current, skuId)),
+      // The 409 STOCK_CHANGED review, once the retailer has agreed to it, and the empty cart a person
+      // chooses after finding their order in My orders. Each is a new revision, so it is requoted.
+      applyConflict: (items) => commit((current) => applyStockConflict(current, items)),
+      clear: () => commit(clearCart),
       retryQuote: () => {
         setQuote(null);
         setRetries((count) => count + 1);
@@ -362,7 +368,9 @@ export function RetailerProvider({ children }) {
   // is still the only one. It decides nothing about prices: the order carries SKU ids, packets and the
   // address id, and everything shown afterwards is what the server returned or what the order page
   // reads back.
-  const [checkoutController] = useState(() => createCheckoutController({ getGeneration: getSessionGeneration }));
+  const [checkoutController] = useState(() =>
+    createCheckoutController({ getGeneration: getSessionGeneration, getStorage: browserStorage, parseOrderList: normalizeOrderList })
+  );
   const checkoutState = useSyncExternalStore(checkoutController.subscribe, checkoutController.getState, () => IDLE_CHECKOUT);
   useEffect(() => {
     checkoutController.sync(cartIdentity);
@@ -496,7 +504,39 @@ export function RetailerProvider({ children }) {
     });
   });
 
-  const checkout = useMemo(() => (cart ? { view, gate, placeOrder } : null), [cart, view, gate, placeOrder]);
+  // The retailer agreed to the stock review: lower or drop exactly the lines the server named, then ask
+  // for a fresh quote. Nothing is sent; Place order is pressed again on purpose.
+  const acceptReview = useCallback(() => {
+    const review = checkoutController.getState();
+    const live = liveRef.current;
+    if (review.phase !== "stock-review" || !live.cart) return;
+    live.cart.applyConflict(review.review);
+    checkoutController.acceptReview();
+    live.cart.retryQuote();
+  }, [checkoutController]);
+
+  // The person looked at My orders and found the order there: the cart they still hold is that order.
+  const emptyCartAfterCheck = useCallback(() => {
+    const live = liveRef.current;
+    if (checkoutController.resolveUncertain()) live.cart?.clear();
+  }, [checkoutController]);
+
+  const checkout = useMemo(
+    () =>
+      cart
+        ? {
+            view,
+            gate,
+            placeOrder,
+            acceptReview,
+            emptyCartAfterCheck,
+            dismiss: checkoutController.dismiss,
+            checkOrders: checkoutController.checkOrders,
+            resolveUncertain: checkoutController.resolveUncertain
+          }
+        : null,
+    [cart, view, gate, placeOrder, acceptReview, emptyCartAfterCheck, checkoutController]
+  );
 
   // Clears the retailer session only; the staff session is a different storage key and is not
   // read or touched. No navigation: the visitor returns to browsing where they are.

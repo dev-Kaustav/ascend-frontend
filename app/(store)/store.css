@@ -2170,3 +2170,32 @@
   white-space: nowrap;
   border: 0;
 }
+
+.store-checkout__refused,
+.store-checkout__recent,
+.store-checkout__choices {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.store-checkout__recent {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-checkout__recent .store-link-button {
+  min-height: 44px;
+  text-align: left;
+}
+
+.ascend-storefront .store-checkout__advice {
+  font-weight: 600;
+}
+
+.store-checkout__choices .store-button {
+  width: 100%;
+  text-align: center;
+}

@@ -111,12 +111,29 @@ function Totals({ quote }) {
   );
 }
 
+// The lines the server's 409 STOCK_CHANGED named, with the cart's own quantity and the cap, in the same
+// shape the quote's own shortage uses. Products that are no longer in the cart are not listed.
+function reviewItems(cart, review) {
+  return review
+    .map((item) => {
+      const line = cart.lines.find((candidate) => candidate.sku_id === item.sku_id);
+      if (!line) return null;
+      return { sku_id: item.sku_id, name: cart.known[item.sku_id]?.name ?? null, quantity: line.quantity, max_orderable: item.max_quantity };
+    })
+    .filter(Boolean);
+}
+
 export default function CartSheet({ onClose }) {
-  const { cart } = useRetailer();
+  const { cart, checkout } = useRetailer();
   const readiness = cart?.readiness;
   const quote = readiness?.quote ?? null;
   const priced = new Map((quote?.lines ?? []).map((line) => [line.sku_id, line]));
-  const shortBySku = new Map((readiness?.stock ?? []).map((item) => [item.sku_id, item]));
+  // A conflict reported when the order was sent is shown the same way as a shortage in the quote, and is
+  // applied only when the retailer accepts it.
+  const conflict = cart && checkout?.view.phase === "stock-review" ? reviewItems(cart, checkout.view.review) : null;
+  const shortList = conflict ?? readiness?.stock ?? [];
+  const reviewing = conflict !== null || readiness?.state === "stock";
+  const shortBySku = new Map(shortList.map((item) => [item.sku_id, item]));
   const problem = cart?.problem ?? null;
   const goneIds = new Set(problem?.kind === "unavailable" ? problem.skuIds : []);
   const empty = Boolean(cart) && cart.lines.length === 0;
@@ -177,17 +194,17 @@ export default function CartSheet({ onClose }) {
         </div>
       ) : (
         <>
-          {readiness.state === "stock" ? (
+          {reviewing ? (
             <div className="store-cart__review" role="alert">
               <p>Availability changed. Review these items before placing your order.</p>
               <ul>
-                {readiness.stock.map((item) => (
+                {shortList.map((item) => (
                   <li key={item.sku_id}>
                     {item.name ?? `Product ${item.sku_id}`}: {item.max_orderable > 0 ? `only ${item.max_orderable} available, you have ${item.quantity}` : "out of stock"}
                   </li>
                 ))}
               </ul>
-              <button type="button" className="store-button" onClick={cart.acceptStock}>
+              <button type="button" className="store-button" onClick={conflict !== null ? checkout.acceptReview : cart.acceptStock}>
                 Accept changes
               </button>
             </div>
