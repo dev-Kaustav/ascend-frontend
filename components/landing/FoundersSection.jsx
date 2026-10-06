@@ -14,7 +14,8 @@ const founders = [
     role: "COO",
     image: "/praful.jpg",
     focus: "SLAs and last-mile execution",
-    body: "Runs the part of Ascend retailers judge us on: stock on the shelf, on time. Four years managing load-out and delivery fleets at BigBasket's largest Noida warehouse, B2B delivery at Flipkart, and delivery teams across multiple warehouses at StackBox. Today he owns SLAs and last-mile execution across our dark stores."
+    linkedin: "https://www.linkedin.com/in/praful-pachauri-46189b1ab/",
+    body: "Owns SLAs and last-mile execution across our dark stores, so stock is on the shelf, on time. Previously ran delivery fleets at BigBasket, Flipkart, and StackBox."
   },
   {
     name: "Kaustav Mukherjee",
