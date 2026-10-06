@@ -10,6 +10,13 @@ const founders = [
     body: "Leads Ascend's ground network, city execution, and the operating systems behind reliable snack distribution."
   },
   {
+    name: "Praful Pachauri",
+    role: "COO",
+    image: "/praful.jpg",
+    focus: "SLAs and last-mile execution",
+    body: "Runs the part of Ascend retailers judge us on: stock on the shelf, on time. Four years managing load-out and delivery fleets at BigBasket's largest Noida warehouse, B2B delivery at Flipkart, and delivery teams across multiple warehouses at StackBox. Today he owns SLAs and last-mile execution across our dark stores."
+  },
+  {
     name: "Kaustav Mukherjee",
     role: "Founder & CTO",
     image: "/kaustav.jpg",
@@ -47,9 +54,11 @@ export default function FoundersSection() {
                 <h3>{founder.name}</h3>
                 <span>{founder.role}</span>
                 <p>{founder.body}</p>
-                <a href={founder.linkedin} target="_blank" rel="noreferrer">
-                  LinkedIn <span aria-hidden="true">↗</span>
-                </a>
+                {founder.linkedin && (
+                  <a href={founder.linkedin} target="_blank" rel="noreferrer">
+                    LinkedIn <span aria-hidden="true">↗</span>
+                  </a>
+                )}
               </div>
             </article>
           ))}
