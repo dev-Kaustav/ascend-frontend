@@ -97,7 +97,7 @@ function Unconfirmed({ checkout }) {
 }
 
 export default function Checkout() {
-  const { cart, checkout, selectedAddress, openAddresses } = useRetailer();
+  const { cart, checkout, selectedAddress, openAddresses, requireRetailer } = useRetailer();
   const outcomeRef = useRef(null);
   const phase = checkout?.view.phase ?? "idle";
   const checkPhase = checkout?.view.check?.phase ?? null;
@@ -114,6 +114,18 @@ export default function Checkout() {
   const chooseAddress = () => openAddresses({ returnTo: "cart" });
   const rest = selectedAddress ? formatAddressLines(selectedAddress).slice(1).join(", ") : "";
   const unavailable = view.phase === "refused" && view.problem?.kind === "unavailable";
+
+  // A guest cart: login (and the shop, if it is not set up yet) is asked for here and nowhere earlier.
+  // Afterwards the cart opens again with the same lines, and Place order is pressed on purpose.
+  if (gate.reason === "signed-out") {
+    return (
+      <div className="store-checkout" data-checkout-phase="guest">
+        <button type="button" className="store-button store-checkout__place" onClick={() => requireRetailer({ type: "cart" })}>
+          Log in to place order
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="store-checkout" data-checkout-phase={view.phase}>

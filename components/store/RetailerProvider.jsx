@@ -12,6 +12,8 @@ import {
   clearCart,
   describeQuoteError,
   emptyCart,
+  GUEST_CART,
+  mergeGuestCart,
   performReorder,
   quoteRequestBody,
   reconcileReorder,
@@ -119,16 +121,31 @@ const RetailerContext = createContext({
 });
 
 // ---- Cart -----------------------------------------------------------------------------------------
-// The cart is the retailer's intent (SKU ids and whole packets) under ascend_store_cart:v2:<retailer_id>.
-// It exists only for a ready retailer and only for the identity it was restored under: a new
-// generation or retailer drops the visible cart at once and restores that retailer's own. Prices come
-// only from POST /store/cart/quote, asked for one cart revision under one session generation; an
-// answer that is not for the cart now on screen is ignored (see cartReadiness).
+// The cart is the visitor's intent (SKU ids and pieces in whole ladis). A ready retailer's lives under
+// ascend_store_cart:v2:<retailer_id>; anyone else (anonymous, or signed in without a finished shop)
+// shops into the guest cart, which moves into the retailer's own cart the moment they can order. A new
+// generation or owner drops the visible cart at once and restores that owner's own. Prices come only
+// from POST /store/cart/quote (open to guests), asked for one cart revision under one session
+// generation; an answer that is not for the cart now on screen is ignored (see cartReadiness).
 const QUOTE_DELAY_MS = 150; // quick taps on a stepper become one request
 
-function useCartState({ ready, retailerId, generation }) {
-  const ownerKey = ready && retailerId != null && generation != null ? `${generation}:${retailerId}` : null;
-  const identity = useMemo(() => (ownerKey ? { generation, retailerId } : null), [ownerKey, generation, retailerId]);
+// The owner's stored cart. A retailer's also takes in the guest cart built before login, once.
+function restoreOwnerCart(ownerId) {
+  const storage = browserStorage();
+  const own = readStoredCart(storage, ownerId);
+  if (ownerId === GUEST_CART) return own;
+  const merged = mergeGuestCart(own, readStoredCart(storage, GUEST_CART));
+  if (merged !== own) {
+    writeStoredCart(storage, ownerId, merged);
+    writeStoredCart(storage, GUEST_CART, emptyCart());
+  }
+  return merged;
+}
+
+function useCartState({ ready, known: readinessKnown, retailerId, generation }) {
+  const ownerId = ready && retailerId != null ? retailerId : readinessKnown ? GUEST_CART : null;
+  const ownerKey = ownerId != null && generation != null ? `${generation}:${ownerId}` : null;
+  const identity = useMemo(() => (ownerKey ? { generation, retailerId: ownerId } : null), [ownerKey, generation, ownerId]);
   const [record, setRecord] = useState(null); // { owner, retailerId, cart }
   const recordRef = useRef(null);
   const ownerRef = useRef(null);
@@ -137,10 +154,10 @@ function useCartState({ ready, retailerId, generation }) {
   const [retries, setRetries] = useState(0);
 
   // The owner changed (sign-in, sign-out, a switched account): drop the old cart from view in this
-  // very render and restore the new owner's own, so another retailer's lines are never shown. A ready
-  // retailer exists only in the browser, so the server render and hydration never read storage here.
+  // very render and restore the new owner's own, so another retailer's lines are never shown. Readiness
+  // is known only in the browser, so the server render and hydration never read storage here.
   if (ownerKey !== (record?.owner ?? null)) {
-    setRecord(ownerKey ? { owner: ownerKey, retailerId, cart: readStoredCart(browserStorage(), retailerId) } : null);
+    setRecord(ownerKey ? { owner: ownerKey, retailerId: ownerId, cart: restoreOwnerCart(ownerId) } : null);
   }
   // Kept in step before any other effect runs. A page's own effect (the held Add that resumes after login)
   // runs before this provider's effects; with a plain effect here it would still see the previous owner
@@ -158,7 +175,9 @@ function useCartState({ ready, retailerId, generation }) {
     const gate = createRequestGate();
     const token = gate.begin();
     const timer = setTimeout(() => {
-      storeFetch(storeEndpoints.quote, { method: "POST", body: JSON.stringify(quoteRequestBody(cart)) })
+      // A guest's quote is asked anonymously: a cart is priced the same for everyone.
+      const guest = identity.retailerId === GUEST_CART;
+      storeFetch(storeEndpoints.quote, { method: "POST", body: JSON.stringify(quoteRequestBody(cart)), ...(guest ? { public: true } : {}) })
         .then((answer) => {
           if (!gate.isCurrent(token) || getSessionGeneration() !== identity.generation) return;
           setQuote({ phase: "ready", ...asked, quote: answer, error: null });
@@ -271,7 +290,6 @@ export function RetailerProvider({ children }) {
   // The sheet someone asked for, and the identity it was asked under. Shop and address sheets show
   // an account's data, so they only count for that identity (see activeSheet below).
   const [sheetState, setSheetState] = useState(null);
-  const [promptDone, setPromptDone] = useState(null); // generation whose shop prompt was answered
   const [pendingIntent, setPendingIntent] = useState(null);
   const intentRef = useRef(null);
   // Set when the address sheet was opened from the cart: closing it returns to the cart (the order
@@ -346,29 +364,24 @@ export function RetailerProvider({ children }) {
     returnToCartRef.current = false;
     setSheetState(SHEETS.includes(name) ? { name, generation: getSessionGeneration() } : null);
   }, []);
-  // Closing also answers the shop prompt for this identity, so a dismissed shop sheet is not
-  // pushed back at the person until they reload or try something that needs a shop. An address
-  // sheet that was opened from the cart hands back to the cart instead of leaving the person at the
-  // page behind it.
+  // An address sheet that was opened from the cart hands back to the cart instead of leaving the
+  // person at the page behind it.
   const closeSheet = useCallback(() => {
     const backToCart = returnToCartRef.current;
     returnToCartRef.current = false;
     setSheetState((current) => (backToCart && current?.name === "address" ? { name: "cart", generation: getSessionGeneration() } : null));
-    setPromptDone(getSessionGeneration());
   }, []);
 
   const readiness = state.readiness;
-  const needsShop = readiness === "new" || readiness === "confirm";
 
   // What is on screen. Login follows the visitor through the identity change it causes; the shop
   // and address sheets only count for the identity that opened them and only while that identity is
-  // in the state they are for. A new or confirm retailer is shown the shop sheet once per identity
-  // without asking (onboarding is the server's answer, so a reload resumes it).
+  // in the state they are for. The cart is open to guests. Login and the shop sheet are never pushed
+  // at a browsing visitor: they open when asked for, which in the cart means Place order.
   let activeSheet = null;
   if (sheetState && (sheetState.name === "login" || sheetState.generation === generation)) activeSheet = sheetState.name;
-  if ((activeSheet === "address" || activeSheet === "cart") && readiness !== "ready") activeSheet = null;
+  if (activeSheet === "address" && readiness !== "ready") activeSheet = null;
   if (activeSheet === "shop" && readiness === "anonymous") activeSheet = null;
-  if (activeSheet === null && needsShop && promptDone !== generation) activeSheet = "shop";
 
   // ---- Selected delivery address -------------------------------------------------------------
   // The server owns the addresses (state.me.addresses). The browser remembers one id, per
@@ -385,7 +398,12 @@ export function RetailerProvider({ children }) {
 
   // The cart seam Catalogue's controls read: { quantityOf, setQuantity, ... }, null until a ready
   // retailer's own cart has been restored.
-  const { cart, identity: cartIdentity, settleOrdered, reorderInto } = useCartState({ ready: state.canPurchase, retailerId, generation });
+  const { cart, identity: cartIdentity, settleOrdered, reorderInto } = useCartState({
+    ready: state.canPurchase,
+    known: state.readiness !== "loading",
+    retailerId,
+    generation
+  });
 
   // ---- Placing the order -----------------------------------------------------------------------
   // One controller for the whole provider, so an order in flight survives the cart sheet closing and
@@ -445,6 +463,14 @@ export function RetailerProvider({ children }) {
     setPendingIntent(null);
     return intent;
   }, []);
+
+  // Place order from a guest cart went through login (and the shop, if it was not set up): once the
+  // retailer can order, their cart, now holding the guest's lines, opens again to finish checkout.
+  useEffect(() => {
+    if (!state.canPurchase || pendingIntent?.type !== "cart") return;
+    takeIntent();
+    openSheet("cart");
+  }, [state.canPurchase, pendingIntent, takeIntent, openSheet]);
 
   // Header location and Account: a ready retailer picks an address; anyone else is taken to the
   // sheet that gets them there (login, or finishing the shop). Nothing is held to resume.

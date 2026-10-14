@@ -185,52 +185,22 @@ test("isAvailable needs stock and, for a retailer, a positive cap", () => {
 
 // ---- identity and price -----------------------------------------------------------------------
 
-test("an anonymous viewer sees MRP and a login prompt, never a trade price", () => {
-  const price = displayPrice(product(1, { trade_price: 18, mrp: 30 }), anonymous);
-  assert.equal(price.kind, "mrp");
-  assert.equal(price.mrp, 30);
-  assert.equal(price.loginPrompt, true);
-  assert.equal(price.tradePrice, null, "a trade_price in the payload must not leak to a non-ready viewer");
+test("every visitor sees the server's trade price with MRP secondary", () => {
+  const price = displayPrice(product(1, { trade_price: 21.5, mrp: 30 }));
+  assert.deepEqual(price, { kind: "trade", tradePrice: 21.5, mrp: 30 });
 });
 
-test("a retailer who is not ready (new, confirm, error) is treated like an anonymous viewer", () => {
-  for (const readiness of ["new", "confirm", "error"]) {
-    const key = viewerKey({ status: "authed", readiness, generation: 3 });
-    const price = displayPrice(product(1, { trade_price: 18 }), key);
-    assert.equal(price.kind, "mrp", readiness);
-    assert.equal(price.tradePrice, null, readiness);
-  }
-});
-
-test("a ready retailer sees the server's trade price per packet with MRP secondary", () => {
-  const price = displayPrice(product(1, { trade_price: 21.5, mrp: 30 }), ready);
-  assert.equal(price.kind, "trade");
-  assert.equal(price.tradePrice, 21.5);
-  assert.equal(price.mrp, 30);
-  assert.equal(price.perPacket, true);
-  assert.equal(price.loginPrompt, false);
-});
-
-test("a ready retailer without a usable trade price gets no price and no purchase", () => {
+test("a product without a usable trade price gets no price and no purchase", () => {
   for (const extra of [{}, { trade_price: null }, { trade_price: 0 }, { trade_price: "18" }, { trade_price: NaN }]) {
-    const item = product(1, { max_orderable: 5, ...extra });
-    assert.equal(displayPrice(item, ready).kind, "unavailable", JSON.stringify(extra));
-    assert.deepEqual(purchaseState(item, ready), { action: "none", reason: "no-price" });
+    const item = product(1, extra);
+    assert.equal(displayPrice(item).kind, "unavailable", JSON.stringify(extra));
+    assert.deepEqual(purchaseState(item), { action: "none", reason: "no-price" });
   }
 });
 
-test("purchaseState: out of stock, login gate, add with its cap", () => {
-  assert.deepEqual(purchaseState(product(1, { in_stock: false }), anonymous), { action: "none", reason: "out-of-stock" });
-  assert.deepEqual(purchaseState(product(1, { in_stock: false, trade_price: 18, max_orderable: 0 }), ready), {
-    action: "none",
-    reason: "out-of-stock"
-  });
-  assert.deepEqual(purchaseState(product(1), anonymous), { action: "gate", reason: "login" });
-  assert.deepEqual(purchaseState(product(1, { trade_price: 18, max_orderable: 12 }), ready), { action: "add", max: 12 });
-  // max_orderable is already capped by the server at 999; a larger value is still bounded here.
-  assert.equal(purchaseState(product(1, { trade_price: 18, max_orderable: 5000 }), ready).max, MAX_LINE_QUANTITY);
-  // A ready retailer response with no cap cannot be bought against.
-  assert.deepEqual(purchaseState(product(1, { trade_price: 18 }), ready), { action: "none", reason: "no-limit" });
+test("purchaseState: out of stock blocks; anyone else may add up to the line limit, no stock cap", () => {
+  assert.deepEqual(purchaseState(product(1, { in_stock: false, trade_price: 18 })), { action: "none", reason: "out-of-stock" });
+  assert.deepEqual(purchaseState(product(1, { trade_price: 18 })), { action: "add", max: MAX_LINE_QUANTITY });
 });
 
 test("quantities are whole packets, never above the cap, never negative", () => {

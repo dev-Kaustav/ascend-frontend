@@ -128,12 +128,12 @@ export default function ProductDetail({ id, seed = null }) {
             ) : null}
           </dl>
 
-          <PriceBlock product={item} viewer={viewer} />
+          <PriceBlock product={item} />
           <p className={available ? "store-detail__stock" : "store-detail__stock store-detail__stock--out"}>
             {available ? "In stock" : "Out of stock"}
           </p>
           <div className="store-detail__buy">
-            <PurchaseControl product={item} viewer={viewer} />
+            <PurchaseControl product={item} />
           </div>
         </div>
       </div>

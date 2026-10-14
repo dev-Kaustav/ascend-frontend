@@ -390,3 +390,10 @@ test("validateRetailerIntent accepts a whole-packet SKU add and refuses anything
     assert.equal(validateRetailerIntent(bad), null, `should refuse ${JSON.stringify(bad)}`);
   }
 });
+
+test("validateRetailerIntent keeps a return to the cart, and decideResume holds it until the shop is ready", async () => {
+  const { decideResume } = await import("../lib/store/session.mjs");
+  assert.deepEqual(validateRetailerIntent({ type: "cart", extra: "dropped" }), { type: "cart" });
+  assert.deepEqual(decideResume({ type: "cart" }, "new"), { action: "hold", reason: "onboarding" });
+  assert.deepEqual(decideResume(null, "new"), { action: "none" });
+});

@@ -259,11 +259,14 @@ export function QuantityOutput({ quantity, item, label }) {
   );
 }
 
-/** Add, then minus / quantity / plus, a whole pack (ladi) at a time; Out of stock and missing price block it. */
-export function PurchaseControl({ product, viewer }) {
-  const { retailer, cart } = useCart();
+/**
+ * Add, then minus / quantity / plus, a whole pack (ladi) at a time, for any visitor: a guest's cart is
+ * kept in the browser and login is asked for at Place order. Out of stock and missing price block it.
+ */
+export function PurchaseControl({ product }) {
+  const { cart } = useCart();
   const [localQuantity, setLocalQuantity] = useState(0);
-  const state = purchaseState(product, viewer);
+  const state = purchaseState(product);
   const max = state.action === "add" ? state.max : 0;
   const { size } = packOf(product);
   const quantity = cart ? clampQuantity(cart.quantityOf(product.id), max, size) : clampQuantity(localQuantity, max, size);
@@ -278,32 +281,9 @@ export function PurchaseControl({ product, viewer }) {
     );
   }
 
-  if (state.action === "gate") {
-    // Anonymous, or a retailer whose shop is not confirmed: opens login or onboarding and holds
-    // this add, so it resumes afterwards. No trade price is shown before that.
-    return (
-      <button
-        type="button"
-        className="store-add"
-        aria-label={`Add ${product.name}`}
-        onClick={() => retailer.requireRetailer({ type: "add", skuId: product.id, quantity: size })}
-      >
-        Add
-      </button>
-    );
-  }
-
   if (quantity < 1) {
     return (
-      <button
-        type="button"
-        className="store-add"
-        aria-label={`Add ${product.name}`}
-        onClick={() => {
-          if (!retailer.requireRetailer({ type: "add", skuId: product.id, quantity: size })) return;
-          setQuantity(size);
-        }}
-      >
+      <button type="button" className="store-add" aria-label={`Add ${product.name}`} onClick={() => setQuantity(size)}>
         Add
       </button>
     );
@@ -339,9 +319,9 @@ export function PurchaseControl({ product, viewer }) {
   );
 }
 
-/** The price a visitor is allowed to see: MRP with a login prompt, or the retailer's trade price. */
-export function PriceBlock({ product, viewer }) {
-  const price = displayPrice(product, viewer);
+/** The trade price (per ladi first, then per piece and MRP), or MRP when no trade price is set. */
+export function PriceBlock({ product }) {
+  const price = displayPrice(product);
   const mrp = price.mrp === null ? null : formatCurrency(price.mrp);
   const { size, name } = packOf(product);
   if (price.kind === "trade") {
@@ -365,11 +345,7 @@ export function PriceBlock({ product, viewer }) {
   return (
     <div className="store-price">
       {mrp ? <p className="store-price__line store-price__now">MRP {mrp}{size > 1 ? " per pc" : ""}</p> : null}
-      {price.kind === "unavailable" ? (
-        <p className="store-price__prompt">Trade price unavailable</p>
-      ) : (
-        <p className="store-price__prompt">Log in for trade prices</p>
-      )}
+      <p className="store-price__prompt">Trade price unavailable</p>
     </div>
   );
 }
@@ -393,8 +369,8 @@ export function ProductCard({ product, viewer, lazy = false }) {
         </p>
       </Link>
       <p className="store-card__pack">{packLine(product) || " "}</p>
-      <PriceBlock product={product} viewer={viewer} />
-      <PurchaseControl product={product} viewer={viewer} />
+      <PriceBlock product={product} />
+      <PurchaseControl product={product} />
     </li>
   );
 }

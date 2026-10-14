@@ -500,11 +500,11 @@ test("an existing 2 and a past 3 of the same product become 5 packets", () => {
   assert.deepEqual(result.added, [{ sku_id: 7, name: "Snack 7", quantity: 3 }]);
 });
 
-test("the merge stops at the product's current max_orderable and says so", () => {
+test("the merge is not held back by stock: a shortage is trimmed at checkout", () => {
   const result = reconcileReorder(cartOf([7, 2]), [pastLine(7, 3)], [product(7, { max_orderable: 4 })]);
-  assert.equal(cartQuantity(result.cart, 7), 4);
-  assert.deepEqual(result.reduced, [{ sku_id: 7, name: "Snack 7", wanted: 5, quantity: 4 }]);
-  assert.deepEqual(result.added, [{ sku_id: 7, name: "Snack 7", quantity: 2 }]);
+  assert.equal(cartQuantity(result.cart, 7), 5);
+  assert.deepEqual(result.reduced, []);
+  assert.deepEqual(result.added, [{ sku_id: 7, name: "Snack 7", quantity: 3 }]);
 });
 
 test("a cart line the past order does not mention survives untouched", () => {
@@ -595,25 +595,16 @@ test("a product that is unlisted, sold out or unpriced is skipped by name, and t
   assert.deepEqual(result.lines, [
     { sku_id: 3, quantity: 1 },
     { sku_id: 7, quantity: 2 },
-    { sku_id: 10, quantity: 3 }
+    { sku_id: 10, quantity: 4 }
   ]);
   assert.deepEqual(
     result.skipped.map(({ sku_id, reason }) => [sku_id, reason]),
     [[8, "out-of-stock"], [9, "unavailable"], [11, "unlisted"]]
   );
   assert.equal(result.skipped.find((item) => item.sku_id === 11).name, "Retired Crisps");
-  assert.deepEqual(names(result.reduced), ["Snack 10"]);
+  assert.deepEqual(names(result.reduced), []);
   assert.equal(result.outcome, "partial");
   assert.equal(describeReorder(result, 40).message, "Some items changed. Review your cart before ordering.");
-});
-
-test("a product the store lists with no cap, or a cap of zero, is not added", () => {
-  const result = reconcileReorder(emptyCart(), [pastLine(7, 1), pastLine(8, 1)], [product(7, { max_orderable: undefined }), product(8, { max_orderable: 0 })]);
-  assert.deepEqual(result.lines, []);
-  assert.deepEqual(
-    result.skipped.map((item) => item.sku_id),
-    [7, 8]
-  );
 });
 
 test("when nothing can be added the very same cart comes back, with the approved copy", () => {
@@ -630,15 +621,6 @@ test("when nothing can be added the very same cart comes back, with the approved
   assert.equal(told.kind, "none");
   assert.equal(told.message, "These items are currently unavailable. Your cart hasn't changed.");
   assert.equal(told.skipped.length, 2);
-});
-
-test("a reorder never lowers a line that is already above what is available", () => {
-  const cart = cartOf([7, 8]);
-  const result = reconcileReorder(cart, [pastLine(7, 3)], [product(7, { max_orderable: 5 })]);
-  assert.equal(cartQuantity(result.cart, 7), 8);
-  assert.equal(result.cart, cart);
-  assert.equal(result.outcome, "none");
-  assert.deepEqual(result.reduced, [{ sku_id: 7, name: "Snack 7", wanted: 11, quantity: 8 }]);
 });
 
 test("a line stops at 999 packets even when the product's cap is higher", () => {
@@ -851,11 +833,25 @@ test("a product that answers with another product's id is not trusted", async ()
   assert.equal(outcome.status, "failed");
 });
 
-test("reorder rounds a past loose-piece quantity up to whole ladis, within stock", () => {
+test("reorder rounds a past loose-piece quantity up to whole ladis", () => {
   const ladi = { units_per_pack: 12, pack_type: "ladi" };
-  const up = reconcileReorder(emptyCart(), [pastLine(7, 5)], [product(7, { ...ladi, max_orderable: 48 })]);
-  assert.deepEqual(up.lines, [{ sku_id: 7, quantity: 12 }]);
-  const capped = reconcileReorder(emptyCart(), [pastLine(7, 30)], [product(7, { ...ladi, max_orderable: 24 })]);
-  assert.deepEqual(capped.lines, [{ sku_id: 7, quantity: 24 }]);
-  assert.equal(capped.outcome, "partial");
+  const up = reconcileReorder(emptyCart(), [pastLine(7, 5), pastLine(8, 30)], [product(7, ladi), product(8, ladi)]);
+  assert.deepEqual(up.lines, [
+    { sku_id: 7, quantity: 12 },
+    { sku_id: 8, quantity: 36 }
+  ]);
+  assert.equal(up.outcome, "full");
+});
+
+test("a guest cart has its own key and is summed into the retailer's cart at login", async () => {
+  const { GUEST_CART, mergeGuestCart } = await import("../lib/store/cart.mjs");
+  assert.equal(cartStorageKey(GUEST_CART), "ascend_store_cart:v2:guest");
+  const merged = mergeGuestCart(cartOf([7, 12], [3, 1]), cartOf([7, 24], [9, 10]));
+  assert.deepEqual(merged.lines, [
+    { sku_id: 7, quantity: 36 },
+    { sku_id: 3, quantity: 1 },
+    { sku_id: 9, quantity: 10 }
+  ]);
+  const own = cartOf([7, 12]);
+  assert.equal(mergeGuestCart(own, emptyCart()), own);
 });

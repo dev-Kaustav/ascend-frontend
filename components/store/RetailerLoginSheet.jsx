@@ -321,8 +321,9 @@ export default function RetailerLoginSheet({ intent, onClose }) {
       historyEntry.open = false;
       router.replace(decision.href);
       closeSheet();
-    } else if (readiness === "new" || readiness === "confirm") {
-      // The shop sheet is the answer for an unfinished shop, with or without a held destination.
+    } else if ((readiness === "new" || readiness === "confirm") && decision.action === "hold") {
+      // An unfinished shop is set up only when the login was for something that needs it (Place
+      // order, My orders); a plain login lets them keep browsing.
       openSheet("shop");
     } else {
       closeSheet();
