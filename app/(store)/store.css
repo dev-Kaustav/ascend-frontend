@@ -656,6 +656,20 @@
   font-weight: 600;
 }
 
+/* A ladi product: whole ladis on top, the pieces they hold beneath, inside the same 44px control. */
+.store-qty__packs,
+.store-qty__pieces {
+  display: block;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.store-qty__pieces {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
 /* The orange controls take an ink focus ring: orange text on orange would not be visible. */
 .store-add:focus-visible,
 .store-qty button:focus-visible,

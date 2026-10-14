@@ -538,3 +538,25 @@ test("categoryCovers gives each category one https pack shot, in-stock first, an
   });
   assert.deepEqual(categoryCovers(null), {});
 });
+
+// ---- ladi ----------------------------------------------------------------------------------------
+
+test("a ladi product steps and caps in whole ladis; a loose product steps by one piece", async () => {
+  const { packOf, quantityLabel, stepQuantity } = await import("../lib/store/catalogue.mjs");
+  const ladi = { units_per_pack: 12, pack_type: "ladi" };
+  assert.deepEqual(packOf(ladi), { size: 12, name: "ladi" });
+  assert.deepEqual(packOf({ units_per_pack: 1 }), { size: 1, name: null });
+  assert.deepEqual(packOf(null), { size: 1, name: null });
+
+  assert.equal(stepQuantity(0, 1, 100, 12).quantity, 12);
+  assert.equal(stepQuantity(12, 1, 100, 12).quantity, 24);
+  assert.equal(stepQuantity(24, -1, 100, 12).quantity, 12);
+  assert.equal(stepQuantity(12, -1, 100, 12).quantity, 0);
+  assert.deepEqual(stepQuantity(24, 1, 30, 12), { quantity: 24, capped: true }, "30 in stock is 2 whole ladis");
+  assert.equal(clampQuantity(999, 999, 12), 996);
+  assert.equal(stepQuantity(5, 1, 10).quantity, 6);
+
+  assert.equal(quantityLabel(24, ladi), "2 ladi · 24 pcs");
+  assert.equal(quantityLabel(1, {}), "1 pc");
+  assert.equal(quantityLabel(5, ladi), "5 pcs", "an old loose-piece order line is shown as pieces");
+});

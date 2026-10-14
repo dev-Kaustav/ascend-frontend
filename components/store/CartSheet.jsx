@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Minus, Plus } from "lucide-react";
+import { QuantityOutput, packLine } from "@/components/store/Catalogue";
 import Checkout from "@/components/store/Checkout";
 import { ReorderSummary } from "@/components/store/OrderViews";
 import ProductImage from "@/components/store/ProductImage";
@@ -10,10 +11,11 @@ import { useRetailer } from "@/components/store/RetailerProvider";
 import SheetFrame from "@/components/store/SheetFrame";
 import { formatCurrency } from "@/lib/format";
 import { freeDeliveryRemaining } from "@/lib/store/cart.mjs";
+import { MAX_LINE_QUANTITY, packOf, quantityLabel, stepQuantity } from "@/lib/store/catalogue.mjs";
 import { historyEntry } from "@/lib/store/sheet-history";
 
 // The cart review. Every name, image and rupee here is the server's quote for the cart as it is now;
-// the cart itself holds only SKU ids and packets (lib/store/cart.mjs). While the quote is being
+// the cart itself holds only SKU ids and pieces (lib/store/cart.mjs). While the quote is being
 // refreshed, or when it failed, no total is shown and the order is not offered, so a stale price is
 // never read as current. A shortage is shown and waits for the retailer to accept it.
 
@@ -38,17 +40,24 @@ function BrowseLink({ onClose }) {
   );
 }
 
-function shortNote(stock) {
+function shortNote(stock, shown) {
   if (!stock) return null;
-  return stock.max_orderable > 0 ? `Only ${stock.max_orderable} available` : "Out of stock";
+  return stock.max_orderable > 0 ? `Only ${quantityLabel(stock.max_orderable, shown)} available` : "Out of stock";
 }
 
 function CartLine({ line, cart, priced, shown, short, gone }) {
   const name = shown?.name ?? "Loading product";
   const max = Number.isInteger(shown?.max_orderable) && shown.max_orderable > 0 ? shown.max_orderable : null;
   const atMax = max !== null && line.quantity >= max;
-  const unit = shown ? formatCurrency(shown.trade_price) : null;
-  const note = gone ? "No longer available" : shortNote(short);
+  // Steps are whole ladis, so the stepper waits for the product (and its ladi size) to be known.
+  const { size, name: packName } = packOf(shown);
+  const unit = shown
+    ? size > 1
+      ? `${formatCurrency(Math.round(shown.trade_price * size * 100) / 100)} per ${packName} · ${formatCurrency(shown.trade_price)} per pc`
+      : `${formatCurrency(shown.trade_price)} per pc`
+    : null;
+  const pack = shown ? packLine(shown) : "";
+  const note = gone ? "No longer available" : shortNote(short, shown);
   return (
     <li className="store-cart__line" data-sku-id={line.sku_id} data-short={note ? "true" : "false"}>
       <div className="store-cart__thumb">
@@ -56,24 +65,27 @@ function CartLine({ line, cart, priced, shown, short, gone }) {
       </div>
       <div className="store-cart__info">
         <p className="store-cart__name">{name}</p>
-        {shown?.pack_size ? <p className="store-cart__pack">{shown.pack_size}</p> : null}
-        {unit ? <p className="store-cart__pack">{unit} per packet</p> : null}
+        {pack ? <p className="store-cart__pack">{pack}</p> : null}
+        {unit ? <p className="store-cart__pack">{unit}</p> : null}
         {note ? <p className="store-cart__note">{note}</p> : null}
       </div>
       <div className="store-cart__actions">
         <div className="store-qty-wrap">
           <div className="store-qty store-cart__stepper" role="group" aria-label={`Quantity of ${name}`}>
-            <button type="button" aria-label={`Decrease quantity of ${name}`} onClick={() => cart.setQuantity(line.sku_id, line.quantity - 1)}>
+            <button
+              type="button"
+              aria-label={`Decrease quantity of ${name}`}
+              disabled={!shown}
+              onClick={() => cart.setQuantity(line.sku_id, stepQuantity(line.quantity, -1, line.quantity, size).quantity)}
+            >
               <Minus size={18} strokeWidth={2} aria-hidden="true" />
             </button>
-            <output aria-live="polite" aria-label={`${name} quantity`}>
-              {line.quantity}
-            </output>
+            <QuantityOutput quantity={line.quantity} item={shown} label={`${name} quantity`} />
             <button
               type="button"
               aria-label={`Increase quantity of ${name}`}
-              disabled={atMax}
-              onClick={() => cart.setQuantity(line.sku_id, line.quantity + 1, max ?? undefined)}
+              disabled={!shown || atMax}
+              onClick={() => cart.setQuantity(line.sku_id, stepQuantity(line.quantity, 1, max ?? MAX_LINE_QUANTITY, size).quantity, max ?? undefined)}
             >
               <Plus size={18} strokeWidth={2} aria-hidden="true" />
             </button>
@@ -220,7 +232,10 @@ export default function CartSheet({ onClose }) {
               <ul>
                 {shortList.map((item) => (
                   <li key={item.sku_id}>
-                    {item.name ?? `Product ${item.sku_id}`}: {item.max_orderable > 0 ? `only ${item.max_orderable} available, you have ${item.quantity}` : "out of stock"}
+                    {item.name ?? `Product ${item.sku_id}`}:{" "}
+                    {item.max_orderable > 0
+                      ? `only ${quantityLabel(item.max_orderable, priced.get(item.sku_id) ?? cart.known[item.sku_id])} available, you have ${quantityLabel(item.quantity, priced.get(item.sku_id) ?? cart.known[item.sku_id])}`
+                      : "out of stock"}
                   </li>
                 ))}
               </ul>

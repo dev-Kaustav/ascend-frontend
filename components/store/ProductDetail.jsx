@@ -13,7 +13,7 @@ import {
 } from "@/components/store/Catalogue";
 import ProductImage from "@/components/store/ProductImage";
 import { storeEndpoints } from "@/lib/store/api.mjs";
-import { isAvailable, listingHref, productsPath, similarProducts } from "@/lib/store/catalogue.mjs";
+import { isAvailable, listingHref, packOf, piecesLabel, productsPath, similarProducts } from "@/lib/store/catalogue.mjs";
 
 // One product: one real image, its full name, brand, net weight, the viewer's price and the
 // purchase control, then real products from the same category (never itself). Nothing the
@@ -116,6 +116,14 @@ export default function ProductDetail({ id, seed = null }) {
               <div>
                 <dt>Net weight</dt>
                 <dd>{item.pack_size}</dd>
+              </div>
+            ) : null}
+            {packOf(item).size > 1 ? (
+              <div>
+                <dt>Sold as</dt>
+                <dd>
+                  1 {packOf(item).name} = {piecesLabel(packOf(item).size)}
+                </dd>
               </div>
             ) : null}
           </dl>

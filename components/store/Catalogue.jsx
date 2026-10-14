@@ -17,7 +17,9 @@ import {
   decideAddResume,
   displayPrice,
   listingHref,
+  packOf,
   pageOffset,
+  piecesLabel,
   productQuery,
   productsPath,
   purchaseState,
@@ -238,13 +240,33 @@ const UNAVAILABLE_LABEL = {
   "no-limit": "Unavailable"
 };
 
-/** Add, then minus / quantity / plus. Whole packets only; Out of stock and missing price block it. */
+/** The stepper's count: whole packs with their pieces beneath, or pieces alone for a loose product. */
+export function QuantityOutput({ quantity, item, label }) {
+  const { size, name } = packOf(item);
+  return (
+    <output aria-live="polite" aria-label={label}>
+      {size > 1 ? (
+        <>
+          <span className="store-qty__packs">
+            {Math.floor(quantity / size)} {name}
+          </span>
+          <span className="store-qty__pieces">{piecesLabel(quantity)}</span>
+        </>
+      ) : (
+        quantity
+      )}
+    </output>
+  );
+}
+
+/** Add, then minus / quantity / plus, a whole pack (ladi) at a time; Out of stock and missing price block it. */
 export function PurchaseControl({ product, viewer }) {
   const { retailer, cart } = useCart();
   const [localQuantity, setLocalQuantity] = useState(0);
   const state = purchaseState(product, viewer);
   const max = state.action === "add" ? state.max : 0;
-  const quantity = cart ? clampQuantity(cart.quantityOf(product.id), max) : clampQuantity(localQuantity, max);
+  const { size } = packOf(product);
+  const quantity = cart ? clampQuantity(cart.quantityOf(product.id), max, size) : clampQuantity(localQuantity, max, size);
   const setQuantity = (next) => (cart ? cart.setQuantity(product.id, next) : setLocalQuantity(next));
 
   if (state.action === "none") {
@@ -264,7 +286,7 @@ export function PurchaseControl({ product, viewer }) {
         type="button"
         className="store-add"
         aria-label={`Add ${product.name}`}
-        onClick={() => retailer.requireRetailer({ type: "add", skuId: product.id, quantity: 1 })}
+        onClick={() => retailer.requireRetailer({ type: "add", skuId: product.id, quantity: size })}
       >
         Add
       </button>
@@ -278,8 +300,8 @@ export function PurchaseControl({ product, viewer }) {
         className="store-add"
         aria-label={`Add ${product.name}`}
         onClick={() => {
-          if (!retailer.requireRetailer({ type: "add", skuId: product.id, quantity: 1 })) return;
-          setQuantity(1);
+          if (!retailer.requireRetailer({ type: "add", skuId: product.id, quantity: size })) return;
+          setQuantity(size);
         }}
       >
         Add
@@ -287,25 +309,23 @@ export function PurchaseControl({ product, viewer }) {
     );
   }
 
-  const atMax = stepQuantity(quantity, 0, max).capped;
+  const atMax = stepQuantity(quantity, 0, max, size).capped;
   return (
     <div className="store-qty-wrap">
       <div className="store-qty" role="group" aria-label={`Quantity of ${product.name}`}>
         <button
           type="button"
           aria-label={`Decrease quantity of ${product.name}`}
-          onClick={() => setQuantity(stepQuantity(quantity, -1, max).quantity)}
+          onClick={() => setQuantity(stepQuantity(quantity, -1, max, size).quantity)}
         >
           <Minus size={18} strokeWidth={2} aria-hidden="true" />
         </button>
-        <output aria-live="polite" aria-label={`${product.name} quantity`}>
-          {quantity}
-        </output>
+        <QuantityOutput quantity={quantity} item={product} label={`${product.name} quantity`} />
         <button
           type="button"
           aria-label={`Increase quantity of ${product.name}`}
           disabled={atMax}
-          onClick={() => setQuantity(stepQuantity(quantity, 1, max).quantity)}
+          onClick={() => setQuantity(stepQuantity(quantity, 1, max, size).quantity)}
         >
           <Plus size={18} strokeWidth={2} aria-hidden="true" />
         </button>
@@ -323,20 +343,28 @@ export function PurchaseControl({ product, viewer }) {
 export function PriceBlock({ product, viewer }) {
   const price = displayPrice(product, viewer);
   const mrp = price.mrp === null ? null : formatCurrency(price.mrp);
+  const { size, name } = packOf(product);
   if (price.kind === "trade") {
+    // Per ladi first, the way it is bought; the per-piece price and MRP beneath it.
     return (
       <div className="store-price">
         <p className="store-price__line">
-          <span className="store-price__now">{formatCurrency(price.tradePrice)}</span>{" "}
-          <span className="store-price__unit">per packet</span>
+          <span className="store-price__now">{formatCurrency(size > 1 ? Math.round(price.tradePrice * size * 100) / 100 : price.tradePrice)}</span>{" "}
+          <span className="store-price__unit">per {size > 1 ? name : "pc"}</span>
         </p>
-        {mrp ? <p className="store-price__mrp">MRP {mrp}</p> : null}
+        {size > 1 ? (
+          <p className="store-price__mrp">
+            {formatCurrency(price.tradePrice)} per pc{mrp ? ` · MRP ${mrp}` : ""}
+          </p>
+        ) : mrp ? (
+          <p className="store-price__mrp">MRP {mrp}</p>
+        ) : null}
       </div>
     );
   }
   return (
     <div className="store-price">
-      {mrp ? <p className="store-price__line store-price__now">MRP {mrp}</p> : null}
+      {mrp ? <p className="store-price__line store-price__now">MRP {mrp}{size > 1 ? " per pc" : ""}</p> : null}
       {price.kind === "unavailable" ? (
         <p className="store-price__prompt">Trade price unavailable</p>
       ) : (
@@ -348,6 +376,13 @@ export function PriceBlock({ product, viewer }) {
 
 // ---- cards, shelves, grids -----------------------------------------------------------------------
 
+/** "23 g · 1 ladi = 12 pcs": the weight and, for a pack product, what one pack holds. */
+export function packLine(product) {
+  const { size, name } = packOf(product);
+  const pack = size > 1 ? `1 ${name} = ${piecesLabel(size)}` : null;
+  return [product.pack_size, pack].filter(Boolean).join(" · ");
+}
+
 export function ProductCard({ product, viewer, lazy = false }) {
   return (
     <li className="store-card store-product-card" data-store-product-id={product.id}>
@@ -357,7 +392,7 @@ export function ProductCard({ product, viewer, lazy = false }) {
           {product.name}
         </p>
       </Link>
-      <p className="store-card__pack">{product.pack_size || " "}</p>
+      <p className="store-card__pack">{packLine(product) || " "}</p>
       <PriceBlock product={product} viewer={viewer} />
       <PurchaseControl product={product} viewer={viewer} />
     </li>

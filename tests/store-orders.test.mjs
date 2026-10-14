@@ -25,7 +25,6 @@ import {
   orderListPath,
   orderReference,
   orderSummaryLabel,
-  packetsLabel,
   parseOrderId,
   parseOrderPage,
   productCountLabel,
@@ -170,11 +169,6 @@ test("an unknown product count is left out, not shown as zero", () => {
   assert.equal(orderSummaryLabel({ id: 12 }), "Order #12");
 });
 
-test("a detail quantity is worded as packets", () => {
-  assert.equal(packetsLabel(1), "1 packet");
-  assert.equal(packetsLabel(24), "24 packets");
-});
-
 test("the order id is the reference", () => {
   assert.equal(orderReference(1042), "Order #1042");
   assert.equal(orderHref(1042), "/orders/1042");
@@ -276,7 +270,7 @@ test("detail keeps the order's own snapshot and packet quantities", () => {
     status: "READY_TO_SHIP",
     created_at: "2026-09-03T10:00:00+00:00",
     lines: [
-      { sku_id: 9, name: "Salted chips", image_url: null, pack_size: "52 g", quantity: 12, mrp: 20, line_total: 240 },
+      { sku_id: 9, name: "Salted chips", image_url: null, pack_size: "52 g", pack_type: "ladi", units_per_pack: 12, quantity: 12, mrp: 20, line_total: 240 },
       { sku_id: 0, quantity: 3 },
       { sku_id: 10, quantity: 0 },
       { sku_id: 11, quantity: 2.5 }
@@ -289,6 +283,8 @@ test("detail keeps the order's own snapshot and packet quantities", () => {
   });
   assert.equal(detail.lines.length, 1, "lines without a real SKU or a whole positive quantity are not shown");
   assert.equal(detail.lines[0].quantity, 12);
+  assert.equal(detail.lines[0].pack_type, "ladi");
+  assert.equal(detail.lines[0].units_per_pack, 12);
   assert.equal(detail.total, 280);
   assert.equal(detail.subtotal, 240);
   assert.equal(detail.delivery_charge, 40);

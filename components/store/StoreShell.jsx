@@ -90,7 +90,7 @@ function CartBar() {
       <button
         type="button"
         onClick={() => openSheet("cart")}
-        aria-label={`View cart, ${units} ${units === 1 ? "packet" : "packets"}${total ? `, ${total}` : ""}`}
+        aria-label={`View cart, ${units} ${units === 1 ? "piece" : "pieces"}${total ? `, ${total}` : ""}`}
         data-quote-current={cart.readiness.ready ? "true" : "false"}
       >
         <span className="store-cart-bar__label">
@@ -98,7 +98,7 @@ function CartBar() {
           View cart
         </span>
         <span className="store-cart-bar__sum">
-          {units} {units === 1 ? "packet" : "packets"}
+          {units} {units === 1 ? "pc" : "pcs"}
           {total ? ` · ${total}` : ""}
         </span>
       </button>
@@ -114,7 +114,7 @@ function HeaderCart() {
       type="button"
       className="store-header__cart"
       disabled={readiness === "loading"}
-      aria-label={units > 0 ? `Cart, ${units} ${units === 1 ? "packet" : "packets"}` : "Cart"}
+      aria-label={units > 0 ? `Cart, ${units} ${units === 1 ? "piece" : "pieces"}` : "Cart"}
       onClick={() => {
         if (cart) openSheet("cart");
         else requireRetailer(null);

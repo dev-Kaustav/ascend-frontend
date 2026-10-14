@@ -68,8 +68,8 @@ test("an empty cart serializes to nothing, so its key can be removed", () => {
 });
 
 test("the storage key names the retailer; no retailer, no key", () => {
-  assert.equal(cartStorageKey(6), "ascend_store_cart:6");
-  assert.equal(cartStorageKey("7"), "ascend_store_cart:7");
+  assert.equal(cartStorageKey(6), "ascend_store_cart:v2:6");
+  assert.equal(cartStorageKey("7"), "ascend_store_cart:v2:7");
   assert.equal(cartStorageKey(null), null);
   assert.equal(cartStorageKey(undefined), null);
   assert.equal(cartStorageKey(0), null);
@@ -83,7 +83,7 @@ test("a cart written for one retailer is never read back for another", () => {
   assert.deepEqual(readStoredCart(storage, 6).lines, [{ sku_id: 12, quantity: 3 }]);
   assert.deepEqual(readStoredCart(storage, 7).lines, []);
   assert.deepEqual(readStoredCart(storage, null).lines, []);
-  assert.deepEqual(Object.keys(storage.dump()), ["ascend_store_cart:6"]);
+  assert.deepEqual(Object.keys(storage.dump()), ["ascend_store_cart:v2:6"]);
 });
 
 test("writing an empty cart removes the owner's key", () => {
@@ -849,4 +849,13 @@ test("a product that answers with another product's id is not trusted", async ()
   const harness = reorderHarness({ products: { 7: product(99) } });
   const outcome = await performReorder(harness.options);
   assert.equal(outcome.status, "failed");
+});
+
+test("reorder rounds a past loose-piece quantity up to whole ladis, within stock", () => {
+  const ladi = { units_per_pack: 12, pack_type: "ladi" };
+  const up = reconcileReorder(emptyCart(), [pastLine(7, 5)], [product(7, { ...ladi, max_orderable: 48 })]);
+  assert.deepEqual(up.lines, [{ sku_id: 7, quantity: 12 }]);
+  const capped = reconcileReorder(emptyCart(), [pastLine(7, 30)], [product(7, { ...ladi, max_orderable: 24 })]);
+  assert.deepEqual(capped.lines, [{ sku_id: 7, quantity: 24 }]);
+  assert.equal(capped.outcome, "partial");
 });

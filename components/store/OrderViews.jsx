@@ -7,7 +7,7 @@ import { useRetailer } from "@/components/store/RetailerProvider";
 import { formatCurrency } from "@/lib/format";
 import { storeEndpoints, storeFetch } from "@/lib/store/api.mjs";
 import { reorderSkipText } from "@/lib/store/cart.mjs";
-import { createRequestGate } from "@/lib/store/catalogue.mjs";
+import { createRequestGate, quantityLabel } from "@/lib/store/catalogue.mjs";
 import {
   describeInvoiceError,
   describeOrderError,
@@ -20,7 +20,6 @@ import {
   orderHref,
   orderListPath,
   orderReference,
-  packetsLabel,
   productCountLabel,
   shouldRefreshOnFocus,
   statusLabel,
@@ -225,7 +224,7 @@ export function ReorderSummary({ view }) {
       ))}
       {view.reduced.map((item) => (
         <li key={`r${item.sku_id}`}>
-          {item.name}: only {item.quantity} available, you asked for {item.wanted}
+          {item.name}: only {item.quantity} pcs available, you asked for {item.wanted} pcs
         </li>
       ))}
     </ul>
@@ -496,7 +495,7 @@ function Lines({ lines }) {
           <div className="store-order-line__info">
             <p className="store-cart__name">{line.name ?? "Product no longer listed"}</p>
             {line.pack_size ? <p className="store-cart__pack">{line.pack_size}</p> : null}
-            <p className="store-cart__pack">{packetsLabel(line.quantity)}</p>
+            <p className="store-cart__pack">{quantityLabel(line.quantity, line)}</p>
           </div>
           <p className="store-order-line__total">{line.line_total === null ? "" : formatCurrency(line.line_total)}</p>
         </li>

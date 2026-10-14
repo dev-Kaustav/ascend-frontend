@@ -119,7 +119,7 @@ const RetailerContext = createContext({
 });
 
 // ---- Cart -----------------------------------------------------------------------------------------
-// The cart is the retailer's intent (SKU ids and whole packets) under ascend_store_cart:<retailer_id>.
+// The cart is the retailer's intent (SKU ids and whole packets) under ascend_store_cart:v2:<retailer_id>.
 // It exists only for a ready retailer and only for the identity it was restored under: a new
 // generation or retailer drops the visible cart at once and restores that retailer's own. Prices come
 // only from POST /store/cart/quote, asked for one cart revision under one session generation; an
