@@ -1,11 +1,5 @@
-"use client";
-
-import RetailerRequestsPanel from "@/components/workspaces/RetailerRequestsPanel";
+import { redirect } from "next/navigation";
 
 export default function RetailerRequestsPage() {
-  return (
-    <div className="space-y-6">
-      <RetailerRequestsPanel />
-    </div>
-  );
+  redirect("/app/retailers?tab=requests");
 }

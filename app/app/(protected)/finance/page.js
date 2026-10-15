@@ -6,8 +6,6 @@ import WarehouseSelector from "@/components/ui/WarehouseSelector";
 import AccountingPanel from "@/components/workspaces/AccountingPanel";
 import InvoicesPanel from "@/components/workspaces/InvoicesPanel";
 import CreditNotesPanel from "@/components/workspaces/CreditNotesPanel";
-import CashCollectionPanel from "@/components/workspaces/CashCollectionPanel";
-import OutstandingPanel from "@/components/workspaces/OutstandingPanel";
 import DailySalesPanel from "@/components/workspaces/DailySalesPanel";
 
 export default function FinanceWorkspacePage() {
@@ -36,20 +34,6 @@ export default function FinanceWorkspacePage() {
       render: () => <CreditNotesPanel warehouseId={warehouseId} />
     },
     {
-      key: "outstanding",
-      label: "Outstanding",
-      description: "Per-order outstanding amounts, recovery tracking, and aging analysis.",
-      roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <OutstandingPanel warehouseId={warehouseId} />
-    },
-    {
-      key: "collection",
-      label: "Collection",
-      description: "Payment collection by rider, mode breakdown, and recovery recording.",
-      roles: ["ADMIN", "ACCOUNTANT"],
-      render: () => <CashCollectionPanel warehouseId={warehouseId} />
-    },
-    {
       key: "daily-sales",
       label: "Daily Sales",
       description: "Daily sales summary with salesman-level delivery and cancellation breakdown.",
@@ -65,7 +49,7 @@ export default function FinanceWorkspacePage() {
       </div>
       <WorkspaceTabs
         title="Finance"
-        subtitle="Accounting, invoices, credits, outstanding, collections, and daily sales."
+        subtitle="Accounting, invoices, credits, and daily sales."
         tabs={tabs}
       />
     </div>

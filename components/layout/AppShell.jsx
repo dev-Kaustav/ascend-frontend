@@ -254,6 +254,7 @@ const NAV_ICON_MAP = {
   Profile: PersonIcon,
   "Bill Labels": LabelIcon,
   "My Retailers": StorefrontIcon,
+  Retailers: StorefrontIcon,
   "Retailer Requests": InboxIcon,
   "Outlet Finder": PinIcon,
   "Tracking": PinIcon,

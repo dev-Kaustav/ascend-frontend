@@ -3,7 +3,6 @@
 import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
 import BrandsPanel from "@/components/workspaces/BrandsPanel";
 import CatalogPanel from "@/components/workspaces/CatalogPanel";
-import RetailersPanel from "@/components/workspaces/RetailersPanel";
 
 export default function MasterDataWorkspacePage() {
   const tabs = [
@@ -20,13 +19,6 @@ export default function MasterDataWorkspacePage() {
       description: "SKU catalog, pricing fields, and product dimensions managed together.",
       roles: ["ADMIN"],
       render: () => <CatalogPanel />
-    },
-    {
-      key: "retailers",
-      label: "Retailers",
-      description: "Retailer records, coverage assignments and contact details.",
-      roles: ["ADMIN"],
-      render: () => <RetailersPanel />
     }
   ];
 

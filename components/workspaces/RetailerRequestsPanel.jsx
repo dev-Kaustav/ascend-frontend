@@ -65,7 +65,7 @@ export default function RetailerRequestsPanel() {
       notify(action === "approve" ? `${request.name} approved.` : `${request.name} rejected.`);
       setRejectingId(null);
       setNote("");
-      // Approval mints a retailer, so the cached admin lookups behind Master Data are now stale.
+      // Approval adds a retailer, so the directory's cached lookups are now stale.
       invalidateApiCache(apiEndpoints.admin.lookups);
       await load();
     } catch (err) {
