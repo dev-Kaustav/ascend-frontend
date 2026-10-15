@@ -39,19 +39,20 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[1.75rem] border border-slate-200/70 bg-white px-7 py-6 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.28)]">
+      <section className="field-workspace-heading rounded-[1.75rem] border border-slate-200/70 bg-white px-7 py-6 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.28)]">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <h1 className="text-[2rem] font-bold tracking-[-0.03em] text-slate-900">{title}</h1>
             <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
           </div>
-          <div className="flex flex-wrap gap-2.5">
+          <div className="field-workspace-tabs flex flex-wrap gap-2.5">
             {allowedTabs.map((tab) => {
               const isActive = activeTab.key === tab.key;
               return (
                 <button
                   key={tab.key}
                   type="button"
+                  aria-pressed={isActive}
                   onClick={() => {
                     const params = new URLSearchParams(searchParams.toString());
                     params.set("tab", tab.key);
@@ -69,7 +70,7 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
             })}
           </div>
         </div>
-        {activeTab.description ? <p className="mt-4 text-sm text-slate-500">{activeTab.description}</p> : null}
+        {activeTab.description ? <p className="field-workspace-description mt-4 text-sm text-slate-500">{activeTab.description}</p> : null}
       </section>
 
       <div key={activeTab.key}>{activeTab.render()}</div>

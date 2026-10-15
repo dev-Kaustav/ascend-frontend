@@ -18,3 +18,191 @@
   font-family: var(--font-display), "DM Sans", "Avenir Next", sans-serif;
   letter-spacing: -0.02em;
 }
+
+/* Field workspace: phone and tablet layouts share one touch-first shell. */
+@media (max-width: 1023px) {
+  .field-app {
+    --field-nav-height: calc(72px + env(safe-area-inset-bottom, 0px));
+    --color-accent: #047857;
+    --color-accent-strong: #065f46;
+    --color-accent-soft: #ecfdf5;
+    font-family: var(--font-marketing-body), sans-serif;
+    background: #f8fafc;
+    min-height: 100dvh;
+  }
+
+  .field-app > aside { display: none; }
+  .field-app h1, .field-app h2, .field-app h3, .field-app h4 {
+    font-family: inherit;
+    letter-spacing: normal;
+    text-wrap: balance;
+  }
+  .field-app p { text-wrap: pretty; }
+  .field-app :focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
+  .field-app button, .field-app select, .field-app input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+  .field-app input, .field-app select, .field-app textarea { font-size: 16px; }
+  .field-app input, .field-app select, .field-app textarea, .field-app button { max-width: 100%; }
+  .field-app input, .field-app select, .field-app textarea { min-width: 0; }
+  .field-app .app-main {
+    padding: 20px 16px calc(var(--field-nav-height) + 24px);
+    min-width: 0;
+  }
+  .field-app:has(.mobile-action-bar) .app-main {
+    padding-bottom: calc(var(--field-nav-height) + 110px);
+  }
+  .field-app .app-section {
+    border-radius: 20px;
+    border-color: #e2e8f0;
+    padding: 18px 16px;
+    box-shadow: none;
+    min-width: 0;
+  }
+  .field-app .app-section > div:first-child:has(h2) { gap: 12px; margin-bottom: 16px; }
+  .field-app .app-section h2 { font-size: 19px; line-height: 1.3; }
+  .field-app .app-section > div:first-child > div { min-width: 0; }
+  .field-app .app-section > div:first-child > div > p { font-size: 13px; }
+  .field-app .app-section button, .field-app .app-section a {
+    min-height: 44px;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+  .field-app label { letter-spacing: normal; }
+  .field-app .mobile-action-bar {
+    bottom: var(--field-nav-height);
+    padding: 12px 16px !important;
+    background: white;
+    backdrop-filter: none;
+  }
+  .field-app .field-detail-overlay { --field-nav-height: 0px; }
+  .field-app .field-detail-overlay .mobile-action-bar { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important; }
+  .field-app .field-detail-overlay > aside { padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
+  .field-app .field-workspace-heading {
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .field-app .field-workspace-heading h1 { font-size: 24px; }
+  .field-app .field-workspace-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px 0;
+    gap: 8px;
+  }
+  .field-app .field-workspace-tabs button { flex-shrink: 0; letter-spacing: normal; box-shadow: none; }
+  .field-app .field-workspace-description { display: none; }
+}
+
+.field-header, .field-bottom-nav { display: none; }
+@media (max-width: 1023px) {
+  .field-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
+  }
+  .field-header a, .field-app a[href^="tel:"] { min-width: 44px; min-height: 44px; }
+  .field-icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    color: #334155;
+  }
+  .field-bottom-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    display: flex;
+    min-height: var(--field-nav-height);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+  }
+  .field-nav-item {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    min-height: 60px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .field-nav-icon {
+    display: flex;
+    width: 48px;
+    height: 30px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+  }
+  .field-nav-item-active { color: #047857; }
+  .field-nav-item-active .field-nav-icon { background: #ecfdf5; }
+  .field-home { display: grid; gap: 24px; }
+  .field-home-hero { padding: 24px; border-radius: 24px; background: #0f172a; color: #fff; }
+  .field-home-hero h1 { margin-top: 12px; font-size: 30px; line-height: 1.15; font-weight: 600; }
+  .field-home-hero p { color: #cbd5e1; line-height: 1.6; }
+  .field-home-primary {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 20px;
+    border-radius: 16px;
+    background: #a7f3d0;
+    color: #064e3b;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .field-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .field-metric { min-width: 0; padding: 16px 12px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; }
+  .field-metric strong { display: block; font-size: 26px; line-height: 1.2; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .field-metric span { display: block; margin-top: 6px; font-size: 12px; color: #64748b; }
+  .field-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .field-shortcut { padding: 18px 16px; border-radius: 20px; border: 1px solid #e2e8f0; background: white; }
+  .field-shortcut strong { display: block; margin-top: 12px; font-size: 16px; }
+  .field-shortcut span { display: block; margin-top: 4px; font-size: 13px; color: #64748b; }
+  .field-order-card { padding: 18px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; }
+  .field-order-card a { min-height: 44px; }
+  .field-order-card .field-order-title { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+  .field-order-title strong { display: block; font-size: 17px; line-height: 1.35; }
+  .field-order-title small { display: block; margin-top: 4px; color: #64748b; font-size: 12px; }
+  .field-order-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; font-size: 13px; color: #64748b; }
+  .field-order-summary strong { color: #0f172a; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .field-order-actions { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+  .field-order-actions button, .field-order-actions select, .field-order-actions input { border-radius: 12px; }
+  .field-empty { padding: 32px 20px; text-align: center; border: 1px dashed #cbd5e1; border-radius: 20px; background: white; }
+  .field-empty h3 { margin-top: 12px; font-size: 17px; font-weight: 600; }
+  .field-empty p { margin-top: 8px; font-size: 14px; color: #64748b; }
+  .field-empty a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 12px; color: #047857; font-weight: 600; }
+  .field-status-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .field-status-filters button { min-height: 44px; flex-shrink: 0; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 16px; background: #fff; color: #475569; font-size: 14px; font-weight: 600; }
+  .field-status-filters button[aria-pressed="true"] { background: #0f172a; border-color: #0f172a; color: #fff; }
+  .field-order-form > .app-section { padding: 0; border: 0; background: transparent; }
+  .field-order-form form > .field-form-section { padding: 18px 16px; border: 1px solid #e2e8f0; border-radius: 20px; background: white; }
+}
+
+@media (max-width: 1023px) {
+  .field-app .field-list-section { border: 0; padding: 0; background: transparent; }
+  .field-order-actions button { font-size: 14px; }
+  .field-app .field-form-section > div > label { color: #475569; }
+  .field-app .field-form-section label:has(input[type="radio"]) { min-height: 44px; }
+}

@@ -25,6 +25,7 @@ export default function DataTable({
   data,
   emptyLabel = "No records",
   onRowClick,
+  renderMobileRow,
   tableClassName = "",
   containerClassName = ""
 }) {
@@ -45,7 +46,7 @@ export default function DataTable({
           meta.mobilePrimary marks the headline field (rendered large, no label);
           meta.mobileHidden drops a column that is noise on a small screen. Without either
           hint, every column renders as a label/value row — correct, if verbose. */}
-      <div className="md:hidden">
+      <div className={renderMobileRow ? "lg:hidden" : "md:hidden"}>
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
             {emptyLabel}
@@ -53,6 +54,12 @@ export default function DataTable({
         ) : (
           <ul className="space-y-2.5">
             {rows.map((row) => {
+              if (renderMobileRow) {
+                return <li key={row.id}>{renderMobileRow(row.original, (columnId) => {
+                  const cell = row.getVisibleCells().find((item) => item.column.id === columnId);
+                  return cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : null;
+                })}</li>;
+              }
               const cells = row.getVisibleCells().filter((cell) => !cell.column.columnDef.meta?.mobileHidden);
               const primary = cells.find((cell) => cell.column.columnDef.meta?.mobilePrimary);
               const rest = cells.filter((cell) => cell !== primary);
@@ -120,7 +127,7 @@ export default function DataTable({
         )}
       </div>
 
-      <div className={`hidden overflow-x-auto max-w-full md:block ${containerClassName}`}>
+      <div className={`hidden overflow-x-auto max-w-full ${renderMobileRow ? "lg:block" : "md:block"} ${containerClassName}`}>
       <table className={`w-full min-w-[720px] border-separate border-spacing-y-2 text-sm ${tableClassName}`}>
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (

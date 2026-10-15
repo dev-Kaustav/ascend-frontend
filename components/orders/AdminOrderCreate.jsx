@@ -59,8 +59,8 @@ export default function AdminOrderCreate() {
       retailers.map((retailer) => ({
         value: String(retailer.id),
         label: retailer.name,
-        hint: retailer.city || "",
-        keywords: [retailer.city, retailer.mobile_number]
+        hint: retailer.address_line1 || "",
+        keywords: [retailer.address_line1, retailer.city, retailer.mobile_number]
       })),
     [retailers]
   );
@@ -200,7 +200,7 @@ export default function AdminOrderCreate() {
                 value={retailerId}
                 onChange={setRetailerId}
                 options={retailerOptions}
-                placeholder="Search retailers by name, city or phone"
+                placeholder="Search retailers by name, address, city or phone"
                 emptyLabel="No retailers match"
                 className="mt-2"
               />

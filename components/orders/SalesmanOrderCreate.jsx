@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import OrderLineItemsTable from "@/components/orders/OrderLineItemsTable";
+import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
 import SectionCard from "@/components/layout/SectionCard";
 import SearchSelect from "@/components/ui/SearchSelect";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
@@ -50,8 +51,8 @@ export default function SalesmanOrderCreate() {
       retailers.map((retailer) => ({
         value: String(retailer.id),
         label: retailer.name,
-        hint: retailer.city || "",
-        keywords: [retailer.city, retailer.mobile_number]
+        hint: retailer.address_line1 || "",
+        keywords: [retailer.address_line1, retailer.city, retailer.mobile_number]
       })),
     [retailers]
   );
@@ -163,7 +164,7 @@ export default function SalesmanOrderCreate() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="field-order-form space-y-6">
       <SectionCard
         title="Create Order"
         subtitle="Book an order for one of your assigned retailers."
@@ -176,15 +177,15 @@ export default function SalesmanOrderCreate() {
           </Link>
         }
       >
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
+        <form id="salesman-order-form" onSubmit={handleSubmit} className="space-y-6">
+          <div className="field-form-section grid gap-4 lg:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Retailer</label>
               <SearchSelect
                 value={retailerId}
                 onChange={setRetailerId}
                 options={retailerOptions}
-                placeholder="Search retailers by name, city or phone"
+                placeholder="Search retailers by name, address, city or phone"
                 emptyLabel="No retailers match"
                 className="mt-2"
               />
@@ -209,7 +210,7 @@ export default function SalesmanOrderCreate() {
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="field-form-section grid gap-4 lg:grid-cols-2">
             <div>
               <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse</label>
               <SelectBar value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="mt-2">
@@ -259,7 +260,7 @@ export default function SalesmanOrderCreate() {
             </div>
           </div>
 
-          <div>
+          <div className="field-form-section">
             <label className="text-xs uppercase tracking-widest text-slate-400">Payment mode</label>
             <SelectBar
               value={paymentMode}
@@ -270,7 +271,7 @@ export default function SalesmanOrderCreate() {
                   setPaymentAmount("");
                 }
               }}
-              className="mt-2 md:max-w-[calc(50%-0.5rem)]"
+              className="mt-2 lg:max-w-[calc(50%-0.5rem)]"
             >
               <option value="CASH">Cash</option>
               <option value="UPI">UPI</option>
@@ -279,7 +280,7 @@ export default function SalesmanOrderCreate() {
             </SelectBar>
           </div>
 
-          <div className="space-y-4 border-t border-slate-200 pt-4">
+          <div className="field-form-section space-y-4 border-t border-slate-200 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs uppercase tracking-widest text-slate-400">Order items</p>
               <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -325,14 +326,14 @@ export default function SalesmanOrderCreate() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="field-form-section flex flex-wrap items-center justify-end gap-3">
             {paymentMode !== "CREDIT" ? (
               <div className="w-full space-y-2">
-                <div className="flex items-center justify-between gap-3 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
-                  <span className="md:col-span-7 text-right text-sm font-semibold text-slate-700">
+                <div className="flex items-center justify-between gap-3 lg:grid lg:items-center lg:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                  <span className="lg:col-span-7 text-right text-sm font-semibold text-slate-700">
                     Payment received
                   </span>
-                  <div className="w-40 shrink-0 md:col-span-2 md:col-start-8 md:w-auto">
+                  <div className="w-40 shrink-0 lg:col-span-2 lg:col-start-8 lg:w-auto">
                     <InputBar
                       type="number"
                       min="0"
@@ -345,11 +346,11 @@ export default function SalesmanOrderCreate() {
                     />
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-3 text-sm text-slate-600 md:grid md:items-center md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
-                  <span className="md:col-span-7 text-right text-sm font-semibold text-slate-500">
+                <div className="flex items-center justify-between gap-3 text-sm text-slate-600 lg:grid lg:items-center lg:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
+                  <span className="lg:col-span-7 text-right text-sm font-semibold text-slate-500">
                     Payment pending
                   </span>
-                  <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+                  <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
                     {formatRupee(paymentPending)}
                   </span>
                 </div>
@@ -363,7 +364,7 @@ export default function SalesmanOrderCreate() {
 
           {lookupError ? <p className="text-sm text-rose-500">{lookupError}</p> : null}
           {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-          <div className="flex justify-end">
+          <div className="hidden justify-end lg:flex">
             <button
               type="submit"
               disabled={saving || !retailers.length}
@@ -374,6 +375,10 @@ export default function SalesmanOrderCreate() {
           </div>
         </form>
       </SectionCard>
+      <MobileActionBar notice={error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}>
+        <div className="min-w-0 shrink-0 pr-2"><p className="text-xs text-slate-500">Order total</p><p className="text-lg font-semibold tabular-nums">{formatRupee(orderGrandTotal)}</p></div>
+        <button type="submit" form="salesman-order-form" disabled={saving || !retailers.length} className={BAR_ACTION_PRIMARY}>{saving ? "Creating…" : "Create order"}</button>
+      </MobileActionBar>
     </div>
   );
 }

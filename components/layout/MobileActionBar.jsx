@@ -21,7 +21,7 @@ export default function MobileActionBar({ children, notice, className = "" }) {
   if (!children) return null;
   return (
     <div
-        className={`fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur lg:hidden ${className}`}
+        className={`mobile-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur lg:hidden ${className}`}
         // The iOS home indicator sits inside the viewport; without this the last few
         // pixels of a button are unreachable. max() keeps normal padding on devices
         // that report no inset.

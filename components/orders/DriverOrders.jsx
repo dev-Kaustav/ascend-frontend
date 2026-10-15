@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
+import FieldFeedback from "@/components/field/FieldFeedback";
+import FieldOrderCard from "@/components/field/FieldOrderCard";
+import FieldStatusFilters from "@/components/field/FieldStatusFilters";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
@@ -18,6 +21,8 @@ const CANCELLABLE = new Set(["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY"]);
 export default function DriverOrders() {
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ status: "READY_TO_SHIP" });
@@ -27,7 +32,7 @@ export default function DriverOrders() {
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String((page - 1) * pageSize) });
       if (filters.status !== "ALL") params.set("status", filters.status);
       const resp = await apiFetch(`${apiEndpoints.orders.list}?${params.toString()}`);
       setOrders(resp?.items || []);
@@ -40,7 +45,7 @@ export default function DriverOrders() {
     }
   }
 
-  useEffect(() => { loadOrders(); }, [filters]);
+  useEffect(() => { loadOrders(); }, [filters, page]);
 
   function updateRow(orderId, patch) {
     setUpdates((prev) => ({ ...prev, [orderId]: { ...prev[orderId], ...patch } }));
@@ -130,6 +135,7 @@ export default function DriverOrders() {
             <div className="flex flex-col gap-1.5 text-xs">
               <div className="grid grid-cols-2 gap-1.5">
                 <select
+                  aria-label={`Payment status for order ${order.id}`}
                   value={rowUpdate.paymentStatus || ""}
                   onChange={(e) => updateRow(order.id, { paymentStatus: e.target.value })}
                   className="col-span-2 min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
@@ -142,6 +148,7 @@ export default function DriverOrders() {
                 {rowUpdate.paymentStatus && rowUpdate.paymentStatus !== "CREDIT" && (
                   <>
                     <select
+                      aria-label={`Payment mode for order ${order.id}`}
                       value={rowUpdate.paymentMode || ""}
                       onChange={(e) => updateRow(order.id, { paymentMode: e.target.value })}
                       className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
@@ -158,6 +165,7 @@ export default function DriverOrders() {
                       value={rowUpdate.paymentAmount || ""}
                       onChange={(e) => updateRow(order.id, { paymentAmount: e.target.value })}
                       placeholder="Amount"
+                      aria-label={`Payment amount for order ${order.id}`}
                       className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
                     />
                   </>
@@ -194,8 +202,8 @@ export default function DriverOrders() {
     },
   ], [updates]);
 
-  if (loading) return <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">Loading orders…</div>;
-  if (error) return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
+  if (loading) return <FieldFeedback loading label="Loading orders…" />;
+  if (error) return <FieldFeedback error={error} onRetry={() => loadOrders()} />;
 
   return (
     <div className="space-y-6">
@@ -208,10 +216,12 @@ export default function DriverOrders() {
           </button>
         }
       >
+        <FieldStatusFilters value={filters.status} onChange={(status) => { setFilters({ status }); setPage(1); }} driver />
         <select
+          aria-label="Filter orders by status"
           value={filters.status}
-          onChange={(e) => setFilters({ status: e.target.value })}
-          className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
+          onChange={(e) => { setFilters({ status: e.target.value }); setPage(1); }}
+          className="hidden lg:block rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
         >
           <option value="ALL">All Statuses</option>
           <option value="READY_TO_SHIP">Ready to ship</option>
@@ -221,17 +231,25 @@ export default function DriverOrders() {
         </select>
       </SectionCard>
 
-      <SectionCard title="Orders" subtitle={`${total} orders`}>
+      <SectionCard className="field-list-section" title="Orders" subtitle={`${total} ${total === 1 ? "order" : "orders"}`}>
         <DataTable
+          renderMobileRow={(order, renderCell) => <FieldOrderCard order={order}>{renderCell("actions")}</FieldOrderCard>}
           columns={columns}
           data={orders}
           emptyLabel="No orders found."
           tableClassName="min-w-[700px]"
           onRowClick={(order) => setSelectedOrderId(order.id)}
         />
+        {total > pageSize ? <div className="mt-4 flex items-center justify-between gap-3 text-sm text-slate-500">
+          <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+          <div className="flex gap-2">
+            <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded-xl border border-slate-200 px-4 disabled:opacity-40">Previous</button>
+            <button type="button" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage((value) => value + 1)} className="min-h-11 rounded-xl border border-slate-200 px-4 disabled:opacity-40">Next</button>
+          </div>
+        </div> : null}
       </SectionCard>
       {selectedOrderId ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
+        <div className="field-detail-overlay fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
           <button
             type="button"
             aria-label="Close order detail"

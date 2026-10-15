@@ -1,6 +1,8 @@
-export default function SectionCard({ title, subtitle, children, actions }) {
+import { cn } from "@/lib/cn";
+
+export default function SectionCard({ title, subtitle, children, actions, className }) {
   return (
-    <section className="rounded-[1.5rem] border border-black/10 bg-white p-5 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.35)] sm:p-6">
+    <section className={cn("app-section rounded-[1.5rem] border border-black/10 bg-white p-5 shadow-[0_24px_60px_-44px_rgba(15,23,42,0.35)] sm:p-6", className)}>
       {(title || actions) && (
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>

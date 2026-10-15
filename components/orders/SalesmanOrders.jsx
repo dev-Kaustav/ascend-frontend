@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
+import FieldFeedback from "@/components/field/FieldFeedback";
+import FieldOrderCard from "@/components/field/FieldOrderCard";
+import FieldStatusFilters from "@/components/field/FieldStatusFilters";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
@@ -16,6 +19,8 @@ function getOrderDate(order) {
 export default function SalesmanOrders() {
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({ status: "ALL" });
@@ -24,7 +29,7 @@ export default function SalesmanOrders() {
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ limit: String(pageSize), offset: String((page - 1) * pageSize) });
       if (filters.status !== "ALL") params.set("status", filters.status);
       const resp = await apiFetch(`${apiEndpoints.orders.list}?${params.toString()}`);
       setOrders(resp?.items || []);
@@ -37,7 +42,7 @@ export default function SalesmanOrders() {
     }
   }
 
-  useEffect(() => { loadOrders(); }, [filters]);
+  useEffect(() => { loadOrders(); }, [filters, page]);
 
   const columns = useMemo(() => [
     {
@@ -93,24 +98,26 @@ export default function SalesmanOrders() {
     },
   ], []);
 
-  if (loading) return <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">Loading orders…</div>;
-  if (error) return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
+  if (loading) return <FieldFeedback loading label="Loading orders…" />;
+  if (error) return <FieldFeedback error={error} onRetry={() => loadOrders()} />;
 
   return (
     <div className="space-y-6">
       <SectionCard
         title="My Orders"
-        subtitle="Orders for your retailers"
+        subtitle="Track orders and record collected cash from order details."
         actions={
           <Link href="/app/orders/new" className="inline-flex min-h-[44px] items-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white">
             New Order
           </Link>
         }
       >
+        <FieldStatusFilters value={filters.status} onChange={(status) => { setFilters({ status }); setPage(1); }} />
         <select
+          aria-label="Filter orders by status"
           value={filters.status}
-          onChange={(e) => setFilters({ status: e.target.value })}
-          className="min-h-[44px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base sm:w-auto sm:text-sm"
+          onChange={(e) => { setFilters({ status: e.target.value }); setPage(1); }}
+          className="hidden lg:block min-h-[44px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-2 text-base sm:w-auto sm:text-sm"
         >
           <option value="ALL">All Statuses</option>
           <option value="PENDING">Pending</option>
@@ -121,8 +128,9 @@ export default function SalesmanOrders() {
         </select>
       </SectionCard>
 
-      <SectionCard title="Orders" subtitle={`${total} orders`}>
+      <SectionCard className="field-list-section" title="Orders" subtitle={`${total} ${total === 1 ? "order" : "orders"}`}>
         <DataTable
+          renderMobileRow={(order, renderCell) => <FieldOrderCard order={order}>{renderCell("actions")}</FieldOrderCard>}
           columns={columns}
           data={orders}
           emptyLabel="No orders found."
@@ -131,6 +139,13 @@ export default function SalesmanOrders() {
           // button be hidden there. Matches DriverOrders, which already did this.
           onRowClick={(order) => setSelectedOrderId(order.id)}
         />
+        {total > pageSize ? <div className="mt-4 flex items-center justify-between gap-3 text-sm text-slate-500">
+          <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
+          <div className="flex gap-2">
+            <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="min-h-11 rounded-xl border border-slate-200 px-4 disabled:opacity-40">Previous</button>
+            <button type="button" disabled={page >= Math.ceil(total / pageSize)} onClick={() => setPage((value) => value + 1)} className="min-h-11 rounded-xl border border-slate-200 px-4 disabled:opacity-40">Next</button>
+          </div>
+        </div> : null}
       </SectionCard>
 
       {selectedOrderId && (

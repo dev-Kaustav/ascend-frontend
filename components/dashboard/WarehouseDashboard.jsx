@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch } from "@/lib/api";
+import FieldFeedback from "@/components/field/FieldFeedback";
+import FieldHome from "@/components/field/FieldHome";
 import StatCard from "@/components/layout/StatCard";
 import SectionCard from "@/components/layout/SectionCard";
 import DateRangeFilter from "@/components/ui/DateRangeFilter";
@@ -10,6 +12,8 @@ import DateRangeFilter from "@/components/ui/DateRangeFilter";
 export default function WarehouseDashboard() {
   const [pendingTotal, setPendingTotal] = useState(0);
   const [inTransitTotal, setInTransitTotal] = useState(0);
+  const [readyTotal, setReadyTotal] = useState(0);
+  const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
@@ -25,9 +29,14 @@ export default function WarehouseDashboard() {
         const url = params.toString()
           ? `${apiEndpoints.admin.orderStatusSummary}?${params.toString()}`
           : apiEndpoints.admin.orderStatusSummary;
-        const summary = await apiFetch(url);
+        const [summary, recent] = await Promise.all([
+          apiFetch(url),
+          apiFetch(`${apiEndpoints.orders.list}?${params.toString()}&limit=3`)
+        ]);
         if (!active) return;
         setPendingTotal(summary?.PENDING || 0);
+        setReadyTotal(summary?.READY_TO_SHIP || 0);
+        setRecentOrders(recent.items || []);
         setInTransitTotal(summary?.OUT_FOR_DELIVERY || 0);
         setError("");
       } catch (err) {
@@ -42,15 +51,17 @@ export default function WarehouseDashboard() {
   }, [dateRange]);
 
   if (loading) {
-    return <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">Loading warehouse overview…</div>;
+    return <FieldFeedback loading label="Loading warehouse overview…" />;
   }
 
   if (error) {
-    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
+    return <FieldFeedback error={error} />;
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      <FieldHome role="WAREHOUSE_MANAGER" metrics={[{ label: "Pending", value: pendingTotal }, { label: "Ready", value: readyTotal }, { label: "In transit", value: inTransitTotal }]} orders={recentOrders} />
+      <div className="hidden space-y-6 lg:block">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
           {dateRange.from || dateRange.to ? "Filtered range" : "All time"}
@@ -79,6 +90,7 @@ export default function WarehouseDashboard() {
           </Link>
         </div>
       </SectionCard>
-    </div>
+      </div>
+    </>
   );
 }

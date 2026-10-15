@@ -9,7 +9,7 @@ import {
 } from "@/lib/orders";
 
 const inputClassName =
-  "w-full min-w-0 h-11 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-base md:h-9 md:text-sm";
+  "w-full min-w-0 h-11 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-base lg:h-9 lg:text-sm";
 
 export default function OrderLineItemsTable({
   items,
@@ -34,8 +34,8 @@ export default function OrderLineItemsTable({
   const formatRupee = (value) => `₹${currencyFormatter.format(Number(value) || 0)}`;
   // Desktop only. Below md the same fields are re-laid-out as labelled cards, because nine
   // unlabelled controls stacked in one column tells a phone user nothing.
-  const gridColumnsClassName = "md:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]";
-  const desktopRowClassName = `hidden gap-3 items-center md:grid ${gridColumnsClassName}`;
+  const gridColumnsClassName = "lg:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]";
+  const desktopRowClassName = `hidden gap-3 items-center lg:grid ${gridColumnsClassName}`;
   // The one blank line phones are allowed to show. -1 once every line carries a SKU, which
   // is also when "Add SKU" becomes the only way to get another one.
   const firstBlankIndex = items.findIndex((item) => !item.skuId);
@@ -141,13 +141,13 @@ export default function OrderLineItemsTable({
     `${resolveInputClass(isEditable)} text-right tabular-nums`;
   const headerNumericClass = "text-right pr-3";
   const currencyCellClass =
-    "flex h-11 items-center justify-end gap-1 px-3 text-right text-base text-slate-500 tabular-nums md:h-9 md:text-sm";
+    "flex h-11 items-center justify-end gap-1 px-3 text-right text-base text-slate-500 tabular-nums lg:h-9 lg:text-sm";
   const currencySymbolClass = "text-slate-400 leading-none";
-  const currencyInputWrapClass = "flex h-11 w-full items-center justify-end gap-1 md:h-9";
+  const currencyInputWrapClass = "flex h-11 w-full items-center justify-end gap-1 lg:h-9";
   const currencyInputClass = (isEditable) =>
-    `${resolveNumericInputClass(isEditable)} w-full md:w-20`;
+    `${resolveNumericInputClass(isEditable)} w-full lg:w-20`;
   // Label left, figure right on a phone; the desktop grid keeps them aligned to the columns.
-  const totalsRowClassName = `flex items-center justify-between gap-3 text-sm text-slate-700 md:grid md:gap-3 ${gridColumnsClassName}`;
+  const totalsRowClassName = `flex items-center justify-between gap-3 text-sm text-slate-700 lg:grid lg:gap-3 ${gridColumnsClassName}`;
   const applyItemChange = (index, patch) => {
     const current = items[index] || {};
     let next = { ...current, ...patch };
@@ -257,7 +257,7 @@ export default function OrderLineItemsTable({
                 options={skuOptions}
                 placeholder={selectedBrandId ? "Search SKUs by name or code" : "Select brand above"}
                 emptyLabel="No SKUs match"
-                inputClassName="h-11 rounded-2xl px-3 py-0 text-base md:h-9 md:text-sm"
+                inputClassName="h-11 rounded-2xl px-3 py-0 text-base lg:h-9 lg:text-sm"
               />
             );
             // Allocatable units at the chosen warehouse, or null when there is nothing to
@@ -357,7 +357,7 @@ export default function OrderLineItemsTable({
                 <button
                   type="button"
                   onClick={() => onRemoveItem(index)}
-                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-rose-200 text-rose-500 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 md:h-8 md:w-8"
+                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-rose-200 text-rose-500 transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 lg:h-8 lg:w-8"
                   aria-label={`Remove line item ${index + 1}`}
                 >
                   <svg
@@ -390,22 +390,23 @@ export default function OrderLineItemsTable({
               <div key={`line-${index}`}>
                 {/* Phone: a labelled card. Every control keeps its name, which the desktop
                     column header would otherwise be carrying. */}
-                <div className={`mb-3 rounded-2xl border border-slate-200 bg-white p-3 md:hidden ${showOnMobile ? "" : "hidden"}`}>
+                <div className={`mb-3 rounded-2xl border border-slate-200 bg-white p-3 lg:hidden ${showOnMobile ? "" : "hidden"}`}>
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                       Item {index + 1}
                     </span>
-                    {removeButton}
+                    {item.skuId ? removeButton : null}
                   </div>
                   <div className="space-y-3">
                     {mobileField("SKU", skuField)}
+                    {item.skuId ? <>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>MRP</span><span className="tabular-nums">{mrpValue ? `₹${currencyFormatter.format(Number(mrpValue))}` : "—"}</span>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       {mobileField("Quantity", quantityField)}
-                      {mobileField("MRP", mrpField)}
-                      {mobileField("Discount %", discountPercentField)}
-                      {mobileField("Discount", discountField)}
+                      {pricingMode === "percent" ? mobileField("Discount %", discountPercentField) : pricingMode === "discount" ? mobileField("Discount", discountField) : mobileField("Unit price", unitPriceField)}
                     </div>
-                    {mobileField("Unit price", unitPriceField)}
                     <div className="flex items-center justify-between border-t border-slate-100 pt-2">
                       <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                         Line total
@@ -414,6 +415,7 @@ export default function OrderLineItemsTable({
                         {lineTotalValue ? `₹${lineTotalValue}` : "—"}
                       </span>
                     </div>
+                    </> : null}
                   </div>
                 </div>
 
@@ -444,39 +446,39 @@ export default function OrderLineItemsTable({
           // set, so the button would append a line the view cannot show. Desktop, which
           // renders every line as a grid row, always offers it.
           className={`mr-auto rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500 ${
-            firstBlankIndex === -1 ? "" : "hidden md:block"
+            firstBlankIndex === -1 ? "" : "hidden lg:block"
           }`}
         >
           Add SKU
         </button>
         <div className="ml-auto w-full space-y-2">
           <div className={totalsRowClassName}>
-            <span className="md:col-span-7 text-right text-slate-500">Order total</span>
-            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+            <span className="lg:col-span-7 text-right text-slate-500">Order total</span>
+            <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(orderBaseTotal)}
             </span>
           </div>
           <div className={totalsRowClassName}>
-            <span className="md:col-span-7 text-right text-slate-500">(-) Total discount</span>
-            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+            <span className="lg:col-span-7 text-right text-slate-500">(-) Total discount</span>
+            <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(totalDiscount)}
             </span>
           </div>
           <div className={totalsRowClassName}>
-            <span className="md:col-span-7 text-right text-slate-500">Pre-GST total</span>
-            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+            <span className="lg:col-span-7 text-right text-slate-500">Pre-GST total</span>
+            <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(preGstTotal)}
             </span>
           </div>
           <div className={totalsRowClassName}>
-            <span className="md:col-span-7 text-right text-slate-500">GST</span>
-            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+            <span className="lg:col-span-7 text-right text-slate-500">GST</span>
+            <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(taxTotal)}
             </span>
           </div>
           <div className={totalsRowClassName}>
-            <span className="md:col-span-7 text-right text-slate-700 font-semibold">Grand total</span>
-            <span className="md:col-span-2 md:col-start-8 text-right font-semibold tabular-nums">
+            <span className="lg:col-span-7 text-right text-slate-700 font-semibold">Grand total</span>
+            <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
               {formatRupee(grandTotal)}
             </span>
           </div>

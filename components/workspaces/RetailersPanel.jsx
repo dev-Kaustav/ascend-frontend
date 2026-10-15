@@ -113,7 +113,12 @@ export default function RetailersPanel() {
 
   const rows = useMemo(
     () =>
-      (retailers || []).map((retailer) => ({
+      [...(retailers || [])].sort((a, b) => {
+        // Older records have no creation date; use their insertion IDs as a fallback.
+        const dateA = a.created_at ? Date.parse(a.created_at) : 0;
+        const dateB = b.created_at ? Date.parse(b.created_at) : 0;
+        return dateB - dateA || b.id - a.id;
+      }).map((retailer) => ({
         ...retailer,
         salesman_name: salesmanMap.get(String(retailer.assigned_salesman_id)) || "—",
         beat_name: beatMap.get(String(retailer.beat_id)) || "—",

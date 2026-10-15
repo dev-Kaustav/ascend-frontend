@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } 
 
 import DataTable from "@/components/tables/DataTable";
 import InvoiceCell from "@/components/ui/InvoiceCell";
+import SalesmanCashCollection from "@/components/orders/SalesmanCashCollection";
 import MobileActionBar, {
   BAR_ACTION_PRIMARY,
   BAR_ACTION_SECONDARY,
@@ -496,6 +497,8 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
         </div>
       </div>
 
+      {role === "SALESMAN" && order.can_collect_cash ? <SalesmanCashCollection key={order.id} order={order} onRecorded={handleOrderUpdate} /> : null}
+
       {/* Two-up on phones: these values are short ("Credit", "-", a rupee amount), so one
           per row turned eight facts into eight screens' worth of scrolling. Long values
           span the full width. */}
@@ -520,6 +523,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
         // Roles with no status transitions (ROLE_ACTIONS.SALESMAN is []) still get a bar,
         // so the one thing they came for does not scroll away with the header.
         secondaryActions={
+          role === "SALESMAN" && order.can_collect_cash ? <a href={`#order-cash-${order.id}`} className={BAR_ACTION_PRIMARY}>Record collected cash</a> :
           <button
             type="button"
             onClick={downloadInvoice}
@@ -556,7 +560,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
               <div key={payment.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatCurrency(payment.amount)}</p>
-                  <p className="truncate text-xs text-slate-500">{payment.transaction_reference || "Transaction"}</p>
+                  <p className="truncate text-xs text-slate-500">{payment.transaction_reference?.startsWith("SALESMAN-CASH-") ? "Cash collected by salesman" : payment.transaction_reference || "Transaction"}</p>
                 </div>
                 <p className="shrink-0 text-xs text-slate-500">{formatDate(payment.created_at)}</p>
               </div>

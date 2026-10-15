@@ -58,14 +58,15 @@ export default function ManualFinder({ assignable = false }) {
     <div className="space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
         <label className="text-sm font-medium text-slate-700">Enter Outlet IDs</label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !loading && findOutlets()}
             placeholder="e.g. 707811, 390495"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+            aria-label="Outlet IDs"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
           />
           <button
             onClick={findOutlets}

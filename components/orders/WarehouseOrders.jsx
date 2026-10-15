@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
+import FieldFeedback from "@/components/field/FieldFeedback";
+import FieldOrderCard from "@/components/field/FieldOrderCard";
+import FieldStatusFilters from "@/components/field/FieldStatusFilters";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
@@ -153,6 +156,7 @@ export default function WarehouseOrders() {
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <select
+                  aria-label={`Set status for order ${orderId}`}
                   value={rowUpdate.status || ""}
                   onChange={(event) => updateRow(orderId, { status: event.target.value, deliveryDriverId: "" })}
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
@@ -173,7 +177,8 @@ export default function WarehouseOrders() {
               </div>
               {showDriverPicker && (
                 <select
-                  value={rowUpdate.deliveryDriverId || ""}
+                  aria-label={`Assign driver for order ${orderId}`}
+                    value={rowUpdate.deliveryDriverId || ""}
                   onChange={(event) => updateRow(orderId, { deliveryDriverId: event.target.value })}
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
                 >
@@ -225,7 +230,8 @@ export default function WarehouseOrders() {
           </button>
         }
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <FieldStatusFilters value={filters.status} onChange={(status) => { setFilters({ status }); setPage(1); }} />
+        <div className="hidden gap-4 md:grid-cols-2 lg:grid">
           <select
             value={filters.status}
             onChange={(event) => {
@@ -245,8 +251,9 @@ export default function WarehouseOrders() {
       </SectionCard>
 
       <SectionCard
+        className="field-list-section"
         title="Orders"
-        subtitle={`${total} orders`}
+        subtitle={`${total} ${total === 1 ? "order" : "orders"}`}
         actions={
           <select
             value={pageSize}
@@ -264,7 +271,7 @@ export default function WarehouseOrders() {
           </select>
         }
       >
-        <DataTable columns={columns} data={orders} emptyLabel="No orders match the selected filter." onRowClick={(order) => setSelectedOrderId(order.id)} />
+        <DataTable renderMobileRow={(order, renderCell) => <FieldOrderCard order={{ ...order, retailer_name: retailerMap.get(order.to_entity_id) }}>{renderCell("actions")}</FieldOrderCard>} columns={columns} data={orders} emptyLabel="No orders match the selected filter." onRowClick={(order) => setSelectedOrderId(order.id)} />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
             Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
@@ -290,7 +297,7 @@ export default function WarehouseOrders() {
         </div>
       </SectionCard>
       {selectedOrderId ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
+        <div className="field-detail-overlay fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
           <button
             type="button"
             aria-label="Close order detail"

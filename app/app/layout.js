@@ -13,6 +13,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "default-no-store";
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover"
+};
+
 export default function AppLayout({ children }) {
   return (
     <AuthProvider>

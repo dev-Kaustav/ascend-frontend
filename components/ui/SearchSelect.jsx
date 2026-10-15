@@ -41,6 +41,7 @@ export default function SearchSelect({
   onChange,
   options,
   placeholder = "Search…",
+  ariaLabel,
   emptyLabel = "No matches",
   disabled = false,
   className = "",
@@ -132,6 +133,7 @@ export default function SearchSelect({
         ref={inputRef}
         type="text"
         role="combobox"
+        aria-label={ariaLabel || placeholder}
         aria-expanded={open}
         aria-controls={`${instanceId}-listbox`}
         aria-autocomplete="list"

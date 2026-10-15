@@ -7,6 +7,9 @@ import dayjs from "dayjs";
 import { getAccessToken, getUserFromToken, logout } from "@/lib/auth";
 import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
+import FieldMobileNavigation from "@/components/layout/FieldMobileNavigation";
+import { isFieldRole } from "@/lib/navigation";
+import { cn } from "@/lib/cn";
 
 function getInitials(email) {
   if (!email) return "U";
@@ -263,11 +266,12 @@ function NavGlyph({ label }) {
 
 const COLLAPSED_KEY = "app-shell-collapsed";
 
-export default function AppShell({ navItems = [], roleLabel, children }) {
+export default function AppShell({ navItems = [], roleLabel, role, children }) {
   const pathname = usePathname();
   const token = getAccessToken();
   const user = getUserFromToken(token);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const fieldRole = isFieldRole(role);
   // localStorage is the source of truth for this preference. The previous read-effect
   // rendered once collapsed=false and again with the stored value, and the paired
   // write-effect fired on mount too, rewriting the value it had just read.
@@ -282,7 +286,8 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
   };
 
   return (
-    <div className="min-h-screen bg-canvas text-slate-900 app-shell">
+    <div className={cn("min-h-dvh bg-canvas text-slate-900 app-shell", fieldRole && "field-app")}>
+      {fieldRole ? <FieldMobileNavigation role={role} /> : null}
       {sidebarOpen ? (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
@@ -392,7 +397,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
       </aside>
 
       <div className={`${sidebarCollapsed ? "lg:pl-[84px]" : "lg:pl-56"}`}>
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <header className={cn("sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur", fieldRole && "hidden lg:block")}>
           <div className="flex items-center justify-between gap-4 px-5 py-3 sm:px-6">
             <div className="flex items-center gap-3">
               <button
@@ -441,7 +446,7 @@ export default function AppShell({ navItems = [], roleLabel, children }) {
           </div>
         </header>
 
-        <main className="p-5 pb-28 sm:p-6 lg:pb-6">
+        <main id="main-content" className="app-main p-5 pb-28 sm:p-6 lg:pb-6">
           <div className="space-y-6">{children}</div>
         </main>
       </div>

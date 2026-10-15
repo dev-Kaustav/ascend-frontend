@@ -447,10 +447,10 @@ export default function MyRetailersPanel() {
                   </p>
                 ) : null}
                 {phone ? (
-                  <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
+                  <a href={`tel:${retailer.mobile_number}`} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600">
                     <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
                     <span className="tabular-nums">{phone}</span>
-                  </p>
+                  </a>
                 ) : null}
               </li>
             );

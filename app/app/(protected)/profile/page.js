@@ -128,6 +128,9 @@ export default function ProfilePage() {
           </div>
         </form>
       </SectionCard>
+      <div className="lg:hidden">
+        <button type="button" onClick={logout} className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-base font-semibold text-slate-700">Sign out</button>
+      </div>
     </div>
   );
 }

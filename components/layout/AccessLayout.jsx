@@ -69,7 +69,7 @@ export default function AccessLayout({ children }) {
   }
 
   return (
-    <AppShell navItems={navItems} roleLabel={roleLabel}>
+    <AppShell navItems={navItems} roleLabel={roleLabel} role={role}>
       {children}
     </AppShell>
   );
