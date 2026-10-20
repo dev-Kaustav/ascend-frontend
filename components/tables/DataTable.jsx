@@ -15,6 +15,15 @@ function resolveAlign(columnDef) {
   return "left";
 }
 
+// flexRender mounts a function cell as a component, so a column array rebuilt on every render
+// (inline editors close over per-keystroke state) gives React a new component type each time
+// and remounts the cell — inputs lose focus and autoFocus refires. Calling it keeps them mounted.
+// Cell renderers must therefore not use hooks.
+function renderCell(cell) {
+  const def = cell.column.columnDef.cell;
+  return typeof def === "function" ? def(cell.getContext()) : flexRender(def, cell.getContext());
+}
+
 function headerLabel(column) {
   const header = column.columnDef.header;
   return typeof header === "string" ? header : column.id;
@@ -57,7 +66,7 @@ export default function DataTable({
               if (renderMobileRow) {
                 return <li key={row.id}>{renderMobileRow(row.original, (columnId) => {
                   const cell = row.getVisibleCells().find((item) => item.column.id === columnId);
-                  return cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : null;
+                  return cell ? renderCell(cell) : null;
                 })}</li>;
               }
               const cells = row.getVisibleCells().filter((cell) => !cell.column.columnDef.meta?.mobileHidden);
@@ -95,7 +104,7 @@ export default function DataTable({
                   >
                     {primary ? (
                       <div className="mb-2 text-base font-semibold text-slate-900">
-                        {flexRender(primary.column.columnDef.cell, primary.getContext())}
+                        {renderCell(primary)}
                       </div>
                     ) : null}
                     <dl className="grid grid-cols-[minmax(0,7rem)_1fr] gap-x-3 gap-y-1.5">
@@ -105,7 +114,7 @@ export default function DataTable({
                             {headerLabel(cell.column)}
                           </dt>
                           <dd className="min-w-0 text-sm text-slate-700">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            {renderCell(cell)}
                           </dd>
                         </div>
                       ))}
@@ -116,7 +125,7 @@ export default function DataTable({
                       .filter((cell) => cell.column.columnDef.meta?.mobileFullWidth)
                       .map((cell) => (
                         <div key={cell.id} className="mt-3 border-t border-slate-100 pt-3">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          {renderCell(cell)}
                         </div>
                       ))}
                   </div>
@@ -166,7 +175,7 @@ export default function DataTable({
                   const align = resolveAlign(cell.column.columnDef);
                   return (
                     <td key={cell.id} className={`px-4 py-3.5 text-slate-600 ${ALIGN_CLASS[align]}`}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {renderCell(cell)}
                     </td>
                   );
                 })}
