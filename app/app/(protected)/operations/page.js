@@ -2,6 +2,7 @@
 
 import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
 import InventoryPanel from "@/components/workspaces/InventoryPanel";
+import StockLedgerPanel from "@/components/workspaces/StockLedgerPanel";
 import DriversPanel from "@/components/workspaces/DriversPanel";
 import SalesmenPanel from "@/components/workspaces/SalesmenPanel";
 
@@ -9,10 +10,17 @@ export default function OperationsWorkspacePage() {
   const tabs = [
     {
       key: "inventory",
-      label: "Inventory",
+      label: "Stock",
       description: "Stock visibility, receipts, and warehouse inventory management.",
       roles: ["ADMIN", "WAREHOUSE_MANAGER"],
       render: () => <InventoryPanel />
+    },
+    {
+      key: "ledger",
+      label: "Stock ledger",
+      description: "Every stock movement with running balances, a period summary, and an Excel download.",
+      roles: ["ADMIN", "WAREHOUSE_MANAGER"],
+      render: () => <StockLedgerPanel />
     },
     {
       key: "drivers",
@@ -32,8 +40,8 @@ export default function OperationsWorkspacePage() {
 
   return (
     <WorkspaceTabs
-      title="Operations"
-      subtitle="Warehouse and field operations grouped into one workspace."
+      title="Inventory"
+      subtitle="Stock on hand, the stock movement ledger, and warehouse and field teams."
       tabs={tabs}
     />
   );

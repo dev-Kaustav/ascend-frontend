@@ -58,8 +58,8 @@ function Field({ label, children }) {
 }
 
 export default function MyRetailersPanel() {
-  // Approved outlets only — the backend scopes this to retailers actually assigned to this
-  // salesman, which is exactly the set they can book orders against.
+  // The backend scopes this to retailers actually assigned to this salesman, which is exactly
+  // the set they can book orders against — including ones they just added themselves.
   const { retailers, loading, error, refreshLookups } = useOrderFormLookups({
     errorMessage: "Unable to load your retailers."
   });
@@ -158,9 +158,11 @@ export default function MyRetailersPanel() {
         editingId ? apiEndpoints.retailerRequests.update(editingId) : apiEndpoints.retailerRequests.create,
         { method: editingId ? "PATCH" : "POST", body: JSON.stringify(body) }
       );
-      notify(editingId ? "Request updated." : "Sent to admin for approval.");
+      // Without an edit id this creates the retailer outright (approval workflow disabled), so
+      // the order picker has to be refreshed for the new outlet to be bookable.
+      notify(editingId ? "Request updated." : "Retailer added. You can book orders for it now.");
       cancel();
-      await loadRequests();
+      await Promise.all([loadRequests(), refreshLookups()]);
     } catch (err) {
       setFormError(err?.payload?.detail || err?.message || "Unable to submit the request.");
     } finally {
@@ -181,10 +183,7 @@ export default function MyRetailersPanel() {
   const form = (
     <div className="space-y-3 rounded-2xl border border-[#7c3aed]/30 bg-[#7c3aed]/[0.03] p-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-        {editingId ? "Edit request" : "New retailer request"}
-      </p>
-      <p className="text-xs text-slate-500">
-        An admin reviews this before the outlet can take orders.
+        {editingId ? "Edit request" : "New retailer"}
       </p>
       <Field label="Shop name">
         <input
@@ -295,7 +294,7 @@ export default function MyRetailersPanel() {
           disabled={saving || !(draft?.name || "").trim()}
           className="h-11 flex-1 cursor-pointer rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
         >
-          {saving ? "Sending…" : editingId ? "Save changes" : "Send for approval"}
+          {saving ? "Saving…" : editingId ? "Save changes" : "Add retailer"}
         </button>
         <button
           type="button"
@@ -326,7 +325,7 @@ export default function MyRetailersPanel() {
   return (
     <SectionCard
       title="My Retailers"
-      subtitle={`${visibleRetailers.length} approved${openRequests.length ? ` · ${openRequests.length} awaiting review` : ""}`}
+      subtitle={`${visibleRetailers.length} outlets${openRequests.length ? ` · ${openRequests.length} older requests` : ""}`}
       actions={
         <button
           type="button"
@@ -335,7 +334,7 @@ export default function MyRetailersPanel() {
           className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-full bg-slate-900 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
-          Request retailer
+          Add retailer
         </button>
       }
     >
@@ -360,7 +359,7 @@ export default function MyRetailersPanel() {
         {nothingToShow ? (
           <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
             {(retailers || []).length === 0 && openRequests.length === 0
-              ? "No outlets yet. Request your first retailer — an admin approves it before you can book orders."
+              ? "No outlets yet. Add your first retailer to start booking orders."
               : "No outlets match that search."}
           </p>
         ) : null}

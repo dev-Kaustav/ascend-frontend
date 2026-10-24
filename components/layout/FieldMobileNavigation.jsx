@@ -6,7 +6,7 @@ import { ArrowLeft, ClipboardList, House, MapPinned, Package, Store, Truck, User
 import { getFieldNavForRole, getRoleLabel } from "@/lib/navigation";
 import { cn } from "@/lib/cn";
 
-const ICONS = { Home: House, Orders: ClipboardList, Deliveries: Truck, Retailers: Store, Outlets: MapPinned, Routes: MapPinned, Operations: Package, Account: UserRound };
+const ICONS = { Home: House, Orders: ClipboardList, Deliveries: Truck, Retailers: Store, Outlets: MapPinned, Routes: MapPinned, Inventory: Package, Account: UserRound };
 
 export default function FieldMobileNavigation({ role }) {
   const pathname = usePathname();

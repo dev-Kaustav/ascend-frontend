@@ -246,9 +246,9 @@ function UploadIcon() {
 const NAV_ICON_MAP = {
   Dashboard: DashboardIcon,
   Orders: OrdersIcon,
-  Operations: PackageIcon,
+  Inventory: PackageIcon,
   Finance: CalculatorIcon,
-  "Master Data": LayersIcon,
+  Catalog: LayersIcon,
   Imports: UploadIcon,
   Admin: ShieldIcon,
   Profile: PersonIcon,

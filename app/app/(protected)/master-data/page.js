@@ -24,7 +24,7 @@ export default function MasterDataWorkspacePage() {
 
   return (
     <WorkspaceTabs
-      title="Master Data"
+      title="Catalog"
       subtitle="Core brand and product records grouped together for easier maintenance."
       tabs={tabs}
     />
