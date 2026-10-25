@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Clock, MapPin, Navigation, Pencil, Phone, Plus, X } from "lucide-react";
+import { ChevronDown, Clock, MapPin, Navigation, Pencil, Phone, Plus, ShoppingBag, X } from "lucide-react";
+import Link from "next/link";
 import SectionCard from "@/components/layout/SectionCard";
+import MobileActionBar, { BAR_ACTION_PRIMARY, BAR_ACTION_SECONDARY } from "@/components/layout/MobileActionBar";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatAccuracy, getCoords, mapsUrl } from "@/lib/geo";
@@ -88,6 +90,21 @@ function DetectStatus({ detect, accuracy, onRetry }) {
   );
 }
 
+// A steady tint per shop, so the avatar helps the eye find a card it has seen before.
+const AVATAR_TINTS = [
+  "bg-violet-100 text-violet-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-800",
+  "bg-sky-100 text-sky-700",
+  "bg-rose-100 text-rose-700",
+  "bg-teal-100 text-teal-700"
+];
+const avatarTint = (name = "") =>
+  AVATAR_TINTS[[...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_TINTS.length];
+
+const CARD_ACTION =
+  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition-colors";
+
 export default function MyRetailersPanel() {
   // The backend scopes this to retailers actually assigned to this salesman, which is exactly
   // the set they can book orders against — including ones they just added themselves.
@@ -102,6 +119,7 @@ export default function MyRetailersPanel() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [showMore, setShowMore] = useState(false);
   // Where the new shop is, read from the phone the moment the form opens: "finding" | "found" |
   // "no-address" (a fix but Google had no address) | "failed" | null.
   const [detect, setDetect] = useState(null);
@@ -186,6 +204,7 @@ export default function MyRetailersPanel() {
     setDraft({ ...BLANK });
     setEditingId(null);
     setFormError("");
+    setShowMore(false);
     touched.current = new Set();
     detectLocation();
   };
@@ -274,25 +293,16 @@ export default function MyRetailersPanel() {
           autoFocus
         />
       </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Mobile">
-          <input
-            className={FIELD_CLASSNAME}
-            inputMode="numeric"
-            value={draft?.mobile_number ?? ""}
-            onChange={(event) => setField("mobile_number", event.target.value.replace(/\D/g, "").slice(0, 10))}
-            placeholder="10 digits"
-          />
-        </Field>
-        <Field label="City">
-          <input
-            className={FIELD_CLASSNAME}
-            value={draft?.city ?? ""}
-            onChange={(event) => setField("city", event.target.value)}
-            placeholder="City"
-          />
-        </Field>
-      </div>
+      <Field label="Mobile">
+        <input
+          className={FIELD_CLASSNAME}
+          inputMode="numeric"
+          value={draft?.mobile_number ?? ""}
+          onChange={(event) => setField("mobile_number", event.target.value.replace(/\D/g, "").slice(0, 10))}
+          placeholder="10 digits"
+        />
+      </Field>
+      {/* Pre-filled from the phone's location, and always editable. */}
       <Field label="Address">
         <input
           className={FIELD_CLASSNAME}
@@ -301,43 +311,72 @@ export default function MyRetailersPanel() {
           placeholder="Shop no., street, area"
         />
       </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="State">
-          <select
-            className={FIELD_CLASSNAME}
-            value={draft?.state ?? ""}
-            onChange={(event) => setField("state", event.target.value)}
-          >
-            <option value="">Select state</option>
-            {INDIAN_STATES.map((state) => (
-              <option key={state} value={state}>
-                {state}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Pincode">
-          <input
-            className={FIELD_CLASSNAME}
-            inputMode="numeric"
-            value={draft?.pincode ?? ""}
-            onChange={(event) => setField("pincode", event.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="6 digits"
-          />
-        </Field>
-      </div>
-      <Field label="GST number">
-        <input
-          className={FIELD_CLASSNAME}
-          value={draft?.gst_number ?? ""}
-          onChange={(event) => setField("gst_number", event.target.value)}
-          placeholder="Optional"
-        />
-      </Field>
-      {formError ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600">{formError}</p>
+      {/* City, state, pincode and GST fill themselves from the location; tucked away so the
+          form is three fields unless the salesman needs to correct one. */}
+      <button
+        type="button"
+        onClick={() => setShowMore((value) => !value)}
+        aria-expanded={showMore}
+        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-1 text-left text-sm text-slate-500"
+      >
+        <span className="min-w-0 truncate">
+          {[draft?.city, draft?.state, draft?.pincode].filter(Boolean).join(", ") || "City, state, pincode, GST"}
+        </span>
+        <span className="flex shrink-0 items-center gap-1 font-semibold text-[#6d28d9]">
+          {showMore ? "Less" : "More details"}
+          <ChevronDown className={`h-4 w-4 transition-transform ${showMore ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {showMore ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="City">
+              <input
+                className={FIELD_CLASSNAME}
+                value={draft?.city ?? ""}
+                onChange={(event) => setField("city", event.target.value)}
+                placeholder="City"
+              />
+            </Field>
+            <Field label="Pincode">
+              <input
+                className={FIELD_CLASSNAME}
+                inputMode="numeric"
+                value={draft?.pincode ?? ""}
+                onChange={(event) => setField("pincode", event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6 digits"
+              />
+            </Field>
+          </div>
+          <Field label="State">
+            <select
+              className={FIELD_CLASSNAME}
+              value={draft?.state ?? ""}
+              onChange={(event) => setField("state", event.target.value)}
+            >
+              <option value="">Select state</option>
+              {INDIAN_STATES.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="GST number">
+            <input
+              className={FIELD_CLASSNAME}
+              value={draft?.gst_number ?? ""}
+              onChange={(event) => setField("gst_number", event.target.value)}
+              placeholder="Optional"
+            />
+          </Field>
+        </div>
       ) : null}
-      <div className="flex gap-2 pt-1">
+      {formError ? (
+        // On phones a create error shows in the bottom bar, next to the button that caused it.
+        <p className={`rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600 ${editingId ? "" : "hidden lg:block"}`}>{formError}</p>
+      ) : null}
+      <div className={`gap-2 pt-1 ${editingId ? "flex" : "hidden lg:flex"}`}>
         <button
           type="button"
           onClick={submit}
@@ -381,7 +420,7 @@ export default function MyRetailersPanel() {
           type="button"
           onClick={startCreate}
           disabled={Boolean(draft)}
-          className="inline-flex h-11 cursor-pointer items-center gap-1.5 rounded-full bg-slate-900 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
+          className="hidden h-11 cursor-pointer items-center gap-1.5 rounded-full bg-slate-900 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40 lg:inline-flex"
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Add retailer
@@ -487,36 +526,74 @@ export default function MyRetailersPanel() {
             const phone = formatPhone(retailer.mobile_number);
             const place = [retailer.address_line1, retailer.city].filter(Boolean).join(", ");
             return (
-              <li key={`retailer-${retailer.id}`} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="font-semibold text-slate-900">{retailer.name}</p>
-                {place ? (
-                  <p className="mt-1 flex items-start gap-1.5 text-sm text-slate-500">
-                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                    <span>{place}</span>
-                  </p>
-                ) : null}
-                <div className="mt-2 flex flex-wrap gap-2">
+              <li key={`retailer-${retailer.id}`} className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center gap-3 px-1 pt-1">
+                  <span
+                    aria-hidden="true"
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${avatarTint(retailer.name)}`}
+                  >
+                    {(retailer.name || "?").trim().charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">{retailer.name}</p>
+                    <p className={`truncate text-sm ${place ? "text-slate-500" : "text-amber-600"}`}>
+                      {place || "No address"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   {phone ? (
-                    <a href={`tel:${retailer.mobile_number}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600">
-                      <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                      <span className="tabular-nums">{phone}</span>
+                    <a href={`tel:${retailer.mobile_number}`} aria-label={`Call ${retailer.name}, ${phone}`} className={`${CARD_ACTION} bg-slate-100 text-slate-700`}>
+                      <Phone className="h-4 w-4" strokeWidth={2} />
+                      Call
                     </a>
-                  ) : null}
+                  ) : (
+                    <span className={`${CARD_ACTION} bg-slate-50 text-slate-300`} aria-label="No phone number">
+                      <Phone className="h-4 w-4" strokeWidth={2} />
+                      Call
+                    </span>
+                  )}
                   <a
                     href={mapsUrl(retailer)}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600"
+                    aria-label={`Open ${retailer.name} in Google Maps`}
+                    className={`${CARD_ACTION} bg-slate-100 text-slate-700`}
                   >
-                    <Navigation className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    <Navigation className="h-4 w-4" strokeWidth={2} />
                     Map
                   </a>
+                  <Link href={`/app/orders/new?retailer=${retailer.id}`} className={`${CARD_ACTION} bg-slate-900 text-white`}>
+                    <ShoppingBag className="h-4 w-4" strokeWidth={2} />
+                    Order
+                  </Link>
                 </div>
               </li>
             );
           })}
         </ul>
       </div>
+      {/* Phones: the add action lives in the thumb zone; while the form is open it becomes
+          Save / Cancel there. Editing an old request keeps its own inline buttons. */}
+      {editingId ? null : (
+        <MobileActionBar notice={draft && formError ? <p role="alert" className="text-sm text-rose-600">{formError}</p> : null}>
+          {draft ? (
+            <>
+              <button type="button" onClick={cancel} disabled={saving} className={`${BAR_ACTION_SECONDARY} !flex-none px-5`}>
+                Cancel
+              </button>
+              <button type="button" onClick={submit} disabled={saving || !(draft.name || "").trim()} className={BAR_ACTION_PRIMARY}>
+                {saving ? "Saving…" : "Add retailer"}
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={startCreate} className={`${BAR_ACTION_PRIMARY} gap-1.5`}>
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              Add retailer
+            </button>
+          )}
+        </MobileActionBar>
+      )}
     </SectionCard>
   );
 }

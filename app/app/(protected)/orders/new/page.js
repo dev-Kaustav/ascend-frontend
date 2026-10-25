@@ -1,6 +1,6 @@
 "use client";
 
-import {  } from "react";
+import { Suspense } from "react";
 
 import AdminOrderCreate from "@/components/orders/AdminOrderCreate";
 import AccountantOrderCreate from "@/components/orders/AccountantOrderCreate";
@@ -12,7 +12,8 @@ export default function OrderCreatePage() {
 
   if (role === "ADMIN") return <AdminOrderCreate />;
   if (role === "ACCOUNTANT") return <AccountantOrderCreate />;
-  if (role === "SALESMAN") return <SalesmanOrderCreate />;
+  // SalesmanOrderCreate reads ?retailer= (the Order button on a retailer card) via useSearchParams.
+  if (role === "SALESMAN") return <Suspense fallback={null}><SalesmanOrderCreate /></Suspense>;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">

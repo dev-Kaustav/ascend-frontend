@@ -1,136 +1,184 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, MapPin, Minus, Pencil, Plus } from "lucide-react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import OrderLineItemsTable from "@/components/orders/OrderLineItemsTable";
 import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
-import SectionCard from "@/components/layout/SectionCard";
 import SearchSelect from "@/components/ui/SearchSelect";
-import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
-import useLineItems from "@/lib/hooks/useLineItems";
 import useStockAvailability from "@/lib/hooks/useStockAvailability";
-import { createEmptyOrderItem, getOrderTotal, getSkuGstRate, roundToTwo } from "@/lib/orders";
+import { getLineTaxAmount, getSkuGstRate, roundToTwo } from "@/lib/orders";
 import { useToast } from "@/components/ui/ToastProvider";
 
-// No salesman picker: create_outgoing_order stamps salesman_id from the authenticated
-// user's employee record and ignores any client-supplied value, so a field here would be
-// decorative at best and misleading at worst. No QuickCreatePanel either: a salesman does not
-// create brands or SKUs, and retailers are added on their own My Retailers screen, where the
-// backend stamps the assignment that makes the new outlet visible here.
+// The salesman's order screen, built for a phone at a shop counter: pick the shop, add products
+// from the search dropdown, step quantities by the ladi, optionally note cash collected, done. No salesman picker (create_outgoing_order stamps
+// it from the login), no date (the server dates the order), and no pricing-mode toggle: the unit
+// price is what gets negotiated, and the discount is derived from it.
+
+// Most orders are booked from the City warehouse, so it is preselected when it exists.
+const DEFAULT_WAREHOUSE_NAME = "city";
+
+// Pieces in one pack (a ladi). Quantities step by a whole pack; 1 when the SKU is sold by the piece.
+const packSize = (sku) => (Number(sku?.units_per_pack) > 0 ? Number(sku.units_per_pack) : 1);
+const packLabel = (sku) => (packSize(sku) > 1 ? sku?.pack_type || "pack" : "pc");
+const listPriceOf = (sku) => Number(sku?.mrp ?? sku?.rate) || 0;
+// The default selling price per piece: the catalogue amount, i.e. MRP less the SKU's discount.
+const defaultUnitPrice = (sku) => {
+  const amount = Number(sku?.amount);
+  if (Number.isFinite(amount) && amount > 0) return amount;
+  return Math.max(listPriceOf(sku) - (Number(sku?.discount_amount) || 0), 0);
+};
+
+const rupees = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatRupee = (value) => `₹${rupees.format(Number(value) || 0)}`;
+
+const PAYMENT_MODES = [
+  ["CASH", "Cash"],
+  ["UPI", "UPI"],
+  ["CHEQUE", "Cheque"]
+];
+
 export default function SalesmanOrderCreate() {
   const router = useRouter();
-  const [retailerId, setRetailerId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [paymentMode, setPaymentMode] = useState("CASH");
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [brandId, setBrandId] = useState("");
-  // Today, fixed at mount. Display only — the server decides the real timestamp.
-  const displayDate = useMemo(
-    () => new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
-    []
-  );
-  // Unit price is what gets negotiated at the counter; discount is derived from it.
-  const [pricingMode, setPricingMode] = useState("unit");
-  const { items, updateItem, addItem, removeItem, setItems } = useLineItems(createEmptyOrderItem, 5);
-  // Live allocatable stock for the chosen warehouse, shown beside each line so a
-  // shortage is visible before the order is keyed in rather than after (INVT-07).
-  const selectedSkuIds = useMemo(
-    () => [...new Set(items.map((item) => item.skuId).filter(Boolean).map(String))],
-    [items]
-  );
-  const { available, refreshAvailability } = useStockAvailability(warehouseId, selectedSkuIds);
+  const searchParams = useSearchParams();
+  const { notify } = useToast();
   const { retailers, skus, warehouses, brands, loading, error: lookupError } = useOrderFormLookups({
     errorMessage: "Unable to load order form data."
   });
-  const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
+
+  const [retailerId, setRetailerId] = useState(() => searchParams.get("retailer") || "");
+  const [warehouseChoice, setWarehouseChoice] = useState("");
+  const [brandChoice, setBrandChoice] = useState("");
+  // { [skuId]: { quantity (pieces), packPrice (per ladi, as typed) } }. Prices are negotiated per
+  // ladi at the counter; the per-piece price the API needs is derived from it.
+  const [lines, setLines] = useState({});
+  // Insertion order, so a newly added product lands at the bottom of the list, not re-sorted.
+  const [lineOrder, setLineOrder] = useState([]);
+  const [editingPrice, setEditingPrice] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMode, setPaymentMode] = useState("CASH");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // A choice the salesman made wins; otherwise City, otherwise the only/first warehouse.
+  const warehouseId = useMemo(() => {
+    if (warehouseChoice) return warehouseChoice;
+    const city = warehouses.find((w) => (w.name || "").trim().toLowerCase() === DEFAULT_WAREHOUSE_NAME);
+    return String((city || warehouses[0])?.id ?? "");
+  }, [warehouseChoice, warehouses]);
+  const brandId = brandChoice || String(brands[0]?.id ?? "");
+
+  const retailer = useMemo(
+    () => retailers.find((r) => String(r.id) === String(retailerId)) || null,
+    [retailers, retailerId]
+  );
+  // A ?retailer= id that is not one of this salesman's outlets is dropped rather than submitted.
+  useEffect(() => {
+    if (!loading && retailerId && !retailer) setRetailerId("");
+  }, [loading, retailerId, retailer]);
+
   const retailerOptions = useMemo(
     () =>
-      retailers.map((retailer) => ({
-        value: String(retailer.id),
-        label: retailer.name,
-        hint: retailer.address_line1 || "",
-        keywords: [retailer.address_line1, retailer.city, retailer.mobile_number]
+      retailers.map((r) => ({
+        value: String(r.id),
+        label: r.name,
+        hint: r.address_line1 || "",
+        keywords: [r.address_line1, r.city, r.mobile_number]
       })),
     [retailers]
   );
-  const currencyFormatter = useMemo(
+
+  const skuMap = useMemo(() => new Map(skus.map((sku) => [String(sku.id), sku])), [skus]);
+  // The dropdown offers the brand's products not yet on the order; added ones are edited below.
+  const productOptions = useMemo(
     () =>
-      new Intl.NumberFormat("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }),
-    []
+      skus
+        .filter((sku) => (!brandId || String(sku.brand_id) === brandId) && !lines[String(sku.id)])
+        .map((sku) => ({
+          value: String(sku.id),
+          label: sku.name || sku.code || `SKU ${sku.id}`,
+          hint: `${formatRupee(defaultUnitPrice(sku) * packSize(sku))} / ${packLabel(sku)}`,
+          keywords: [sku.code]
+        })),
+    [skus, brandId, lines]
   );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const { notify } = useToast();
-  const formatRupee = (value) => `₹${currencyFormatter.format(Number(value) || 0)}`;
-  const orderGrandTotal = useMemo(() => getOrderTotal(items, skuMap), [items, skuMap]);
-  const paymentPending = useMemo(() => {
-    if (paymentMode === "CREDIT") return orderGrandTotal;
-    const received = Number(paymentAmount);
-    const safeReceived = Number.isFinite(received) ? received : 0;
-    return roundToTwo(Math.max(orderGrandTotal - safeReceived, 0));
-  }, [paymentAmount, paymentMode, orderGrandTotal]);
+
+  const chosenIds = lineOrder;
+  const { available, refreshAvailability } = useStockAvailability(warehouseId, chosenIds);
+
+  // Lines in the shape lib/orders.js prices: quantity, and discount per piece off the list price.
+  const priced = useMemo(
+    () =>
+      chosenIds.map((skuId) => {
+        const sku = skuMap.get(skuId);
+        const line = lines[skuId];
+        const listPrice = listPriceOf(sku);
+        const perPiece = (Number(line.packPrice) || 0) / packSize(sku);
+        const unitPrice = Math.min(Math.max(perPiece, 0), listPrice || Infinity);
+        // The discount is fixed per line, not per piece: ₹95 a ladi of 12 does not divide into
+        // whole paise, and rounding each piece would drift the ladi to ₹95.04.
+        const lineDiscount = roundToTwo(Math.max(listPrice - unitPrice, 0) * line.quantity);
+        // `discount` (per piece) is what lib/orders.js getLineTaxAmount expects.
+        const discount = line.quantity ? lineDiscount / line.quantity : 0;
+        return { skuId, sku, quantity: line.quantity, listPrice, unitPrice, discount, lineDiscount };
+      }),
+    [chosenIds, lines, skuMap]
+  );
+  const totals = useMemo(() => {
+    const mrp = priced.reduce((sum, l) => sum + l.listPrice * l.quantity, 0);
+    const discount = priced.reduce((sum, l) => sum + l.lineDiscount, 0);
+    const gst = priced.reduce((sum, l) => sum + getLineTaxAmount(l, l.sku), 0);
+    const grand = roundToTwo(Math.max(mrp - discount, 0));
+    return { mrp: roundToTwo(mrp), discount: roundToTwo(discount), gst: roundToTwo(gst), grand };
+  }, [priced]);
+
+  const addProduct = (skuId) => {
+    const sku = skuMap.get(String(skuId));
+    if (!sku || lines[String(skuId)]) return;
+    const id = String(skuId);
+    setLines((prev) => ({
+      ...prev,
+      [id]: { quantity: packSize(sku), packPrice: String(roundToTwo(defaultUnitPrice(sku) * packSize(sku))) }
+    }));
+    setLineOrder((prev) => [...prev, id]);
+  };
+
+  const removeProduct = (id) => {
+    setLines(({ [id]: _removed, ...rest }) => rest);
+    setLineOrder((prev) => prev.filter((value) => value !== id));
+    if (editingPrice === id) setEditingPrice(null);
+  };
+
+  const step = (sku, direction) => {
+    const id = String(sku.id);
+    const quantity = (lines[id]?.quantity || 0) + direction * packSize(sku);
+    if (quantity <= 0) return removeProduct(id);
+    setLines((prev) => ({ ...prev, [id]: { ...prev[id], quantity } }));
+  };
+
+  const setPackPrice = (skuId, value) =>
+    setLines((prev) => (prev[skuId] ? { ...prev, [skuId]: { ...prev[skuId], packPrice: value } } : prev));
+
+  // A brand switch keeps only the lines that belong to the new brand.
+  const chooseBrand = (nextBrandId) => {
+    setBrandChoice(nextBrandId);
+    const keep = lineOrder.filter((id) => String(skuMap.get(id)?.brand_id) === nextBrandId);
+    setLineOrder(keep);
+    setLines((prev) => Object.fromEntries(keep.map((id) => [id, prev[id]])));
+  };
+
+  const collected = Number(paymentAmount);
+  // Blank or zero collected makes it a credit order: most orders are on credit.
+  const isCredit = !paymentAmount.trim() || !(collected > 0);
 
   async function handleSubmit(event) {
-    event.preventDefault();
+    event?.preventDefault();
     setError("");
-    if (!retailerId) {
-      setError("Select a retailer before submitting.");
-      return;
-    }
-    if (!warehouseId) {
-      setError("Select a warehouse before submitting.");
-      return;
-    }
-    if (!brandId) {
-      setError("Select a brand before submitting.");
-      return;
-    }
-    const payloadItems = items
-      .map((item) => {
-        const skuId = Number(item.skuId);
-        const sku = skuMap.get(String(item.skuId));
-        const quantity = Number(item.quantity);
-        const listPrice = Number(sku?.mrp ?? sku?.rate);
-        const discountPerUnit = Number(item.discount) || 0;
-        const resolvedListPrice = Number.isFinite(listPrice) && listPrice > 0
-          ? listPrice
-          : Number(item.unitPrice || 0) + discountPerUnit;
-        const unitPrice = resolvedListPrice;
-        const gstRate = getSkuGstRate(sku);
-        if (!skuId || !quantity || !unitPrice || !sku) {
-          return null;
-        }
-        return {
-          sku_id: skuId,
-          quantity,
-          unit_price: unitPrice,
-          discount_amount: roundToTwo(discountPerUnit * quantity),
-          taxes: gstRate > 0 ? [{ tax_type: "GST", rate: gstRate }] : []
-        };
-      })
-      .filter(Boolean);
-
-    if (!payloadItems.length) {
-      setError("Add at least one line item with SKU, quantity, and unit price.");
-      return;
-    }
-
-    const trimmedPaymentAmount = paymentAmount.trim();
-    if (paymentMode !== "CREDIT" && !trimmedPaymentAmount) {
-      setError("Enter a payment amount.");
-      return;
-    }
-    const paymentAmountValue = paymentMode === "CREDIT" ? null : Number(trimmedPaymentAmount);
-    if (paymentMode !== "CREDIT" && (!Number.isFinite(paymentAmountValue) || paymentAmountValue <= 0)) {
-      setError("Payment amount must be a positive number.");
-      return;
-    }
+    if (!retailerId) return setError("Choose a shop first.");
+    if (!warehouseId) return setError("No warehouse is set up for orders.");
+    if (!priced.length) return setError("Add at least one product.");
+    if (!isCredit && !Number.isFinite(collected)) return setError("Enter the amount collected as a number.");
 
     setSaving(true);
     try {
@@ -138,17 +186,25 @@ export default function SalesmanOrderCreate() {
         method: "POST",
         body: JSON.stringify({
           retailer_id: Number(retailerId),
-          warehouse_id: warehouseId ? Number(warehouseId) : null,
-          payment_mode: paymentMode,
-          payment_amount: paymentAmountValue,
-          items: payloadItems
+          warehouse_id: Number(warehouseId),
+          payment_mode: isCredit ? "CREDIT" : paymentMode,
+          payment_amount: isCredit ? null : roundToTwo(collected),
+          items: priced.map((l) => {
+            const gstRate = getSkuGstRate(l.sku);
+            return {
+              sku_id: Number(l.skuId),
+              quantity: l.quantity,
+              unit_price: l.listPrice || l.unitPrice,
+              discount_amount: l.lineDiscount,
+              taxes: gstRate > 0 ? [{ tax_type: "GST", rate: gstRate }] : []
+            };
+          })
         })
       });
       notify("Order created.");
       router.push(`/app/orders/${response.id}`);
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to create order.");
-      // The rejection means the figures on screen are behind the warehouse; re-read them.
       refreshAvailability();
     } finally {
       setSaving(false);
@@ -156,229 +212,278 @@ export default function SalesmanOrderCreate() {
   }
 
   if (loading) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
-        Loading order form…
-      </div>
-    );
+    return <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">Loading…</div>;
   }
 
+  const itemCount = priced.length;
+  const submitLabel = saving ? "Creating…" : "Create order";
+  const canSubmit = !saving && Boolean(retailerId) && itemCount > 0;
+
   return (
-    <div className="field-order-form space-y-6">
-      <SectionCard
-        title="Create Order"
-        subtitle="Book an order for one of your assigned retailers."
-        actions={
-          <Link
-            href="/app/orders"
-            className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
-          >
-            Back to Orders
-          </Link>
-        }
-      >
-        <form id="salesman-order-form" onSubmit={handleSubmit} className="space-y-6">
-          <div className="field-form-section grid gap-4 lg:grid-cols-2">
-            <div>
-              <label className="text-xs uppercase tracking-widest text-slate-400">Retailer</label>
-              <SearchSelect
-                value={retailerId}
-                onChange={setRetailerId}
-                options={retailerOptions}
-                placeholder="Search retailers by name, address, city or phone"
-                emptyLabel="No retailers match"
-                className="mt-2"
-              />
-              {!retailers.length ? (
-                <p className="mt-2 text-xs text-amber-600">
-                  No retailers are assigned to you yet.{" "}
-                  <Link href="/app/retailers" className="font-semibold underline underline-offset-2">
-                    Request your first outlet
-                  </Link>{" "}
-                  to start booking orders.
+    <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-3">
+      {/* Shop, with the brand and warehouse it is booked against as one symmetric row. */}
+      <Section title="Shop">
+        {retailer ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{retailer.name}</p>
+              {retailer.address_line1 || retailer.city ? (
+                <p className="mt-0.5 flex items-center gap-1 text-sm text-slate-500">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                  <span className="truncate">{[retailer.address_line1, retailer.city].filter(Boolean).join(", ")}</span>
                 </p>
               ) : null}
             </div>
-            <div>
-              <label className="text-xs uppercase tracking-widest text-slate-400">Order date</label>
-              {/* Read-only: an order is dated when it is booked. The server stamps created_at
-                  from its own clock and ignores anything sent here, so an editable box would
-                  only promise a backdate it will not honour. */}
-              <p className="mt-2 flex h-[42px] items-center rounded-lg border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-600">
-                {displayDate}
-              </p>
-            </div>
-          </div>
-
-          <div className="field-form-section grid gap-4 lg:grid-cols-2">
-            <div>
-              <label className="text-xs uppercase tracking-widest text-slate-400">Warehouse</label>
-              <SelectBar value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} className="mt-2">
-                <option value="" disabled>Select warehouse</option>
-                {warehouses.map((warehouse) => (
-                  <option key={warehouse.id} value={warehouse.id}>
-                    {warehouse.name}
-                  </option>
-                ))}
-              </SelectBar>
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-widest text-slate-400">Brand</label>
-              <SelectBar
-                value={brandId}
-                onChange={(event) => {
-                  const nextBrandId = event.target.value;
-                  setBrandId(nextBrandId);
-                  setItems((prev) =>
-                    prev.map((item) => {
-                      const sku = skuMap.get(String(item.skuId));
-                      const skuMatches = nextBrandId
-                        ? sku && String(sku.brand_id) === String(nextBrandId)
-                        : false;
-                      return {
-                        ...item,
-                        brandId: nextBrandId,
-                        skuId: skuMatches ? item.skuId : "",
-                        unitPrice: skuMatches ? item.unitPrice : "",
-                        discount: skuMatches ? item.discount : "0",
-                        discountPercent: skuMatches ? item.discountPercent : "0",
-                        discountLastEdited: skuMatches ? item.discountLastEdited : "amount"
-                      };
-                    })
-                  );
-                }}
-                className="mt-2"
-                required
-              >
-                <option value="">Select brand</option>
-                {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>
-                    {brand.name}
-                  </option>
-                ))}
-              </SelectBar>
-            </div>
-          </div>
-
-          <div className="field-form-section">
-            <label className="text-xs uppercase tracking-widest text-slate-400">Payment mode</label>
-            <SelectBar
-              value={paymentMode}
-              onChange={(event) => {
-                const value = event.target.value;
-                setPaymentMode(value);
-                if (value === "CREDIT") {
-                  setPaymentAmount("");
-                }
-              }}
-              className="mt-2 lg:max-w-[calc(50%-0.5rem)]"
-            >
-              <option value="CASH">Cash</option>
-              <option value="UPI">UPI</option>
-              <option value="CHEQUE">Cheque</option>
-              <option value="CREDIT">Credit</option>
-            </SelectBar>
-          </div>
-
-          <div className="field-form-section space-y-4 border-t border-slate-200 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-xs uppercase tracking-widest text-slate-400">Order items</p>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-[11px] uppercase tracking-widest text-slate-400">Edit by</span>
-                {[
-                  { value: "percent", label: "Discount %" },
-                  { value: "discount", label: "Discount" },
-                  { value: "unit", label: "Unit price" }
-                ].map((option) => {
-                  const isActive = pricingMode === option.value;
-                  return (
-                    <label
-                      key={option.value}
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                        isActive
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-200 text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="salesman-pricing-mode"
-                        value={option.value}
-                        checked={isActive}
-                        onChange={() => setPricingMode(option.value)}
-                        className="sr-only"
-                      />
-                      {option.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-            <OrderLineItemsTable
-              items={items}
-              available={available}
-              skus={skus}
-              selectedBrandId={brandId}
-              pricingMode={pricingMode}
-              onItemChange={updateItem}
-              onAddItem={addItem}
-              onRemoveItem={removeItem}
-            />
-          </div>
-
-          <div className="field-form-section flex flex-wrap items-center justify-end gap-3">
-            {paymentMode !== "CREDIT" ? (
-              <div className="w-full space-y-2">
-                <div className="flex items-center justify-between gap-3 lg:grid lg:items-center lg:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
-                  <span className="lg:col-span-7 text-right text-sm font-semibold text-slate-700">
-                    Payment received
-                  </span>
-                  <div className="w-40 shrink-0 lg:col-span-2 lg:col-start-8 lg:w-auto">
-                    <InputBar
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={paymentAmount}
-                      onChange={(event) => setPaymentAmount(event.target.value)}
-                      placeholder="Enter amount"
-                      required
-                      className="text-right tabular-nums"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 text-sm text-slate-600 lg:grid lg:items-center lg:grid-cols-[2.5rem_2.6fr_7rem_7rem_7rem_8rem_8rem_8rem_3.5rem]">
-                  <span className="lg:col-span-7 text-right text-sm font-semibold text-slate-500">
-                    Payment pending
-                  </span>
-                  <span className="lg:col-span-2 lg:col-start-8 text-right font-semibold tabular-nums">
-                    {formatRupee(paymentPending)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <span className="text-sm font-semibold text-slate-500">
-                Credit order. Pending amount: {formatRupee(orderGrandTotal)}
-              </span>
-            )}
-          </div>
-
-          {lookupError ? <p className="text-sm text-rose-500">{lookupError}</p> : null}
-          {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-          <div className="hidden justify-end lg:flex">
             <button
-              type="submit"
-              disabled={saving || !retailers.length}
-              className="min-h-[48px] w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:hover:-translate-y-0.5"
+              type="button"
+              onClick={() => setRetailerId("")}
+              className="h-11 shrink-0 cursor-pointer rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700"
             >
-              {saving ? "Creating..." : "Create Order"}
+              Change
             </button>
           </div>
-        </form>
-      </SectionCard>
+        ) : (
+          <SearchSelect
+            value={retailerId}
+            onChange={setRetailerId}
+            options={retailerOptions}
+            placeholder="Search your shops"
+            inputClassName="h-11 !rounded-xl !py-0"
+            emptyLabel="No shops match"
+          />
+        )}
+        {!retailers.length ? (
+          <p className="text-sm text-amber-600">Add a retailer from the Retailers tab to start booking.</p>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3">
+          <FieldSelect
+            label="Brand"
+            value={brandId}
+            onChange={chooseBrand}
+            options={brands.map((b) => [String(b.id), b.name])}
+          />
+          <FieldSelect
+            label="Warehouse"
+            value={warehouseId}
+            onChange={setWarehouseChoice}
+            options={warehouses.map((w) => [String(w.id), w.name])}
+          />
+        </div>
+      </Section>
+
+      {/* Products: added from the dropdown, edited here. */}
+      <Section title="Products" meta={itemCount ? `${itemCount} added` : null}>
+        <SearchSelect
+          value=""
+          onChange={addProduct}
+          options={productOptions}
+          placeholder={itemCount ? "Add another product" : "Search products to add"}
+            inputClassName="h-11 !rounded-xl !py-0"
+          emptyLabel={productOptions.length ? "No products match" : "Every product is already added"}
+        />
+        {itemCount ? (
+          <ul className="divide-y divide-slate-100">
+            {priced.map(({ skuId: id, sku, quantity, unitPrice }) => {
+              const size = packSize(sku);
+              const unit = packLabel(sku);
+              const line = lines[id];
+              const stock = available?.[id];
+              const short = stock !== undefined && stock < quantity;
+              const mrp = listPriceOf(sku);
+              return (
+                <li key={id} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                  {/* Row 1: what it is · how many */}
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold leading-snug text-slate-900">{sku?.name || sku?.code}</p>
+                      <p className="text-xs tabular-nums text-slate-500">
+                        {size > 1 ? `${quantity} pcs` : null}
+                        {size > 1 && mrp ? " · " : null}
+                        {mrp ? `MRP ${formatRupee(mrp * size)} / ${unit}` : null}
+                      </p>
+                    </div>
+                    {/* − count + with the unit beside the count, so it reads "2 ladi", not 2 pieces.
+                        − on the last ladi removes the product. */}
+                    <div className="flex h-11 shrink-0 items-center rounded-xl border border-slate-200">
+                      <button type="button" onClick={() => step(sku, -1)} aria-label={`One ${unit} less of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center text-slate-700">
+                        <Minus className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                      <span className="flex min-w-[4.5rem] items-baseline justify-center gap-1 px-1" aria-label={`${quantity / size} ${unit}`}>
+                        <span className="text-base font-semibold tabular-nums text-slate-900">{quantity / size}</span>
+                        <span className="text-sm text-slate-500">{unit}</span>
+                      </span>
+                      <button type="button" onClick={() => step(sku, 1)} aria-label={`One ${unit} more of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center text-slate-700">
+                        <Plus className="h-4 w-4" strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                  {/* Row 2: price per ladi (editable) · line total, aligned under the stepper */}
+                  <div className="flex items-center justify-between gap-3">
+                    {editingPrice === id ? (
+                      <label className="flex items-center gap-2 text-sm text-slate-600">
+                        <span className="relative">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.01"
+                            autoFocus
+                            aria-label={`Price per ${unit}`}
+                            value={line.packPrice}
+                            onChange={(event) => setPackPrice(id, event.target.value)}
+                            onBlur={() => setEditingPrice(null)}
+                            onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+                            className="h-10 w-28 rounded-xl border border-slate-300 pl-7 pr-3 text-right text-base tabular-nums text-slate-900 focus:border-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25"
+                          />
+                        </span>
+                        <span>/ {unit}</span>
+                      </label>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingPrice(id)}
+                        aria-label={`Edit price per ${unit}`}
+                        className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-xl bg-slate-100 px-3 text-sm tabular-nums text-slate-700"
+                      >
+                        <span className="font-semibold">{formatRupee(unitPrice * size)}</span>
+                        <span className="text-slate-500">/ {unit}</span>
+                        <Pencil className="ml-0.5 h-3.5 w-3.5 text-slate-400" strokeWidth={2} />
+                      </button>
+                    )}
+                    <p className="text-sm font-semibold tabular-nums text-slate-900">{formatRupee(unitPrice * quantity)}</p>
+                  </div>
+                  {short ? <p className="text-xs text-amber-600">Only {stock} pcs in stock right now</p> : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </Section>
+
+      {/* Payment: the same two-column shape as brand / warehouse. Blank received = credit. */}
+      <Section title="Payment">
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-slate-500">Received</span>
+            <span className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-slate-400">₹</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={paymentAmount}
+                onChange={(event) => setPaymentAmount(event.target.value)}
+                placeholder="0"
+                className={`${CONTROL} pl-7 text-right tabular-nums`}
+              />
+            </span>
+          </label>
+          <FieldSelect
+            label="Mode"
+            value={isCredit ? "CREDIT" : paymentMode}
+            onChange={setPaymentMode}
+            disabled={isCredit}
+            options={isCredit ? [["CREDIT", "Credit"]] : PAYMENT_MODES}
+          />
+        </div>
+        <p className="text-xs text-slate-500">
+          {isCredit ? "Nothing received, so this is a credit order." : "Leave Received blank for a credit order."}
+        </p>
+      </Section>
+
+      {itemCount ? <BillSummary totals={totals} itemCount={itemCount} received={isCredit ? 0 : collected} /> : null}
+
+      {lookupError ? <p className="text-sm text-rose-600">{lookupError}</p> : null}
+
+      {/* Desktop: the button sits under the bill. Phones use the bar below. */}
+      <div className="hidden items-center justify-end gap-4 lg:flex">
+        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        <button type="submit" disabled={!canSubmit} className="h-12 rounded-2xl bg-slate-900 px-6 text-sm font-semibold text-white disabled:opacity-50">
+          {submitLabel}
+        </button>
+      </div>
+
       <MobileActionBar notice={error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}>
-        <div className="min-w-0 shrink-0 pr-2"><p className="text-xs text-slate-500">Order total</p><p className="text-lg font-semibold tabular-nums">{formatRupee(orderGrandTotal)}</p></div>
-        <button type="submit" form="salesman-order-form" disabled={saving || !retailers.length} className={BAR_ACTION_PRIMARY}>{saving ? "Creating…" : "Create order"}</button>
+        <div className="min-w-0 shrink-0 pr-1">
+          <p className="text-base font-semibold tabular-nums text-slate-900">{formatRupee(totals.grand)}</p>
+          <p className="text-xs text-slate-500">
+            {itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "No items yet"}
+          </p>
+        </div>
+        <button type="submit" disabled={!canSubmit} className={BAR_ACTION_PRIMARY}>
+          {submitLabel}
+        </button>
       </MobileActionBar>
+    </form>
+  );
+}
+
+// One type scale for the whole screen: 12px labels and meta, 14px body and values, 16px for
+// inputs (stops iOS zooming on focus) and the totals.
+const CONTROL =
+  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25 disabled:bg-slate-50 disabled:text-slate-500";
+
+function Section({ title, meta, children, ...rest }) {
+  return (
+    <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4" {...rest}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">{title}</h2>
+        {meta ? <p className="text-xs text-slate-400">{meta}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// A labelled native select: on a phone it opens the system picker, which is clearer than a row
+// of pill buttons and keeps every field the same height.
+function FieldSelect({ label, value, onChange, options, disabled = false }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      <span className="relative">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          className={`${CONTROL} cursor-pointer appearance-none truncate pr-9 font-semibold disabled:cursor-default`}
+        >
+          {options.map(([optionValue, optionLabel]) => (
+            <option key={optionValue} value={optionValue}>
+              {optionLabel}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      </span>
+    </label>
+  );
+}
+
+// Receipt-style: the numbers a salesman reads back to the shopkeeper, in the order they add up.
+function BillSummary({ totals, itemCount, received }) {
+  const due = roundToTwo(Math.max(totals.grand - (received || 0), 0));
+  const row = (label, value, className = "text-slate-600") => (
+    <div className={`flex items-baseline justify-between gap-3 ${className}`}>
+      <dt>{label}</dt>
+      <dd className="tabular-nums">{value}</dd>
     </div>
+  );
+  return (
+    <Section title="Bill summary" meta={`${itemCount} item${itemCount === 1 ? "" : "s"}`} aria-label="Bill summary">
+      <dl className="space-y-1.5 text-sm">
+        {row("MRP total", formatRupee(totals.mrp))}
+        {row("Discount", `− ${formatRupee(totals.discount)}`, "text-emerald-700")}
+        {row("GST (included)", formatRupee(totals.gst), "text-slate-400")}
+      </dl>
+      <div className="border-t border-dashed border-slate-300" />
+      <dl className="space-y-1.5 text-sm">
+        {row("Order total", formatRupee(totals.grand), "text-base font-semibold text-slate-900")}
+        {received > 0 ? row("Received", `− ${formatRupee(received)}`) : null}
+        {row(received > 0 ? "Balance due" : "Due on credit", formatRupee(due), "font-semibold text-slate-700")}
+      </dl>
+    </Section>
   );
 }

@@ -193,8 +193,9 @@
   .field-empty h3 { margin-top: 12px; font-size: 17px; font-weight: 600; }
   .field-empty p { margin-top: 8px; font-size: 14px; color: #64748b; }
   .field-empty a { display: inline-flex; min-height: 44px; align-items: center; margin-top: 12px; color: #047857; font-weight: 600; }
-  .field-status-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-  .field-status-filters button { min-height: 44px; flex-shrink: 0; border: 1px solid #e2e8f0; border-radius: 14px; padding: 0 16px; background: #fff; color: #475569; font-size: 14px; font-weight: 600; }
+  /* Wraps instead of scrolling sideways: every status is visible without a hidden overflow. */
+  .field-status-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+  .field-status-filters button { min-height: 40px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0 14px; background: #fff; color: #475569; font-size: 14px; font-weight: 600; }
   .field-status-filters button[aria-pressed="true"] { background: #0f172a; border-color: #0f172a; color: #fff; }
   .field-order-form > .app-section { padding: 0; border: 0; background: transparent; }
   .field-order-form form > .field-form-section { padding: 18px 16px; border: 1px solid #e2e8f0; border-radius: 20px; background: white; }
