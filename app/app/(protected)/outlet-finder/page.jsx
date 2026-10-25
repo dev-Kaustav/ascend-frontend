@@ -4,6 +4,7 @@ import {  } from "react";
 
 import ManualFinder from "@/components/outlet-finder/ManualFinder";
 import DriverJobs from "@/components/outlet-finder/DriverJobs";
+import SalesmanFinder from "@/components/outlet-finder/SalesmanFinder";
 import { useAuth } from "@/components/auth/AuthProvider";
 
 export default function OutletFinderPage() {
@@ -22,6 +23,18 @@ export default function OutletFinderPage() {
           <p className="mb-4 mt-1 text-sm text-slate-500">Enter outlet IDs to plan an ad-hoc route.</p>
           <ManualFinder />
         </section>
+      </div>
+    );
+  }
+
+  if (role === "SALESMAN") {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Find outlets</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Your outlets, nearest first. Tick a few to plan a route.</p>
+        </div>
+        <SalesmanFinder />
       </div>
     );
   }

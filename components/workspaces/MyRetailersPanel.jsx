@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Clock, MapPin, Pencil, Phone, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Clock, MapPin, Navigation, Pencil, Phone, Plus, X } from "lucide-react";
 import SectionCard from "@/components/layout/SectionCard";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import CaptureLocationButton from "@/components/ui/CaptureLocationButton";
+import { formatAccuracy, getCoords, mapsUrl } from "@/lib/geo";
+import { loadMaps, normalizePlaceAddress, reverseGeocode } from "@/lib/store/maps.mjs";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import { INDIAN_STATES } from "@/lib/states";
 
@@ -18,7 +19,6 @@ const BLANK = {
   name: "",
   mobile_number: "",
   address_line1: "",
-  address_line2: "",
   city: "",
   state: "",
   pincode: "",
@@ -57,6 +57,37 @@ function Field({ label, children }) {
   );
 }
 
+const DETECT_TEXT = {
+  finding: "Finding your location…",
+  found: "Address filled from your location",
+  "no-address": "Location saved, but no address was found. Type the address.",
+  failed: "Couldn't get your location. Type the address, or retry at the shop."
+};
+
+function DetectStatus({ detect, accuracy, onRetry }) {
+  const precision = detect === "found" ? formatAccuracy(accuracy) : null;
+  return (
+    <p
+      role="status"
+      className={`flex items-start gap-1.5 text-sm ${detect === "failed" ? "text-amber-700" : "text-slate-500"}`}
+    >
+      <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+      <span>
+        {DETECT_TEXT[detect]}
+        {precision ? ` (${precision})` : ""}
+        {detect !== "finding" ? (
+          <>
+            {" · "}
+            <button type="button" onClick={onRetry} className="cursor-pointer font-semibold text-[#6d28d9] underline">
+              Retry
+            </button>
+          </>
+        ) : null}
+      </span>
+    </p>
+  );
+}
+
 export default function MyRetailersPanel() {
   // The backend scopes this to retailers actually assigned to this salesman, which is exactly
   // the set they can book orders against — including ones they just added themselves.
@@ -71,6 +102,12 @@ export default function MyRetailersPanel() {
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  // Where the new shop is, read from the phone the moment the form opens: "finding" | "found" |
+  // "no-address" (a fix but Google had no address) | "failed" | null.
+  const [detect, setDetect] = useState(null);
+  const detectRun = useRef(0);
+  // Fields the salesman has typed into: a slow address lookup must never overwrite them.
+  const touched = useRef(new Set());
 
   const loadRequests = useCallback(async () => {
     try {
@@ -109,10 +146,48 @@ export default function MyRetailersPanel() {
   const visibleRetailers = useMemo(() => (retailers || []).filter(matches), [retailers, matches]);
   const visibleRequests = useMemo(() => openRequests.filter(matches), [openRequests, matches]);
 
+  const detectLocation = async () => {
+    const run = ++detectRun.current;
+    setDetect("finding");
+    let coords;
+    try {
+      coords = await getCoords();
+    } catch {
+      if (run === detectRun.current) setDetect("failed");
+      return;
+    }
+    if (run !== detectRun.current) return;
+    setDraft((prev) => prev && { ...prev, ...coords });
+    try {
+      const result = await reverseGeocode({ maps: await loadMaps(), coords });
+      if (run !== detectRun.current) return;
+      if (!result) {
+        setDetect("no-address");
+        return;
+      }
+      const place = normalizePlaceAddress(result, INDIAN_STATES, { source: "detect", location: coords });
+      const filled = { address_line1: place.line1, city: place.city, state: place.state, pincode: place.pincode };
+      setDraft((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        for (const [field, value] of Object.entries(filled)) {
+          if (value && !touched.current.has(field)) next[field] = value;
+        }
+        return next;
+      });
+      setDetect("found");
+    } catch {
+      // The fix is real even when the address lookup is not: keep the pin, type the address.
+      if (run === detectRun.current) setDetect("no-address");
+    }
+  };
+
   const startCreate = () => {
     setDraft({ ...BLANK });
     setEditingId(null);
     setFormError("");
+    touched.current = new Set();
+    detectLocation();
   };
 
   const startEdit = (request) => {
@@ -130,12 +205,17 @@ export default function MyRetailersPanel() {
   };
 
   const cancel = () => {
+    detectRun.current += 1;
+    setDetect(null);
     setDraft(null);
     setEditingId(null);
     setFormError("");
   };
 
-  const setField = (field, value) => setDraft((prev) => ({ ...prev, [field]: value }));
+  const setField = (field, value) => {
+    touched.current.add(field);
+    setDraft((prev) => ({ ...prev, [field]: value }));
+  };
 
   const submit = async () => {
     if (saving) return;
@@ -145,7 +225,6 @@ export default function MyRetailersPanel() {
       name: draft.name,
       mobile_number: numOrNull(draft.mobile_number),
       address_line1: orNull(draft.address_line1),
-      address_line2: orNull(draft.address_line2),
       city: orNull(draft.city),
       state: orNull(draft.state),
       pincode: numOrNull(draft.pincode),
@@ -185,6 +264,7 @@ export default function MyRetailersPanel() {
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
         {editingId ? "Edit request" : "New retailer"}
       </p>
+      {detect ? <DetectStatus detect={detect} accuracy={draft?.accuracy_m} onRetry={detectLocation} /> : null}
       <Field label="Shop name">
         <input
           className={FIELD_CLASSNAME}
@@ -213,20 +293,12 @@ export default function MyRetailersPanel() {
           />
         </Field>
       </div>
-      <Field label="Address line 1">
+      <Field label="Address">
         <input
           className={FIELD_CLASSNAME}
           value={draft?.address_line1 ?? ""}
           onChange={(event) => setField("address_line1", event.target.value)}
-          placeholder="Street, landmark"
-        />
-      </Field>
-      <Field label="Address line 2">
-        <input
-          className={FIELD_CLASSNAME}
-          value={draft?.address_line2 ?? ""}
-          onChange={(event) => setField("address_line2", event.target.value)}
-          placeholder="Optional"
+          placeholder="Shop no., street, area"
         />
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -260,28 +332,6 @@ export default function MyRetailersPanel() {
           value={draft?.gst_number ?? ""}
           onChange={(event) => setField("gst_number", event.target.value)}
           placeholder="Optional"
-        />
-      </Field>
-      {/* Placed last, right above the submit button: the salesman is standing at the shop when
-          they fill this in, and this is the one field that is cheap now and expensive later.
-          The coordinates ride along to the retailer row when an admin approves the request. */}
-      <Field label="Shop location">
-        <CaptureLocationButton
-          value={draft}
-          onCapture={(coords) =>
-            setDraft((prev) => ({
-              ...prev,
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-              accuracy_m: coords.accuracy_m
-            }))
-          }
-          onClear={() =>
-            setDraft((prev) => ({ ...prev, latitude: null, longitude: null, accuracy_m: null }))
-          }
-          idleLabel="Capture shop location"
-          capturedLabel="Shop location captured"
-          hint="Optional, but do it now — stand at the shop door and tap."
         />
       </Field>
       {formError ? (
@@ -445,12 +495,23 @@ export default function MyRetailersPanel() {
                     <span>{place}</span>
                   </p>
                 ) : null}
-                {phone ? (
-                  <a href={`tel:${retailer.mobile_number}`} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600">
-                    <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                    <span className="tabular-nums">{phone}</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {phone ? (
+                    <a href={`tel:${retailer.mobile_number}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600">
+                      <Phone className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                      <span className="tabular-nums">{phone}</span>
+                    </a>
+                  ) : null}
+                  <a
+                    href={mapsUrl(retailer)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-600"
+                  >
+                    <Navigation className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                    Map
                   </a>
-                ) : null}
+                </div>
               </li>
             );
           })}

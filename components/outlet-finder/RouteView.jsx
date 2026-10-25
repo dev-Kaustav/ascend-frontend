@@ -13,7 +13,7 @@ const LEG_STORAGE_PREFIX = "outletFinder.legIndex.";
 const LAUNCHED_STORAGE_PREFIX = "outletFinder.launchedLegs.";
 const DELIVERY_STORAGE_PREFIX = "outletFinder.deliveries.";
 
-export default function RouteView({ outlets: initialOutlets, userPos, allowRemove = false }) {
+export default function RouteView({ outlets: initialOutlets, userPos, allowRemove = false, allowDelivery = true }) {
   const [outlets, setOutlets] = useState(initialOutlets);
   const [showMap, setShowMap] = useState(false);
 
@@ -132,6 +132,7 @@ export default function RouteView({ outlets: initialOutlets, userPos, allowRemov
         onDeliveryChange={updateDeliveryState}
         onCoordsUpdated={handleCoordsUpdated}
         onRemove={allowRemove ? removeOutlet : null}
+        allowDelivery={allowDelivery}
       />
 
       {legs.length > 0 && (

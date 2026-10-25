@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { MapPin, Pencil, Phone } from "lucide-react";
+import { MapPin, Navigation, Pencil, Phone } from "lucide-react";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/tables/InlineRowCells";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { apiEndpoints } from "@/lib/api";
+import { mapsUrl } from "@/lib/geo";
 import { INDIAN_STATES } from "@/lib/states";
 import useAdminLookups from "@/lib/hooks/useAdminLookups";
 import useInlineRowEditor from "@/lib/hooks/useInlineRowEditor";
@@ -76,6 +77,7 @@ export default function RetailersPanel() {
         name: asText(retailer.name),
         mobile_number: asText(retailer.mobile_number),
         address_line1: asText(retailer.address_line1),
+        // No longer editable (one Address field); carried through so a save never wipes it.
         address_line2: asText(retailer.address_line2),
         city: asText(retailer.city),
         state: asText(retailer.state),
@@ -193,10 +195,7 @@ export default function RetailersPanel() {
         meta: { mobileHidden: true },
         cell: ({ row }) =>
           editor.isEditing(row) ? (
-            <div className="flex gap-1">
-              <InlineText editor={editor} field="address_line1" label="Address line 1" placeholder="Line 1" />
-              <InlineText editor={editor} field="address_line2" label="Address line 2" placeholder="Line 2" />
-            </div>
+            <InlineText editor={editor} field="address_line1" label="Address" placeholder="Shop no., street, area" />
           ) : (
             row.original.address
           )
@@ -300,11 +299,8 @@ export default function RetailersPanel() {
           <MobileField label="Phone">
             <InlineNumber editor={editor} field="mobile_number" label="Mobile number" digits={10} placeholder="10 digits" className={`${MOBILE_FIELD} !text-left`} />
           </MobileField>
-          <MobileField label="Address line 1">
-            <InlineText editor={editor} field="address_line1" label="Address line 1" placeholder="Shop no., street, landmark" className={MOBILE_FIELD} />
-          </MobileField>
-          <MobileField label="Address line 2">
-            <InlineText editor={editor} field="address_line2" label="Address line 2" placeholder="Area, locality (optional)" className={MOBILE_FIELD} />
+          <MobileField label="Address">
+            <InlineText editor={editor} field="address_line1" label="Address" placeholder="Shop no., street, area" className={MOBILE_FIELD} />
           </MobileField>
           <div className="grid grid-cols-2 gap-3">
             <MobileField label="City">
@@ -387,6 +383,10 @@ export default function RetailersPanel() {
               <span className="tabular-nums">{phone}</span>
             </a>
           ) : null}
+          <a href={mapsUrl(retailer)} target="_blank" rel="noreferrer" className="inline-flex min-h-8 items-center gap-1 font-semibold text-slate-700">
+            <Navigation className="h-3.5 w-3.5" strokeWidth={2} />
+            Map
+          </a>
           <span>{retailer.salesman_name === "—" ? "No salesman" : retailer.salesman_name}</span>
           <span aria-hidden="true">·</span>
           <span>{retailer.beat_name === "—" ? "No beat" : retailer.beat_name}</span>

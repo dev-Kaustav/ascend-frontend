@@ -23,6 +23,7 @@ export default function RouteStops({
   onDeliveryChange,
   onCoordsUpdated,
   onRemove,
+  allowDelivery = true,
 }) {
   // Focus is derived, not stored: a tap on a stop overrides it, and the override falls away
   // once that stop leaves the route. Mirroring this into state via an effect re-rendered
@@ -145,13 +146,15 @@ export default function RouteStops({
               >
                 Open in Maps →
               </a>
-              <MarkDeliveredButton
-                outlet={outlet}
-                state={dstate}
-                proximity={delivered ? null : proximityFor(outlet)}
-                onChange={(next) => handleDelivery(outlet.external_id, next)}
-                onCoordsUpdated={onCoordsUpdated}
-              />
+              {allowDelivery ? (
+                <MarkDeliveredButton
+                  outlet={outlet}
+                  state={dstate}
+                  proximity={delivered ? null : proximityFor(outlet)}
+                  onChange={(next) => handleDelivery(outlet.external_id, next)}
+                  onCoordsUpdated={onCoordsUpdated}
+                />
+              ) : null}
             </div>
             {onRemove && (
               <button

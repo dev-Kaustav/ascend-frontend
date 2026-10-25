@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, ClipboardList, House, MapPinned, Package, Store, Truck, UserRound } from "lucide-react";
+import { ArrowLeft, ClipboardList, House, MapPinned, Package, Search, Store, Truck, UserRound } from "lucide-react";
 import { getFieldNavForRole, getRoleLabel } from "@/lib/navigation";
 import { cn } from "@/lib/cn";
 
-const ICONS = { Home: House, Orders: ClipboardList, Deliveries: Truck, Retailers: Store, Outlets: MapPinned, Routes: MapPinned, Inventory: Package, Account: UserRound };
+const ICONS = { Home: House, Orders: ClipboardList, Deliveries: Truck, Retailers: Store, Outlets: MapPinned, Find: Search, Routes: MapPinned, Inventory: Package, Account: UserRound };
 
 export default function FieldMobileNavigation({ role }) {
   const pathname = usePathname();
