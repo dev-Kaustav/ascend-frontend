@@ -62,18 +62,15 @@ export default function SearchSelect({
   icon = null
 }) {
   const [open, setOpen] = useState(false);
-  // Touch screens browse first: the first tap opens the list without the keyboard, which only
-  // comes up on a second tap (or "Type to search"). `typing` is that second step.
-  const [typing, setTyping] = useState(false);
+  // Touch screens browse first: the box itself is read-only, so a tap opens the list without a
+  // keyboard. Typing happens in a real search field at the top of the list; tapping a real input
+  // is the one thing every phone reliably answers with its keyboard.
   const touch = useSyncExternalStore(subscribeTouch, readTouch, () => false);
   const [query, setQuery] = useState("");
   const [highlightIndex, setHighlightIndex] = useState(0);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
-  // Whether the list was already open when this tap began. The first tap's focus opens it
-  // before its click lands, so the click must not read `open` to decide "second tap".
-  const openAtPress = useRef(false);
   const instanceId = useId();
 
   const selected = useMemo(
@@ -87,8 +84,8 @@ export default function SearchSelect({
   }, [options, query]);
   const visible = matches.slice(0, maxResults);
 
-  // Closed: show the selection. Open: show what is being typed.
-  const displayValue = open ? query : selected?.label || "";
+  // Closed: show the selection. Open on desktop: show what is being typed (touch types in the panel).
+  const displayValue = open && !touch ? query : selected?.label || "";
 
   useEffect(() => {
     if (!open) return undefined;
@@ -96,7 +93,6 @@ export default function SearchSelect({
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setOpen(false);
         setQuery("");
-        setTyping(false);
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
@@ -113,28 +109,14 @@ export default function SearchSelect({
   const close = () => {
     setOpen(false);
     setQuery("");
-    setTyping(false);
   };
 
   const commit = (option) => {
     onChange(option ? String(option.value) : "");
     close();
     // On a phone, picking an item is the end of the job: drop focus so no keyboard lingers.
-    if (touch) inputRef.current?.blur();
+    if (touch && typeof document !== "undefined") document.activeElement?.blur?.();
   };
-
-  // Lift the read-only guard and refocus inside the same tap, which is what lets iOS and
-  // Android raise the keyboard.
-  const startTyping = () => {
-    const input = inputRef.current;
-    setTyping(true);
-    if (!input) return;
-    input.readOnly = false;
-    input.blur();
-    input.focus();
-  };
-
-  const browseOnly = open && !typing && touch;
 
   const handleKeyDown = (event) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -184,8 +166,8 @@ export default function SearchSelect({
         aria-activedescendant={open && visible[highlightIndex] ? `${instanceId}-option-${highlightIndex}` : undefined}
         autoComplete="off"
         disabled={disabled}
-        // Read-only on touch until the second tap, so the first tap shows the list, not a keyboard.
-        readOnly={touch && !typing}
+        // Read-only on touch: a tap opens the list, never the keyboard.
+        readOnly={touch}
         value={displayValue}
         placeholder={selected ? selected.label : placeholder}
         onChange={(event) => {
@@ -198,15 +180,12 @@ export default function SearchSelect({
           setHighlightIndex(0);
           if (!touch) event.target.select();
         }}
-        onPointerDown={() => {
-          openAtPress.current = open;
-        }}
         onClick={() => {
-          // First tap opened the list (via focus); a tap on the already-open list's box means "type".
-          if (openAtPress.current && !typing && touch) startTyping();
+          // Already focused (so no focus event) but closed, e.g. after picking: reopen.
+          if (!open) setOpen(true);
         }}
         onKeyDown={handleKeyDown}
-        className={`${BASE_BAR_CLASSNAME} pr-9 ${icon ? "pl-10" : ""} ${browseOnly ? "cursor-pointer caret-transparent" : ""} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${inputClassName}`}
+        className={`${BASE_BAR_CLASSNAME} pr-9 ${icon ? "pl-10" : ""} ${touch ? "cursor-pointer caret-transparent" : ""} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${inputClassName}`}
       />
       {selected && !disabled ? (
         <button
@@ -223,16 +202,24 @@ export default function SearchSelect({
       ) : null}
       {open && !disabled ? (
         <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
-          {browseOnly ? (
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={startTyping}
-              className="flex w-full cursor-pointer items-center gap-2 border-b border-slate-100 px-3.5 py-3 text-left text-sm font-semibold text-[#6d28d9]"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-              Type to search
-            </button>
+          {touch ? (
+            <div className="relative border-b border-slate-100 p-2">
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="pointer-events-none absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setHighlightIndex(0);
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="Type to search"
+                aria-label={`Search ${ariaLabel || placeholder}`}
+                aria-controls={`${instanceId}-listbox`}
+                autoComplete="off"
+                className="h-11 w-full rounded-lg bg-slate-50 pl-9 pr-3 text-base text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25"
+              />
+            </div>
           ) : null}
           <ul ref={listRef} id={`${instanceId}-listbox`} role="listbox" className="max-h-64 overflow-y-auto py-1">
             {visible.length === 0 ? (
