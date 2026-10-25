@@ -6,6 +6,7 @@ import { ChevronDown, MapPin, Minus, Pencil, Plus } from "lucide-react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
 import SearchSelect from "@/components/ui/SearchSelect";
+import FieldSection, { FIELD_CONTROL } from "@/components/field/FieldSection";
 import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import useStockAvailability from "@/lib/hooks/useStockAvailability";
 import { getLineTaxAmount, getSkuGstRate, roundToTwo } from "@/lib/orders";
@@ -222,7 +223,7 @@ export default function SalesmanOrderCreate() {
   return (
     <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-3">
       {/* Shop, with the brand and warehouse it is booked against as one symmetric row. */}
-      <Section title="Shop">
+      <FieldSection title="Shop">
         {retailer ? (
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -269,16 +270,22 @@ export default function SalesmanOrderCreate() {
             options={warehouses.map((w) => [String(w.id), w.name])}
           />
         </div>
-      </Section>
+      </FieldSection>
 
       {/* Products: added from the dropdown, edited here. */}
-      <Section title="Products" meta={itemCount ? `${itemCount} added` : null}>
+      <FieldSection title="Products" meta={itemCount ? `${itemCount} added` : null}>
         <SearchSelect
           value=""
           onChange={addProduct}
           options={productOptions}
-          placeholder={itemCount ? "Add another product" : "Search products to add"}
-            inputClassName="h-11 !rounded-xl !py-0"
+          placeholder={itemCount ? "Add another product" : "Add a product"}
+            // A solid black + button inside a dashed box, label beside it: reads as "add", not "search".
+            icon={
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <Plus className="!h-4 !w-4" strokeWidth={2.75} />
+              </span>
+            }
+            inputClassName="!h-12 !rounded-xl !py-0 !pl-[3.25rem] !border-2 !border-dashed !border-slate-300 font-semibold placeholder:!text-slate-700 placeholder:font-semibold"
           emptyLabel={productOptions.length ? "No products match" : "Every product is already added"}
         />
         {itemCount ? (
@@ -359,10 +366,10 @@ export default function SalesmanOrderCreate() {
             })}
           </ul>
         ) : null}
-      </Section>
+      </FieldSection>
 
       {/* Payment: the same two-column shape as brand / warehouse. Blank received = credit. */}
-      <Section title="Payment">
+      <FieldSection title="Payment">
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold text-slate-500">Received</span>
@@ -376,7 +383,7 @@ export default function SalesmanOrderCreate() {
                 value={paymentAmount}
                 onChange={(event) => setPaymentAmount(event.target.value)}
                 placeholder="0"
-                className={`${CONTROL} pl-7 text-right tabular-nums`}
+                className={`${FIELD_CONTROL} pl-7 text-right tabular-nums`}
               />
             </span>
           </label>
@@ -391,7 +398,7 @@ export default function SalesmanOrderCreate() {
         <p className="text-xs text-slate-500">
           {isCredit ? "Nothing received, so this is a credit order." : "Leave Received blank for a credit order."}
         </p>
-      </Section>
+      </FieldSection>
 
       {itemCount ? <BillSummary totals={totals} itemCount={itemCount} received={isCredit ? 0 : collected} /> : null}
 
@@ -420,23 +427,6 @@ export default function SalesmanOrderCreate() {
   );
 }
 
-// One type scale for the whole screen: 12px labels and meta, 14px body and values, 16px for
-// inputs (stops iOS zooming on focus) and the totals.
-const CONTROL =
-  "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25 disabled:bg-slate-50 disabled:text-slate-500";
-
-function Section({ title, meta, children, ...rest }) {
-  return (
-    <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4" {...rest}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">{title}</h2>
-        {meta ? <p className="text-xs text-slate-400">{meta}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 // A labelled native select: on a phone it opens the system picker, which is clearer than a row
 // of pill buttons and keeps every field the same height.
 function FieldSelect({ label, value, onChange, options, disabled = false }) {
@@ -448,7 +438,7 @@ function FieldSelect({ label, value, onChange, options, disabled = false }) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           disabled={disabled}
-          className={`${CONTROL} cursor-pointer appearance-none truncate pr-9 font-semibold disabled:cursor-default`}
+          className={`${FIELD_CONTROL} cursor-pointer appearance-none truncate pr-9 font-semibold disabled:cursor-default`}
         >
           {options.map(([optionValue, optionLabel]) => (
             <option key={optionValue} value={optionValue}>
@@ -472,7 +462,7 @@ function BillSummary({ totals, itemCount, received }) {
     </div>
   );
   return (
-    <Section title="Bill summary" meta={`${itemCount} item${itemCount === 1 ? "" : "s"}`} aria-label="Bill summary">
+    <FieldSection title="Bill summary" meta={`${itemCount} item${itemCount === 1 ? "" : "s"}`} aria-label="Bill summary">
       <dl className="space-y-1.5 text-sm">
         {row("MRP total", formatRupee(totals.mrp))}
         {row("Discount", `− ${formatRupee(totals.discount)}`, "text-emerald-700")}
@@ -484,6 +474,6 @@ function BillSummary({ totals, itemCount, received }) {
         {received > 0 ? row("Received", `− ${formatRupee(received)}`) : null}
         {row(received > 0 ? "Balance due" : "Due on credit", formatRupee(due), "font-semibold text-slate-700")}
       </dl>
-    </Section>
+    </FieldSection>
   );
 }

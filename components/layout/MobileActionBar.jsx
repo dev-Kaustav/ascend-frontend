@@ -17,8 +17,12 @@
 // lg:hidden matches AppShell's existing mobile breakpoint (its drawer is lg:hidden) rather
 // than introducing a second breakpoint story.
 
+import { Children } from "react";
+
 export default function MobileActionBar({ children, notice, className = "" }) {
-  if (!children) return null;
+  // Children.toArray drops null/false, so a bar whose actions are all conditionally absent
+  // renders nothing instead of an empty strip.
+  if (!Children.toArray(children).length) return null;
   return (
     <div
         className={`mobile-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pt-3 backdrop-blur lg:hidden ${className}`}

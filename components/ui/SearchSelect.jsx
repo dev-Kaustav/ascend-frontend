@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 // Type-to-filter replacement for a native <select> whose option list is too long to scroll.
 // Filtering is client-side over options already in memory; swap the memo for a debounced
@@ -10,6 +10,17 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 // See the note on the same constant in components/ui/InputBars.jsx.
 const BASE_BAR_CLASSNAME =
   "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-base md:text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#7c3aed] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30";
+
+// Phones and tablets: a coarse pointer. Subscribed with a server snapshot of false, so the server
+// render and the first client render agree and React does not warn about a mismatch.
+const COARSE = "(pointer: coarse)";
+const subscribeTouch = (callback) => {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const query = window.matchMedia(COARSE);
+  query.addEventListener("change", callback);
+  return () => query.removeEventListener("change", callback);
+};
+const readTouch = () => typeof window !== "undefined" && Boolean(window.matchMedia?.(COARSE).matches);
 
 function matchesQuery(option, tokens) {
   if (!tokens.length) return true;
@@ -46,14 +57,23 @@ export default function SearchSelect({
   disabled = false,
   className = "",
   inputClassName = "",
-  maxResults = 100
+  maxResults = 100,
+  // Optional leading icon (a lucide element), e.g. <Plus /> for an "add a product" picker.
+  icon = null
 }) {
   const [open, setOpen] = useState(false);
+  // Touch screens browse first: the first tap opens the list without the keyboard, which only
+  // comes up on a second tap (or "Type to search"). `typing` is that second step.
+  const [typing, setTyping] = useState(false);
+  const touch = useSyncExternalStore(subscribeTouch, readTouch, () => false);
   const [query, setQuery] = useState("");
   const [highlightIndex, setHighlightIndex] = useState(0);
   const containerRef = useRef(null);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  // Whether the list was already open when this tap began. The first tap's focus opens it
+  // before its click lands, so the click must not read `open` to decide "second tap".
+  const openAtPress = useRef(false);
   const instanceId = useId();
 
   const selected = useMemo(
@@ -76,6 +96,7 @@ export default function SearchSelect({
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setOpen(false);
         setQuery("");
+        setTyping(false);
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
@@ -89,11 +110,31 @@ export default function SearchSelect({
     if (node) node.scrollIntoView({ block: "nearest" });
   }, [highlightIndex, open]);
 
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+    setTyping(false);
+  };
+
   const commit = (option) => {
     onChange(option ? String(option.value) : "");
-    setQuery("");
-    setOpen(false);
+    close();
+    // On a phone, picking an item is the end of the job: drop focus so no keyboard lingers.
+    if (touch) inputRef.current?.blur();
   };
+
+  // Lift the read-only guard and refocus inside the same tap, which is what lets iOS and
+  // Android raise the keyboard.
+  const startTyping = () => {
+    const input = inputRef.current;
+    setTyping(true);
+    if (!input) return;
+    input.readOnly = false;
+    input.blur();
+    input.focus();
+  };
+
+  const browseOnly = open && !typing && touch;
 
   const handleKeyDown = (event) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -117,18 +158,21 @@ export default function SearchSelect({
     if (event.key === "Escape") {
       if (!open) return;
       event.preventDefault();
-      setOpen(false);
-      setQuery("");
+      close();
       return;
     }
     if (event.key === "Tab" && open) {
-      setOpen(false);
-      setQuery("");
+      close();
     }
   };
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
+      {icon ? (
+        <span className="pointer-events-none absolute left-3 top-1/2 flex -translate-y-1/2 text-slate-500 [&>svg]:h-4 [&>svg]:w-4">
+          {icon}
+        </span>
+      ) : null}
       <input
         ref={inputRef}
         type="text"
@@ -140,6 +184,8 @@ export default function SearchSelect({
         aria-activedescendant={open && visible[highlightIndex] ? `${instanceId}-option-${highlightIndex}` : undefined}
         autoComplete="off"
         disabled={disabled}
+        // Read-only on touch until the second tap, so the first tap shows the list, not a keyboard.
+        readOnly={touch && !typing}
         value={displayValue}
         placeholder={selected ? selected.label : placeholder}
         onChange={(event) => {
@@ -150,10 +196,17 @@ export default function SearchSelect({
         onFocus={(event) => {
           setOpen(true);
           setHighlightIndex(0);
-          event.target.select();
+          if (!touch) event.target.select();
+        }}
+        onPointerDown={() => {
+          openAtPress.current = open;
+        }}
+        onClick={() => {
+          // First tap opened the list (via focus); a tap on the already-open list's box means "type".
+          if (openAtPress.current && !typing && touch) startTyping();
         }}
         onKeyDown={handleKeyDown}
-        className={`${BASE_BAR_CLASSNAME} pr-9 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${inputClassName}`}
+        className={`${BASE_BAR_CLASSNAME} pr-9 ${icon ? "pl-10" : ""} ${browseOnly ? "cursor-pointer caret-transparent" : ""} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 ${inputClassName}`}
       />
       {selected && !disabled ? (
         <button
@@ -170,6 +223,17 @@ export default function SearchSelect({
       ) : null}
       {open && !disabled ? (
         <div className="absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+          {browseOnly ? (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={startTyping}
+              className="flex w-full cursor-pointer items-center gap-2 border-b border-slate-100 px-3.5 py-3 text-left text-sm font-semibold text-[#6d28d9]"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              Type to search
+            </button>
+          ) : null}
           <ul ref={listRef} id={`${instanceId}-listbox`} role="listbox" className="max-h-64 overflow-y-auto py-1">
             {visible.length === 0 ? (
               <li className="px-3.5 py-2 text-sm text-slate-400">{emptyLabel}</li>
@@ -187,7 +251,7 @@ export default function SearchSelect({
                     event.preventDefault();
                     commit(option);
                   }}
-                  className={`cursor-pointer px-3.5 py-2 text-sm ${
+                  className={`cursor-pointer px-3.5 py-2 text-sm [@media(pointer:coarse)]:py-3 ${
                     index === highlightIndex ? "bg-slate-100 text-slate-900" : "text-slate-700"
                   }`}
                 >

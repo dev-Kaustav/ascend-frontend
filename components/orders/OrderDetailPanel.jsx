@@ -477,14 +477,17 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={downloadInvoice}
-            disabled={downloading}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {downloading ? "Preparing..." : "Invoice PDF"}
-          </button>
+          {/* An invoice is issued at dispatch; before that the PDF endpoint 404s. */}
+          {order.invoice_number ? (
+            <button
+              type="button"
+              onClick={downloadInvoice}
+              disabled={downloading}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {downloading ? "Preparing..." : "Invoice PDF"}
+            </button>
+          ) : null}
           {onClose ? (
             <button
               type="button"
@@ -524,6 +527,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
         // so the one thing they came for does not scroll away with the header.
         secondaryActions={
           role === "SALESMAN" && order.can_collect_cash ? <a href={`#order-cash-${order.id}`} className={BAR_ACTION_PRIMARY}>Record collected cash</a> :
+          !order.invoice_number ? null :
           <button
             type="button"
             onClick={downloadInvoice}
@@ -560,7 +564,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
               <div key={payment.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatCurrency(payment.amount)}</p>
-                  <p className="truncate text-xs text-slate-500">{payment.transaction_reference?.startsWith("SALESMAN-CASH-") ? "Cash collected by salesman" : payment.transaction_reference || "Transaction"}</p>
+                  <p className="truncate text-xs text-slate-500">{payment.transaction_reference?.startsWith("SALESMAN-CASH-") ? `${toTitleCase(payment.payment_mode || "CASH")} collected by salesman` : payment.transaction_reference || "Transaction"}</p>
                 </div>
                 <p className="shrink-0 text-xs text-slate-500">{formatDate(payment.created_at)}</p>
               </div>
