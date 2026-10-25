@@ -54,7 +54,7 @@ export default function SalesmanOrderCreate() {
   // { [skuId]: { quantity (pieces), packPrice (per ladi, as typed) } }. Prices are negotiated per
   // ladi at the counter; the per-piece price the API needs is derived from it.
   const [lines, setLines] = useState({});
-  // Insertion order, so a newly added product lands at the bottom of the list, not re-sorted.
+  // Newest first: a just-added product lands at the top, right under the picker, where the eye is.
   const [lineOrder, setLineOrder] = useState([]);
   const [editingPrice, setEditingPrice] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -142,7 +142,7 @@ export default function SalesmanOrderCreate() {
       ...prev,
       [id]: { quantity: packSize(sku), packPrice: String(roundToTwo(defaultUnitPrice(sku) * packSize(sku))) }
     }));
-    setLineOrder((prev) => [...prev, id]);
+    setLineOrder((prev) => [id, ...prev]);
   };
 
   const removeProduct = (id) => {
