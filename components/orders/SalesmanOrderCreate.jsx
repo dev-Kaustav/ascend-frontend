@@ -304,15 +304,15 @@ export default function SalesmanOrderCreate() {
                     </div>
                     {/* − count + with the unit beside the count, so it reads "2 ladi", not 2 pieces.
                         − on the last ladi removes the product. */}
-                    <div className="flex h-11 shrink-0 items-center rounded-xl border border-slate-200">
-                      <button type="button" onClick={() => step(sku, -1)} aria-label={`One ${unit} less of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center text-slate-700">
+                    <div className="flex h-11 shrink-0 items-center rounded-xl bg-slate-900 text-white">
+                      <button type="button" onClick={() => step(sku, -1)} aria-label={`One ${unit} less of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center">
                         <Minus className="h-4 w-4" strokeWidth={2.5} />
                       </button>
                       <span className="flex min-w-[4.5rem] items-baseline justify-center gap-1 px-1" aria-label={`${quantity / size} ${unit}`}>
-                        <span className="text-base font-semibold tabular-nums text-slate-900">{quantity / size}</span>
-                        <span className="text-sm text-slate-500">{unit}</span>
+                        <span className="text-base font-semibold tabular-nums">{quantity / size}</span>
+                        <span className="text-sm text-white/70">{unit}</span>
                       </span>
-                      <button type="button" onClick={() => step(sku, 1)} aria-label={`One ${unit} more of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center text-slate-700">
+                      <button type="button" onClick={() => step(sku, 1)} aria-label={`One ${unit} more of ${sku?.name}`} className="flex h-full w-11 cursor-pointer items-center justify-center">
                         <Plus className="h-4 w-4" strokeWidth={2.5} />
                       </button>
                     </div>
