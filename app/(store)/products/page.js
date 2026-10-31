@@ -15,7 +15,8 @@ import {
 export const dynamic = "force-dynamic";
 
 const siteUrl = "https://ascendfoods.in";
-const description = "Browse the Ascend range of Jabsons snacks. Pay on delivery.";
+const description = "Browse snacks for your shop: Jabsons, Crax and more, delivered in 60 minutes. Pay cash or UPI on delivery.";
+const image = { url: "/store/og-store.jpg", width: 1200, height: 630, alt: "Snacks for your shop, in 60 minutes" };
 
 export async function generateMetadata({ searchParams }) {
   const params = parseListingParams(await searchParams);
@@ -26,8 +27,8 @@ export async function generateMetadata({ searchParams }) {
     alternates: { canonical: "/products" },
     // A search result page is not a page worth indexing; the plain listing and categories are.
     robots: params.q ? { index: false, follow: true } : undefined,
-    openGraph: { title, description, url: `${siteUrl}/products`, siteName: "Ascend Foods", type: "website" },
-    twitter: { card: "summary", title, description }
+    openGraph: { title, description, url: `${siteUrl}/products`, siteName: "Ascend Foods", type: "website", images: [image] },
+    twitter: { card: "summary_large_image", title, description, images: [image.url] }
   };
 }
 

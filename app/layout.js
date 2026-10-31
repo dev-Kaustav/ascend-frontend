@@ -31,18 +31,16 @@ const ibmPlexMono = localFont({
 
 const siteUrl = "https://ascendfoods.in";
 const siteName = "Ascend Foods";
-// Root defaults describe the B2B store at "/" and carry no delivery-time promise. The marketing
-// copy (60-minute restocking) belongs to /landing, which sets its own complete metadata.
-const defaultTitle = "Ascend Foods: Jabsons snacks for retailers";
-const defaultDescription = "Browse the Ascend range of Jabsons snacks for retailers. Pay on delivery.";
+// Root defaults describe the B2B store at "/"; /landing sets its own complete metadata.
+const defaultTitle = "Ascend: Snacks for your shop in 60 minutes";
+const defaultDescription = "Restock Jabsons, Crax and more for your shop, delivered in 60 minutes. Pay cash or UPI on delivery.";
 
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: siteName,
   url: siteUrl,
-  // Neutral facts only: this block is emitted on every route, so no delivery-time claim here.
-  description: "Ascend Foods supplies Jabsons snacks to retailers.",
+  description: "Ascend Foods delivers snacks to retailers in 60 minutes.",
   // Distinct from the favicon: this is the logo Google can attach to the brand itself.
   logo: `${siteUrl}/ascend-logo.png`,
   email: "pranshu@ascendfoods.in",

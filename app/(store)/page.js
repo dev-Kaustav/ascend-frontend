@@ -7,12 +7,18 @@ import { loadProductPages, productsPath } from "@/lib/store/catalogue.mjs";
 // readiness; nothing private is rendered or cached on the server. Never statically cached.
 export const dynamic = "force-dynamic";
 
-// Own metadata: the store is not the marketing page, so it must not carry its 60-minute claim.
-// Nested metadata objects replace the root's, so canonical, OG and Twitter are complete here.
+// Own metadata: nested metadata objects replace the root's, so canonical, OG and Twitter are
+// complete here. The share card (public/store/og-store.jpg, 1200 x 630) carries the promise in type
+// over real snacks, so a WhatsApp or Google preview says what the store is at a glance.
 const siteUrl = "https://ascendfoods.in";
-const title = "Ascend Foods: Jabsons snacks for retailers";
-const description = "Browse the Ascend range. Pay on delivery.";
-const image = { url: "/ascend-logo.png", width: 512, height: 512, alt: "Ascend Foods logo" };
+const title = "Ascend: Snacks for your shop in 60 minutes";
+const description = "Restock Jabsons, Crax and more for your shop, delivered in 60 minutes. Pay cash or UPI on delivery.";
+const image = {
+  url: "/store/og-store.jpg",
+  width: 1200,
+  height: 630,
+  alt: "Snacks for your shop, in 60 minutes: puffs, roasted chana, bhujia and cashews"
+};
 export const metadata = {
   title: { absolute: title },
   description,
@@ -25,7 +31,7 @@ export const metadata = {
     type: "website",
     images: [image]
   },
-  twitter: { card: "summary", title, description, images: [image.url] }
+  twitter: { card: "summary_large_image", title, description, images: [image.url] }
 };
 
 async function seed(load, id) {
