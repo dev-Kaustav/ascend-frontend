@@ -28,6 +28,7 @@ import {
   totalPages,
   viewerKey
 } from "@/lib/store/catalogue.mjs";
+import { categoryPhoto } from "@/lib/store/categoryPhotos.mjs";
 
 // Catalogue UI for the storefront: product cards and shelves, the searchable listing, and the
 // data hooks the home and the product page share. All product text is rendered as React text
@@ -448,6 +449,11 @@ function CategoryArt({ category, coverUrl }) {
   if (typeof url === "string" && url.startsWith("https://")) {
     // eslint-disable-next-line @next/next/no-img-element -- remote host is not whitelisted for next/image
     return <img className="store-category-tile__img store-category-tile__img--photo" src={url} alt="" loading="lazy" />;
+  }
+  const photo = categoryPhoto(category.name);
+  if (photo) {
+    // eslint-disable-next-line @next/next/no-img-element -- a small bundled photo, same treatment as icon_url
+    return <img className="store-category-tile__img store-category-tile__img--photo" src={photo} alt="" loading="lazy" />;
   }
   if (typeof coverUrl === "string" && coverUrl.startsWith("https://")) {
     // eslint-disable-next-line @next/next/no-img-element -- remote host is not whitelisted for next/image

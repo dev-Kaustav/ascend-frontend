@@ -6,7 +6,12 @@
 
 .ascend-storefront {
   --s-surface: #ffffff;
-  --s-surface-alt: #f7f7f5;
+  --s-surface-alt: #f3f2ef;
+  --s-orange-tint: #ffeee3;
+  --s-tone-0: #fdecd8;
+  --s-tone-1: #e8f2e1;
+  --s-tone-2: #fde4e1;
+  --s-tone-3: #e4ecf9;
   --s-orange: #ff6a1a;
   --s-orange-text: #c2410c;
   --s-ink: #1c1c1f;
@@ -15,6 +20,8 @@
   --s-destructive: #b91c1c;
   --s-success: #166534;
   --s-gutter: 16px;
+  --s-cols: 2;
+  --s-col-gap: 16px;
   --s-nav-h: 56px;
   --s-cart-h: 64px;
   min-height: 100vh;
@@ -172,6 +179,83 @@
   opacity: 1;
 }
 
+.store-search__field {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.store-search__field input {
+  width: 100%;
+}
+
+/* The rotating hint sits over the empty box; the quoted word slides up and fades through each cycle. */
+.store-search__hint {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  bottom: 0;
+  left: 17px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: var(--s-muted);
+  font-size: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* A soft-edged curtain: the mask is wider than the word, opaque on its left half, and slides so
+   its feathered edge crosses the word left to right as it types, and back as it erases. */
+.store-search__word {
+  display: inline-block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  -webkit-mask-image: linear-gradient(90deg, #000 45%, transparent 55%);
+  mask-image: linear-gradient(90deg, #000 45%, transparent 55%);
+  -webkit-mask-size: 220% 100%;
+  mask-size: 220% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: store-curtain-in var(--reveal-ms, 700ms) cubic-bezier(0.3, 0.5, 0.3, 1) both;
+}
+
+.store-search__word[data-leaving] {
+  animation: store-curtain-out var(--erase-ms, 400ms) cubic-bezier(0.6, 0, 0.8, 0.6) both;
+}
+
+@keyframes store-curtain-in {
+  from {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  to {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+
+@keyframes store-curtain-out {
+  from {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+  to {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-search__word,
+  .store-search__word[data-leaving] {
+    animation: none;
+  }
+}
+
 .store-search button {
   display: inline-flex;
   flex: none;
@@ -258,10 +342,12 @@
 
 /* ---- Product primitives ------------------------------------------------------------------ */
 
+/* A wrapping row rather than a grid, so a last row that does not fill the width sits centred. */
 .store-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-gutter);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px var(--s-col-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -270,25 +356,33 @@
 .store-shelf {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(140px, 44%);
-  gap: var(--s-gutter);
+  grid-auto-columns: calc((100% - (var(--s-cols) - 1) * var(--s-col-gap)) / var(--s-cols));
+  justify-content: safe center;
+  gap: var(--s-col-gap);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
+}
+
+.store-grid > * {
+  width: calc((100% - (var(--s-cols) - 1) * var(--s-col-gap)) / var(--s-cols));
 }
 
 .store-shelf > * {
   scroll-snap-align: start;
 }
 
+@media (max-width: 767px) {
+  .store-shelf {
+    grid-auto-columns: 42%;
+  }
+}
+
 .store-card {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--s-border);
-  border-radius: 12px;
+  gap: 6px;
   background: var(--s-surface);
 }
 
@@ -312,14 +406,21 @@
   aspect-ratio: 1 / 1;
   place-items: center;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--s-surface-alt);
 }
 
 .store-product-image img {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  padding: 8%;
   object-fit: contain;
+  mix-blend-mode: multiply;
+  transition: transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.store-card__link:hover .store-product-image img {
+  transform: scale(1.04);
 }
 
 .store-state {
@@ -597,16 +698,28 @@
   align-items: center;
   justify-content: center;
   padding: 0 12px;
+  margin-top: auto;
   border: 0;
   border-radius: 8px;
-  background: var(--s-orange);
-  color: var(--s-ink);
+  background: var(--s-orange-tint);
+  color: var(--s-orange-text);
   font: inherit;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
   text-align: center;
   cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 120ms ease;
+}
+
+.store-add:not(:disabled):hover {
+  background: var(--s-orange);
+  color: var(--s-ink);
+}
+
+.store-add:not(:disabled):active,
+.store-button:active {
+  transform: scale(0.97);
 }
 
 /* A disabled control keeps a legible label and says why (Out of stock, Price unavailable). */
@@ -617,6 +730,7 @@
 }
 
 .store-qty-wrap {
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -704,7 +818,8 @@
   min-width: 0;
   font-family: var(--font-marketing-display), sans-serif;
   font-size: 20px;
-  line-height: 1.3;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 .store-see-all,
@@ -893,27 +1008,33 @@
 
 .store-category-tile__img--pack {
   object-fit: contain;
-  padding: 6px;
+  padding: 10%;
+  mix-blend-mode: multiply;
+  transition: transform 240ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.store-category-tile:hover .store-category-tile__img--pack {
+  transform: scale(1.05) rotate(-2deg);
 }
 
 .store-category-row > li:nth-child(4n + 1) .store-category-tile__art,
 .store-category-grid > li:nth-child(4n + 1) .store-category-tile__art {
-  background: #fdecd8;
+  background: var(--s-tone-0);
 }
 
 .store-category-row > li:nth-child(4n + 2) .store-category-tile__art,
 .store-category-grid > li:nth-child(4n + 2) .store-category-tile__art {
-  background: #e8f2e1;
+  background: var(--s-tone-1);
 }
 
 .store-category-row > li:nth-child(4n + 3) .store-category-tile__art,
 .store-category-grid > li:nth-child(4n + 3) .store-category-tile__art {
-  background: #fde4e1;
+  background: var(--s-tone-2);
 }
 
 .store-category-row > li:nth-child(4n) .store-category-tile__art,
 .store-category-grid > li:nth-child(4n) .store-category-tile__art {
-  background: #e4ecf9;
+  background: var(--s-tone-3);
 }
 
 .store-category-tile__name {
@@ -993,58 +1114,52 @@
   list-style: none;
 }
 
-.store-feature {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  border: 1px solid var(--s-border);
-  border-radius: 16px;
+
+
+
+
+
+
+
+/* Category aisles: each home shelf sits on its category's tint; packs sit on white tiles. */
+.store-aisle {
+  margin: 0 calc(-1 * var(--s-gutter));
+  padding: 20px var(--s-gutter) 24px;
+  background: var(--s-tone-0);
+}
+
+.store-aisle[data-tone="1"] {
+  background: var(--s-tone-1);
+}
+
+.store-aisle[data-tone="2"] {
+  background: var(--s-tone-2);
+}
+
+.store-aisle[data-tone="3"] {
+  background: var(--s-tone-3);
+}
+
+.ascend-storefront .store-aisle .store-see-all,
+.store-aisle .store-add:not(:disabled) {
+  color: #9a3412;
+}
+
+.store-aisle .store-card {
+  background: transparent;
+}
+
+.store-aisle .store-product-image {
   background: var(--s-surface);
 }
 
-.store-feature__copy {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+.store-aisle .store-add:not(:disabled) {
+  background: var(--s-surface);
 }
 
-.store-feature h2 {
-  font-family: var(--font-marketing-display), sans-serif;
-  font-size: 24px;
-}
-
-.ascend-storefront .store-feature__label {
-  color: var(--s-orange-text);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.store-feature__art {
-  display: flex;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.store-feature__art li {
-  display: grid;
-  width: 96px;
-  height: 96px;
-  flex: none;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--s-surface-alt);
-}
-
-.store-feature__art img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+.store-aisle .store-add:not(:disabled):hover {
+  background: var(--s-orange);
+  color: var(--s-ink);
 }
 
 /* ---- Product page (09-05) ---------------------------------------------------------------------- */
@@ -1250,13 +1365,9 @@
     padding: 24px;
   }
 
-  .store-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
-  }
-
-  .store-shelf {
-    grid-auto-columns: minmax(180px, 28%);
+  .ascend-storefront {
+    --s-cols: 4;
+    --s-col-gap: 20px;
   }
 }
 
@@ -1278,8 +1389,8 @@
     padding-left: max(24px, calc((100% - 1200px) / 2));
   }
 
-  .store-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .ascend-storefront {
+    --s-cols: 6;
   }
 }
 
@@ -1305,45 +1416,52 @@
     gap: 48px;
   }
 
-  .store-promo {
-    position: relative;
-    min-height: 300px;
-    justify-content: center;
-  }
-
   .store-promo__copy {
-    position: relative;
-    z-index: 1;
-    max-width: 44%;
-    padding: 40px;
+    padding: 40px 40px 8px;
   }
 
   .store-promo__art {
-    position: absolute;
-    inset: 0;
-    aspect-ratio: auto;
-  }
-
-  .store-promo__art img {
-    object-position: right center;
+    aspect-ratio: 5 / 2;
   }
 
   .ascend-storefront .store-promo h1 {
     font-size: 32px;
-    line-height: 1.2;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
   }
 
+  /* Few categories share the row between them; many fall back to a 6-up grid. */
   .store-category-row {
     grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    grid-template-columns: repeat(min(var(--cat-count, 6), 6), minmax(0, 1fr));
     grid-auto-columns: auto;
+    gap: var(--s-col-gap);
     overflow-x: visible;
   }
 
-  .store-feature {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+  .store-category-row .store-category-tile__art {
+    aspect-ratio: 4 / 3;
+  }
+
+  .store-category-row .store-category-tile {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .store-category-row .store-category-tile__name {
+    font-size: 16px;
+  }
+
+
+
+  .store-section__head h2 {
+    font-size: 26px;
+  }
+
+  .store-aisle {
+    margin: 0;
+    padding: 24px 28px 32px;
+    border-radius: 16px;
   }
 
   .store-detail {
@@ -2382,4 +2500,703 @@
 .store-order-block__actions .store-button[aria-disabled="true"] {
   color: var(--s-muted);
   cursor: not-allowed;
+}
+
+/* Desktop home hero: after the 768px block so these sizes win. */
+@media (min-width: 1024px) {
+  /* The copy sits on the photograph's open cream left side. */
+  .store-promo {
+    position: relative;
+    min-height: 340px;
+    justify-content: center;
+  }
+
+  .store-promo__copy {
+    position: relative;
+    z-index: 1;
+    max-width: 46%;
+    padding: 48px 56px;
+  }
+
+  .store-promo__art {
+    position: absolute;
+    inset: 0;
+    aspect-ratio: auto;
+  }
+
+  .store-promo__art img {
+    object-position: right center;
+  }
+
+  .ascend-storefront .store-promo h1 {
+    font-size: 44px;
+  }
+}
+
+
+/* ---- App-like phone layout ------------------------------------------------------------------ */
+/* On a phone the store reads like an app: the logo and address row scrolls away and only the
+   search stays pinned, spacing is tight, shelves show two and a half cards so the next one peeks,
+   and type is set a step smaller. */
+@media (max-width: 767px) {
+  .ascend-storefront {
+    --s-gutter: 12px;
+    --s-col-gap: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .store-header {
+    top: -50px;
+  }
+
+  .store-header__bar {
+    gap: 6px 12px;
+    padding-top: 4px;
+    padding-bottom: 8px;
+  }
+
+  .store-logo,
+  .store-location {
+    min-height: 40px;
+  }
+
+  .store-main {
+    padding-top: 16px;
+  }
+
+  .store-home,
+  .store-shelves {
+    gap: 20px;
+  }
+
+  .store-section__head {
+    min-height: 40px;
+  }
+
+  .ascend-storefront .store-section__head h2 {
+    font-size: 18px;
+  }
+
+  .ascend-storefront .store-shelf {
+    grid-auto-columns: 38%;
+    scrollbar-width: none;
+  }
+
+  .ascend-storefront .store-shelf::-webkit-scrollbar {
+    display: none;
+  }
+
+  .store-aisle {
+    padding: 12px var(--s-gutter) 16px;
+  }
+
+
+  .store-grid {
+    row-gap: 16px;
+  }
+
+  .store-card,
+  .store-card__link {
+    gap: 4px;
+  }
+
+  .ascend-storefront .store-card .store-card__name {
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+
+  .ascend-storefront .store-card p,
+  .ascend-storefront .store-price__unit,
+  .ascend-storefront .store-price__mrp,
+  .ascend-storefront .store-price__prompt {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .ascend-storefront .store-price__now {
+    font-size: 13.5px;
+  }
+
+  .store-price {
+    min-height: 2.6em;
+  }
+
+  .store-add {
+    min-height: 34px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  .store-bottom-nav a {
+    font-size: 11px;
+  }
+}
+
+/* ---- Festive skin: Diwali ------------------------------------------------------------------- */
+/* Everything below applies only while components/store/festive.js sets FESTIVE = "diwali". The
+   palette steps off the everyday orange: wine and maroon fields, marigold gold, a warm cream
+   ground. The motifs (kolam, sparkles, mandala, toran, string and fairy lights) are inline SVG
+   drawn small and fine, so no images ship and no flat shape is big enough to show its edges. */
+
+.ascend-storefront[data-festive="diwali"] {
+  --f-maroon: #5e0b26;
+  --f-maroon-2: #7a1434;
+  --f-wine: #8c1a3c;
+  --f-gold: #f3c452;
+  --f-gold-deep: #c98a1e;
+  --f-cream: #fff6e7;
+  --s-orange: var(--f-gold);
+  --s-orange-text: var(--f-wine);
+  --s-orange-tint: #fbe4e8;
+  --s-surface-alt: #fbf3e6;
+  --s-tone-0: #fbe7c3;
+  --s-tone-1: #f9dfe3;
+  --s-tone-2: #fdeccf;
+  --s-tone-3: #e9f0dc;
+  background: var(--f-cream) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cpath d='M30 33.5Q30.81 37.19 34.5 38Q30.81 38.81 30 42.5Q29.19 38.81 25.5 38Q29.19 37.19 30 33.5Z' fill='%23C98A1E' fill-opacity='0.32'/%3E%3Cpath d='M168 108.8Q168.576 111.424 171.2 112Q168.576 112.576 168 115.2Q167.424 112.576 164.8 112Q167.424 111.424 168 108.8Z' fill='%23C98A1E' fill-opacity='0.28'/%3E%3Cpath d='M92 180.2Q92.684 183.316 95.8 184Q92.684 184.684 92 187.8Q91.316 184.684 88.2 184Q91.316 183.316 92 180.2Z' fill='%23C98A1E' fill-opacity='0.26'/%3E%3Cpath d='M204 19.4Q204.468 21.532 206.6 22Q204.468 22.468 204 24.6Q203.532 22.468 201.4 22Q203.532 21.532 204 19.4Z' fill='%23C98A1E' fill-opacity='0.24'/%3E%3Cpath d='M120 68Q120.36 69.64 122 70Q120.36 70.36 120 72Q119.64 70.36 118 70Q119.64 69.64 120 68Z' fill='%23C98A1E' fill-opacity='0.2'/%3E%3Cg fill='%239B1B42' fill-opacity='.14'%3E%3Ccircle cx='130' cy='36' r='1.1'/%3E%3Ccircle cx='58' cy='120' r='1'/%3E%3Ccircle cx='196' cy='196' r='1.2'/%3E%3Ccircle cx='146' cy='160' r='.9'/%3E%3Ccircle cx='18' cy='200' r='1'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 220px 220px;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-header {
+  border-bottom: 0;
+  background: var(--f-maroon) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%23F3C452' stroke-opacity='.12' stroke-width='.7'%3E%3Cpath d='M18 8.5c3.2 4 3.2 15 0 19c-3.2-4-3.2-15 0-19zM8.5 18c4-3.2 15-3.2 19 0c-4 3.2-15 3.2-19 0z'/%3E%3Ccircle cx='18' cy='18' r='2.2'/%3E%3Cpath d='M0 4.5Q4.5 4.5 4.5 0M31.5 0Q31.5 4.5 36 4.5M36 31.5Q31.5 31.5 31.5 36M4.5 36Q4.5 31.5 0 31.5'/%3E%3C/g%3E%3Cg fill='%23F3C452' fill-opacity='.2'%3E%3Ccircle cx='18' cy='4' r='.8'/%3E%3Ccircle cx='18' cy='32' r='.8'/%3E%3Ccircle cx='4' cy='18' r='.8'/%3E%3Ccircle cx='32' cy='18' r='.8'/%3E%3Ccircle cx='0' cy='0' r='1.3'/%3E%3Ccircle cx='36' cy='0' r='1.3'/%3E%3Ccircle cx='0' cy='36' r='1.3'/%3E%3Ccircle cx='36' cy='36' r='1.3'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 36px 36px;
+  color: #fff;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-header__bar {
+  position: relative;
+  padding-top: 20px;
+}
+
+/* Two strings along the top of the header: bulbs on a dark wire, and a fairy strand behind them
+   on a different repeat, so the two never line up into an obvious tile. */
+.store-lights {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 22px;
+  pointer-events: none;
+}
+
+.store-lights::before,
+.store-lights::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat-x;
+}
+
+.store-lights::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='22' viewBox='0 0 64 22'%3E%3Cpath d='M0 2Q16 13 32 2Q48 13 64 2' fill='none' stroke='%232B0611' stroke-width='.8'/%3E%3Crect x='7.96' y='6.14' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='8.96' cy='9.84' rx='1.65' ry='2.35' fill='%23FFE28A'/%3E%3Ccircle cx='8.41' cy='9.04' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3Crect x='15.00' y='7.20' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='16.00' cy='10.90' rx='1.65' ry='2.35' fill='%23FF9E2C'/%3E%3Ccircle cx='15.45' cy='10.10' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3Crect x='22.04' y='6.14' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='23.04' cy='9.84' rx='1.65' ry='2.35' fill='%23FFF3C9'/%3E%3Ccircle cx='22.49' cy='9.04' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3Crect x='39.96' y='6.14' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='40.96' cy='9.84' rx='1.65' ry='2.35' fill='%23FF7A9C'/%3E%3Ccircle cx='40.41' cy='9.04' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3Crect x='47.00' y='7.20' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='48.00' cy='10.90' rx='1.65' ry='2.35' fill='%23FFD36B'/%3E%3Ccircle cx='47.45' cy='10.10' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3Crect x='54.04' y='6.14' width='2' height='1.8' rx='.4' fill='%232B0611'/%3E%3Cellipse cx='55.04' cy='9.84' rx='1.65' ry='2.35' fill='%23FFB347'/%3E%3Ccircle cx='54.49' cy='9.04' r='.45' fill='%23fff' fill-opacity='.8'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='22' viewBox='0 0 64 22'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.8'/%3E%3C/filter%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='8.96' cy='9.84' r='4.2' fill='%23FFE28A' fill-opacity='0.6'/%3E%3Ccircle cx='23.04' cy='9.84' r='4.2' fill='%23FFF3C9' fill-opacity='0.6'/%3E%3Ccircle cx='48.00' cy='10.90' r='4.2' fill='%23FFD36B' fill-opacity='0.6'/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='58' height='16' viewBox='0 0 58 16'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cpath d='M0 1.5Q29.0 14 58 1.5' fill='none' stroke='%23F6DFA6' stroke-opacity='.28' stroke-width='.45'/%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='3.62' cy='2.96' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='18.12' cy='6.87' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='32.62' cy='7.65' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='47.12' cy='5.31' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='3.62' cy='2.96' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='18.12' cy='6.87' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='32.62' cy='7.65' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='47.12' cy='5.31' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E");
+  background-position: 0 0, 0 0, 19px 2px;
+  background-size: 64px 22px, 64px 22px, 58px 16px;
+}
+
+.store-lights::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='22' viewBox='0 0 64 22'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.8'/%3E%3C/filter%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='16.00' cy='10.90' r='4.2' fill='%23FF9E2C' fill-opacity='0.6'/%3E%3Ccircle cx='40.96' cy='9.84' r='4.2' fill='%23FF7A9C' fill-opacity='0.6'/%3E%3Ccircle cx='55.04' cy='9.84' r='4.2' fill='%23FFB347' fill-opacity='0.6'/%3E%3C/g%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='58' height='16' viewBox='0 0 58 16'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='10.88' cy='5.31' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='25.38' cy='7.65' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='39.88' cy='6.87' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='54.38' cy='2.96' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='10.88' cy='5.31' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='25.38' cy='7.65' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='39.88' cy='6.87' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='54.38' cy='2.96' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E");
+  background-position: 0 0, 19px 2px;
+  background-size: 64px 22px, 58px 16px;
+  animation: store-twinkle 1.9s ease-in-out infinite;
+}
+
+@keyframes store-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ascend-storefront[data-festive="diwali"] .store-logo,
+.ascend-storefront[data-festive="diwali"] .store-location,
+.ascend-storefront[data-festive="diwali"] .store-header__links a,
+.ascend-storefront[data-festive="diwali"] .store-header__cart {
+  color: #fff;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-header__links a[aria-current="page"] {
+  color: var(--f-gold);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-location:disabled {
+  color: rgb(255 255 255 / 0.7);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-search input,
+.ascend-storefront[data-festive="diwali"] .store-search__clear {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(30 2 12 / 0.42);
+  color: #fff;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-search input::placeholder {
+  color: rgb(255 255 255 / 0.72);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-search__hint {
+  color: rgb(255 255 255 / 0.72);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-search button[type="submit"] {
+  background: var(--f-gold);
+  color: var(--f-maroon);
+}
+
+/* The banner: the header's maroon runs on, edge to edge, behind the top of a scalloped arch, with
+   fairy lights draped across it. */
+.store-festive {
+  position: relative;
+  isolation: isolate;
+  margin-top: -16px;
+  padding-top: 22px;
+}
+
+.store-festive::before,
+.store-festive::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  height: 150px;
+  margin-left: -50vw;
+  background-repeat: repeat-x;
+}
+
+.store-festive::before {
+  background-color: var(--f-maroon);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='34' viewBox='0 0 150 34'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cpath d='M0 1.5Q75.0 34 150 1.5' fill='none' stroke='%23F6DFA6' stroke-opacity='.28' stroke-width='.45'/%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='4.69' cy='3.47' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='23.44' cy='10.07' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='42.19' cy='14.64' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='60.94' cy='17.18' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='79.69' cy='17.69' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='98.44' cy='16.16' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='117.19' cy='12.61' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='135.94' cy='7.02' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='4.69' cy='3.47' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='23.44' cy='10.07' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='42.19' cy='14.64' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='60.94' cy='17.18' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='79.69' cy='17.69' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='98.44' cy='16.16' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='117.19' cy='12.61' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='135.94' cy='7.02' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='34' viewBox='0 0 150 34'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cpath d='M0 1.5Q75.0 34 150 1.5' fill='none' stroke='%23F6DFA6' stroke-opacity='.28' stroke-width='.45'/%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='4.69' cy='3.47' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='23.44' cy='10.07' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='42.19' cy='14.64' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='60.94' cy='17.18' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='79.69' cy='17.69' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='98.44' cy='16.16' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='117.19' cy='12.61' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='135.94' cy='7.02' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='4.69' cy='3.47' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='23.44' cy='10.07' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='42.19' cy='14.64' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='60.94' cy='17.18' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='79.69' cy='17.69' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='98.44' cy='16.16' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='117.19' cy='12.61' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='135.94' cy='7.02' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%23F3C452' stroke-opacity='.12' stroke-width='.7'%3E%3Cpath d='M18 8.5c3.2 4 3.2 15 0 19c-3.2-4-3.2-15 0-19zM8.5 18c4-3.2 15-3.2 19 0c-4 3.2-15 3.2-19 0z'/%3E%3Ccircle cx='18' cy='18' r='2.2'/%3E%3Cpath d='M0 4.5Q4.5 4.5 4.5 0M31.5 0Q31.5 4.5 36 4.5M36 31.5Q31.5 31.5 31.5 36M4.5 36Q4.5 31.5 0 31.5'/%3E%3C/g%3E%3Cg fill='%23F3C452' fill-opacity='.2'%3E%3Ccircle cx='18' cy='4' r='.8'/%3E%3Ccircle cx='18' cy='32' r='.8'/%3E%3Ccircle cx='4' cy='18' r='.8'/%3E%3Ccircle cx='32' cy='18' r='.8'/%3E%3Ccircle cx='0' cy='0' r='1.3'/%3E%3Ccircle cx='36' cy='0' r='1.3'/%3E%3Ccircle cx='0' cy='36' r='1.3'/%3E%3Ccircle cx='36' cy='36' r='1.3'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: 0 4px, 75px 26px, 0 0;
+  background-size: 150px 34px, 150px 34px, 36px 36px;
+  background-repeat: repeat-x, repeat-x, repeat;
+}
+
+.store-festive::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='34' viewBox='0 0 150 34'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='14.06' cy='7.02' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='32.81' cy='12.61' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='51.56' cy='16.16' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='70.31' cy='17.69' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='89.06' cy='17.18' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='107.81' cy='14.64' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='126.56' cy='10.07' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='145.31' cy='3.47' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='14.06' cy='7.02' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='32.81' cy='12.61' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='51.56' cy='16.16' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='70.31' cy='17.69' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='89.06' cy='17.18' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='107.81' cy='14.64' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='126.56' cy='10.07' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='145.31' cy='3.47' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E"), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='34' viewBox='0 0 150 34'%3E%3Cfilter id='b' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.2'/%3E%3C/filter%3E%3Cg filter='url(%23b)'%3E%3Ccircle cx='14.06' cy='7.02' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='32.81' cy='12.61' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='51.56' cy='16.16' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='70.31' cy='17.69' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='89.06' cy='17.18' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='107.81' cy='14.64' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='126.56' cy='10.07' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3Ccircle cx='145.31' cy='3.47' r='2.6' fill='%23FFD98A' fill-opacity='.7'/%3E%3C/g%3E%3Ccircle cx='14.06' cy='7.02' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='32.81' cy='12.61' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='51.56' cy='16.16' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='70.31' cy='17.69' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='89.06' cy='17.18' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='107.81' cy='14.64' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='126.56' cy='10.07' r='.85' fill='%23FFF6D8'/%3E%3Ccircle cx='145.31' cy='3.47' r='.85' fill='%23FFF6D8'/%3E%3C/svg%3E");
+  background-position: 0 4px, 75px 26px;
+  background-size: 150px 34px, 150px 34px;
+  animation: store-twinkle 2.6s ease-in-out infinite;
+  animation-delay: -0.8s;
+}
+
+.store-festive__arch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 10px 14px;
+  border-radius: 22px 22px 18px 18px;
+  background: #fff3dd url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23C98A1E' stroke-opacity='.3' stroke-width='.55'%3E%3Cpath transform='rotate(0.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(22.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(45.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(67.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(90.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(112.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(135.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(157.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(180.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(202.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(225.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(247.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(270.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(292.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(315.0 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(337.5 100 100)' d='M100 92C95.5 77 95.5 62 100 46C104.5 62 104.5 77 100 92Z'/%3E%3Cpath transform='rotate(11.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(33.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(56.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(78.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(101.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(123.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(146.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(168.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(191.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(213.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(236.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(258.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(281.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(303.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(326.25 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(348.75 100 100)' d='M100 88C97.5 80 97.5 72 100 64C102.5 72 102.5 80 100 88Z'/%3E%3Cpath transform='rotate(0 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(15 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(30 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(45 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(60 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(75 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(90 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(105 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(120 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(135 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(150 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(165 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(180 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(195 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(210 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(225 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(240 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(255 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(270 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(285 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(300 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(315 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(330 100 100)' d='M93 20Q100 11 107 20'/%3E%3Cpath transform='rotate(345 100 100)' d='M93 20Q100 11 107 20'/%3E%3Ccircle cx='100' cy='100' r='9'/%3E%3Ccircle cx='100' cy='100' r='5' stroke-dasharray='1 1.6'/%3E%3Ccircle cx='100' cy='100' r='56'/%3E%3Ccircle cx='100' cy='100' r='60' stroke-dasharray='1 2.4'/%3E%3Ccircle cx='100' cy='100' r='76'/%3E%3C/g%3E%3Cg fill='%23C98A1E' fill-opacity='.34'%3E%3Ccircle transform='rotate(0 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(10 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(20 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(30 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(40 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(50 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(60 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(70 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(80 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(90 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(100 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(110 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(120 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(130 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(140 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(150 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(160 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(170 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(180 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(190 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(200 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(210 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(220 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(230 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(240 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(250 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(260 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(270 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(280 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(290 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(300 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(310 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(320 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(330 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(340 100 100)' cx='100' cy='33' r='1.1'/%3E%3Ccircle transform='rotate(350 100 100)' cx='100' cy='33' r='1.1'/%3E%3C/g%3E%3C/svg%3E") 50% -30px / 250px 250px no-repeat;
+  text-align: center;
+  box-shadow: 0 14px 30px -18px rgb(94 11 38 / 0.45);
+}
+
+/* Scallops along the top edge, and a dotted gold trim just inside it. */
+.store-festive__arch::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 22px;
+  left: 22px;
+  height: 7px;
+  background: radial-gradient(circle at 50% 100%, #fff3dd 5.5px, transparent 6px) 0 0 / 13px 7px repeat-x;
+}
+
+.store-festive__arch::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dotted rgb(201 138 30 / 0.6);
+  border-radius: 21px 21px 15px 15px;
+  pointer-events: none;
+}
+
+/* A toran of marigolds and mango leaves hangs just inside the trim. */
+.store-festive__toran {
+  position: absolute;
+  top: 9px;
+  right: 18px;
+  left: 18px;
+  height: 22px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='22' viewBox='0 0 26 22'%3E%3Cpath d='M0 1.4H26' stroke='%237A1430' stroke-width='.6'/%3E%3Cpath d='M7 1.4V4.6' stroke='%237A1430' stroke-width='.45'/%3E%3Ccircle cx='11.06' cy='9.50' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='10.51' cy='11.53' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='9.03' cy='13.01' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='7.00' cy='13.56' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='4.97' cy='13.01' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='3.49' cy='11.53' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='2.94' cy='9.50' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='3.49' cy='7.47' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='4.97' cy='5.99' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='7.00' cy='5.44' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='9.03' cy='5.99' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='10.51' cy='7.47' r='1.56' fill='%23E8770E'/%3E%3Ccircle cx='9.67' cy='9.92' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='8.91' cy='11.41' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='7.42' cy='12.17' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='5.77' cy='11.91' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='4.59' cy='10.73' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='4.33' cy='9.08' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='5.09' cy='7.59' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='6.58' cy='6.83' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='8.23' cy='7.09' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='9.41' cy='8.27' r='1.40' fill='%23F59E0B'/%3E%3Ccircle cx='8.29' cy='9.92' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='7.48' cy='10.77' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='6.31' cy='10.66' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='5.66' cy='9.68' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='6.02' cy='8.57' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='7.12' cy='8.15' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='8.13' cy='8.76' r='1.14' fill='%23FBBF24'/%3E%3Ccircle cx='7' cy='9.5' r='0.73' fill='%23B45309'/%3E%3Ccircle cx='9.65' cy='17.80' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='9.30' cy='19.13' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='8.33' cy='20.10' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='7.00' cy='20.45' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='5.67' cy='20.10' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='4.70' cy='19.13' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='4.35' cy='17.80' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='4.70' cy='16.47' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='5.67' cy='15.50' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='7.00' cy='15.15' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='8.33' cy='15.50' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='9.30' cy='16.47' r='1.02' fill='%23E8770E'/%3E%3Ccircle cx='8.75' cy='18.08' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='8.25' cy='19.05' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='7.28' cy='19.55' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='6.20' cy='19.38' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='5.42' cy='18.60' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='5.25' cy='17.52' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='5.75' cy='16.55' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='6.72' cy='16.05' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='7.80' cy='16.22' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='8.58' cy='17.00' r='0.92' fill='%23F59E0B'/%3E%3Ccircle cx='7.84' cy='18.07' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='7.31' cy='18.63' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='6.55' cy='18.56' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='6.12' cy='17.92' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='6.36' cy='17.19' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='7.08' cy='16.92' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='7.74' cy='17.31' r='0.75' fill='%23FBBF24'/%3E%3Ccircle cx='7' cy='17.8' r='0.48' fill='%23B45309'/%3E%3Cpath d='M19.5 1.4C22.1 4.699999999999999 21.58 9.65 19.5 12.4C17.42 9.65 16.9 4.699999999999999 19.5 1.4Z' fill='%233D7A35'/%3E%3Cpath d='M19.5 1.9V11.8' stroke='%239FCB7A' stroke-opacity='.7' stroke-width='.35'/%3E%3C/svg%3E") 50% 0 / 26px 22px repeat-x;
+  pointer-events: none;
+}
+
+.ascend-storefront .store-festive h1 {
+  position: relative;
+  color: var(--f-wine);
+  font-family: var(--font-festive), serif;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1.5px 0 rgb(243 196 82 / 0.6);
+}
+
+.store-ornament {
+  display: block;
+  width: 132px;
+  height: 14px;
+  color: var(--f-gold-deep);
+}
+
+.store-festive__rule {
+  margin: 6px 0 4px;
+}
+
+.ascend-storefront .store-festive__kicker {
+  color: var(--f-maroon-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ascend-storefront .store-festive__facts {
+  margin-top: 2px;
+  color: #6b4a3a;
+  font-size: 12px;
+}
+
+.store-diya {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.store-festive__diya {
+  position: absolute;
+  top: 30px;
+  width: 30px;
+  height: 30px;
+}
+
+.store-festive__diya--left {
+  left: 12px;
+}
+
+.store-festive__diya--right {
+  right: 12px;
+}
+
+.store-diya__glow {
+  animation: store-glow 2.4s ease-in-out infinite;
+}
+
+.store-diya__flame {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: store-flicker 1.3s ease-in-out infinite;
+}
+
+.store-festive__diya--right .store-diya__flame {
+  animation-delay: -0.6s;
+}
+
+@keyframes store-flicker {
+  0%,
+  100% {
+    transform: scale(1, 1) skewX(0deg);
+  }
+  30% {
+    transform: scale(0.92, 1.08) skewX(-3deg);
+  }
+  60% {
+    transform: scale(1.05, 0.95) skewX(2deg);
+  }
+}
+
+@keyframes store-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The categories as gold festive picks. */
+.store-festive__picks {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(min(var(--cat-count, 4), 4), minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-festive__picks > li {
+  animation: store-rise 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.store-festive__picks > li:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.store-festive__picks > li:nth-child(3) {
+  animation-delay: 140ms;
+}
+
+.store-festive__picks > li:nth-child(n + 4) {
+  animation-delay: 210ms;
+}
+
+@keyframes store-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+.store-festive__picks .store-category-tile {
+  height: 100%;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(165deg, #fdf0d3 0%, #f2d18f 100%);
+  box-shadow: inset 0 0 0 1px rgb(201 138 30 / 0.35);
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.store-festive__picks .store-category-tile:hover {
+  transform: translateY(-3px);
+}
+
+.store-festive__picks > li .store-category-tile__art {
+  aspect-ratio: 1 / 1;
+  border-radius: 0;
+  background: transparent;
+  color: var(--f-wine);
+}
+
+.store-festive__picks .store-category-tile__name {
+  display: flex;
+  flex: 1 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 5px 3px 6px;
+  background: var(--f-wine);
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.store-festive__cta {
+  display: none;
+  min-height: 44px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--f-maroon);
+  font-weight: 600;
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.ascend-storefront .store-festive__cta {
+  color: var(--f-gold);
+}
+
+.store-festive__cta:hover {
+  background: var(--f-wine);
+  transform: translateY(-1px);
+}
+
+/* Shelf headings take the festive face and a small gem. */
+.ascend-storefront[data-festive="diwali"] .store-shelves .store-section__head h2,
+.ascend-storefront[data-festive="diwali"] [data-home-section="range"] .store-section__head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--f-wine);
+  font-family: var(--font-festive), serif;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-shelves .store-section__head h2::before,
+.ascend-storefront[data-festive="diwali"] [data-home-section="range"] .store-section__head h2::before {
+  content: "";
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath d='M9 1.5 16.5 9 9 16.5 1.5 9Z' fill='%238C1A3C'/%3E%3Cpath d='M9 4.2 13.8 9 9 13.8 4.2 9Z' fill='none' stroke='%23F3C452' stroke-width='.7'/%3E%3Ccircle cx='9' cy='9' r='1.6' fill='%23F3C452'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Aisles carry a faint kolam on their tint; the products sit on finished cards above it, so no
+   text ever runs over the pattern. */
+.ascend-storefront[data-festive="diwali"] .store-aisle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%238C1A3C' stroke-opacity='.07' stroke-width='.7'%3E%3Cpath d='M18 8.5c3.2 4 3.2 15 0 19c-3.2-4-3.2-15 0-19zM8.5 18c4-3.2 15-3.2 19 0c-4 3.2-15 3.2-19 0z'/%3E%3Ccircle cx='18' cy='18' r='2.2'/%3E%3Cpath d='M0 4.5Q4.5 4.5 4.5 0M31.5 0Q31.5 4.5 36 4.5M36 31.5Q31.5 31.5 31.5 36M4.5 36Q4.5 31.5 0 31.5'/%3E%3C/g%3E%3Cg fill='%238C1A3C' fill-opacity='.09'%3E%3Ccircle cx='18' cy='4' r='.8'/%3E%3Ccircle cx='18' cy='32' r='.8'/%3E%3Ccircle cx='4' cy='18' r='.8'/%3E%3Ccircle cx='32' cy='18' r='.8'/%3E%3Ccircle cx='0' cy='0' r='1.3'/%3E%3Ccircle cx='36' cy='0' r='1.3'/%3E%3Ccircle cx='0' cy='36' r='1.3'/%3E%3Ccircle cx='36' cy='36' r='1.3'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 36px 36px;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-product-card {
+  padding: 8px 8px 10px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgb(201 138 30 / 0.2);
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 200ms ease;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-aisle .store-product-card {
+  background: #fff;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-product-card:hover {
+  box-shadow: inset 0 0 0 1px rgb(201 138 30 / 0.45);
+  transform: translateY(-2px);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-product-card .store-product-image,
+.ascend-storefront[data-festive="diwali"] .store-aisle .store-product-card .store-product-image {
+  background: #fbf3e6;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-product-card .store-card__name,
+.ascend-storefront[data-festive="diwali"] .store-product-card .store-card__pack,
+.ascend-storefront[data-festive="diwali"] .store-product-card .store-price {
+  padding: 0 4px;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-aisle .store-product-card .store-add:not(:disabled) {
+  background: var(--s-orange-tint);
+}
+
+/* All products: the same cards on a cream panel with a gold kolam, closing the home like an aisle. */
+.ascend-storefront[data-festive="diwali"] [data-home-section="range"] {
+  margin: 0 calc(-1 * var(--s-gutter));
+  padding: 20px var(--s-gutter) 24px;
+  background: #fbefd9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%238C1A3C' stroke-opacity='.07' stroke-width='.7'%3E%3Cpath d='M18 8.5c3.2 4 3.2 15 0 19c-3.2-4-3.2-15 0-19zM8.5 18c4-3.2 15-3.2 19 0c-4 3.2-15 3.2-19 0z'/%3E%3Ccircle cx='18' cy='18' r='2.2'/%3E%3Cpath d='M0 4.5Q4.5 4.5 4.5 0M31.5 0Q31.5 4.5 36 4.5M36 31.5Q31.5 31.5 31.5 36M4.5 36Q4.5 31.5 0 31.5'/%3E%3C/g%3E%3Cg fill='%238C1A3C' fill-opacity='.09'%3E%3Ccircle cx='18' cy='4' r='.8'/%3E%3Ccircle cx='18' cy='32' r='.8'/%3E%3Ccircle cx='4' cy='18' r='.8'/%3E%3Ccircle cx='32' cy='18' r='.8'/%3E%3Ccircle cx='0' cy='0' r='1.3'/%3E%3Ccircle cx='36' cy='0' r='1.3'/%3E%3Ccircle cx='0' cy='36' r='1.3'/%3E%3Ccircle cx='36' cy='36' r='1.3'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 36px 36px;
+}
+
+.ascend-storefront[data-festive="diwali"] .store-aisle .store-see-all,
+.ascend-storefront[data-festive="diwali"] .store-aisle .store-add:not(:disabled) {
+  color: var(--f-wine);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-footer {
+  border-top: 0;
+  background: var(--f-maroon) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Cg fill='none' stroke='%23F3C452' stroke-opacity='.12' stroke-width='.7'%3E%3Cpath d='M18 8.5c3.2 4 3.2 15 0 19c-3.2-4-3.2-15 0-19zM8.5 18c4-3.2 15-3.2 19 0c-4 3.2-15 3.2-19 0z'/%3E%3Ccircle cx='18' cy='18' r='2.2'/%3E%3Cpath d='M0 4.5Q4.5 4.5 4.5 0M31.5 0Q31.5 4.5 36 4.5M36 31.5Q31.5 31.5 31.5 36M4.5 36Q4.5 31.5 0 31.5'/%3E%3C/g%3E%3Cg fill='%23F3C452' fill-opacity='.2'%3E%3Ccircle cx='18' cy='4' r='.8'/%3E%3Ccircle cx='18' cy='32' r='.8'/%3E%3Ccircle cx='4' cy='18' r='.8'/%3E%3Ccircle cx='32' cy='18' r='.8'/%3E%3Ccircle cx='0' cy='0' r='1.3'/%3E%3Ccircle cx='36' cy='0' r='1.3'/%3E%3Ccircle cx='0' cy='36' r='1.3'/%3E%3Ccircle cx='36' cy='36' r='1.3'/%3E%3C/g%3E%3C/svg%3E") 0 0 / 36px 36px;
+  color: rgb(255 255 255 / 0.75);
+}
+
+.ascend-storefront[data-festive="diwali"] .store-footer a {
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .ascend-storefront[data-festive="diwali"] .store-header {
+    top: -66px;
+  }
+}
+
+@media (min-width: 768px) {
+  .store-festive {
+    margin-top: -24px;
+    padding-top: 40px;
+  }
+
+  .store-festive__arch {
+    border-radius: 26px 26px 20px 20px;
+  }
+
+  .store-festive__rule {
+    margin: 10px 0 8px;
+  }
+
+  .ascend-storefront .store-festive__kicker {
+    font-size: 13px;
+  }
+
+  .ascend-storefront .store-festive__facts {
+    margin-top: 4px;
+    font-size: 14px;
+  }
+
+  .store-festive__picks .store-category-tile {
+    border-radius: 16px;
+  }
+
+  .store-festive__picks > li .store-category-tile__art {
+    aspect-ratio: 5 / 4;
+  }
+
+  .store-festive__cta {
+    display: inline-flex;
+  }
+
+  .store-festive::before,
+  .store-festive::after {
+    height: 190px;
+  }
+
+  .store-festive__arch {
+    padding: 50px 36px 32px;
+    background-position: 50% -24px;
+    background-size: 300px 300px;
+  }
+
+  .ascend-storefront .store-festive h1 {
+    font-size: 60px;
+  }
+
+  .store-festive__diya {
+    top: 50px;
+    width: 52px;
+    height: 52px;
+  }
+
+  .store-festive__diya--left {
+    left: 48px;
+  }
+
+  .store-festive__diya--right {
+    right: 48px;
+  }
+
+  .store-festive__picks {
+    grid-template-columns: repeat(min(var(--cat-count, 6), 6), minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 28px;
+  }
+
+  .store-festive__picks .store-category-tile__name {
+    padding: 8px 8px 10px;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+
+  .ascend-storefront[data-festive="diwali"] .store-shelves .store-section__head h2,
+  .ascend-storefront[data-festive="diwali"] [data-home-section="range"] .store-section__head h2 {
+    font-size: 30px;
+  }
+
+  .ascend-storefront[data-festive="diwali"] [data-home-section="range"] {
+    margin: 0;
+    padding: 24px 28px 32px;
+    border-radius: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ascend-storefront[data-festive="diwali"] .store-header__bar {
+    padding-top: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-lights::after,
+  .store-festive::after,
+  .store-diya__glow,
+  .store-diya__flame,
+  .store-festive__picks > li {
+    animation: none;
+  }
 }

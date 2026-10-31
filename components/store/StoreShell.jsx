@@ -3,13 +3,69 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { MapPin, Search, ShoppingCart, X } from "lucide-react";
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import BottomNavigation, { STORE_NAV_ITEMS } from "@/components/store/BottomNavigation";
 import { useRetailer, useRetailerLinkGate } from "@/components/store/RetailerProvider";
 import { listingHref, parseListingParams } from "@/lib/store/catalogue.mjs";
 import { formatCurrency } from "@/lib/format";
 import { cartBarSummary } from "@/lib/store/cart.mjs";
 import { headerAddressLabel } from "@/lib/store/maps.mjs";
+import { FESTIVE, festiveFont } from "@/components/store/festive";
+
+// What the search box suggests while it waits, Blinkit style: a product name is revealed left to
+// right behind a soft-edged curtain, as if typed fast, holds, then the curtain sweeps back before
+// the next. It is drawn over the empty box (aria-hidden; the input keeps its label) and stays on the
+// first name for reduced motion.
+const SEARCH_HINTS = [
+  "tandoori peanuts",
+  "black pepper cashew",
+  "hing jeera chana",
+  "green peas",
+  "classic salted cashew",
+  "cheese balls"
+];
+const CHAR_MS = 26; // reveal time per letter
+const HOLD_MS = 1700; // how long a fully revealed name stays
+const ERASE_MS = 12; // sweep-back time per letter
+const EDGE_MS = 220; // the curtain's soft edge crossing the word
+
+function useHintCycle() {
+  const [cycle, setCycle] = useState({ index: 0, leaving: false });
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    let index = 0;
+    let timer;
+    const length = () => SEARCH_HINTS[index].length + 1; // the closing quote types in too
+    const leave = () => {
+      setCycle({ index, leaving: true });
+      timer = setTimeout(next, length() * ERASE_MS + EDGE_MS);
+    };
+    const next = () => {
+      index = (index + 1) % SEARCH_HINTS.length;
+      setCycle({ index, leaving: false });
+      timer = setTimeout(leave, length() * CHAR_MS + EDGE_MS + HOLD_MS);
+    };
+    timer = setTimeout(leave, length() * CHAR_MS + EDGE_MS + HOLD_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return cycle;
+}
+
+function HintWord({ text, leaving }) {
+  const word = `${text}\u201d`;
+  return (
+    <span
+      className="store-search__word"
+      data-leaving={leaving ? "" : undefined}
+      style={{
+        "--reveal-ms": `${word.length * CHAR_MS + EDGE_MS}ms`,
+        "--erase-ms": `${word.length * ERASE_MS + EDGE_MS}ms`
+      }}
+    >
+      {word}
+    </span>
+  );
+}
 
 // Native GET form, so search works before any client code runs; once hydrated it navigates in
 // place (the persistent layout keeps the cart and sheets). The box shows the q in the URL on
@@ -18,6 +74,7 @@ function SearchForm({ initial, onClear }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const [value, setValue] = useState(initial);
+  const hint = useHintCycle();
   return (
     <form
       className="store-search"
@@ -29,18 +86,25 @@ function SearchForm({ initial, onClear }) {
         router.push(listingHref({ q: value }));
       }}
     >
-      <input
-        ref={inputRef}
-        type="search"
-        name="q"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        maxLength={100}
-        autoComplete="off"
-        enterKeyHint="search"
-        placeholder="Search snacks and brands"
-        aria-label="Search products"
-      />
+      <span className="store-search__field">
+        {!value ? (
+          <span className="store-search__hint" aria-hidden="true">
+            Search &ldquo;
+            <HintWord key={hint.index} text={SEARCH_HINTS[hint.index]} leaving={hint.leaving} />
+          </span>
+        ) : null}
+        <input
+          ref={inputRef}
+          type="search"
+          name="q"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          maxLength={100}
+          autoComplete="off"
+          enterKeyHint="search"
+          aria-label="Search products"
+        />
+      </span>
       {value ? (
         <button
           type="button"
@@ -137,11 +201,12 @@ export default function StoreShell({ children }) {
   const locationLabel = headerAddressLabel(selectedAddress);
 
   return (
-    <div className="ascend-storefront">
+    <div className={FESTIVE ? `ascend-storefront ${festiveFont.variable}` : "ascend-storefront"} data-festive={FESTIVE || undefined}>
       <a className="sr-only focus:not-sr-only" href="#main">
         Skip to content
       </a>
       <header className="store-header">
+        {FESTIVE ? <div className="store-lights" aria-hidden="true" /> : null}
         <div className="store-header__bar">
           <Link href="/" className="store-logo" aria-label="Ascend Foods home">
             <svg viewBox="0 0 34 34" aria-hidden="true">

@@ -38,10 +38,9 @@ async function seed(load, id) {
 
 export default async function StoreHomePage() {
   const publicGet = (path) => storeFetch(path, { public: true });
-  const [categories, brands, range] = await Promise.all([
+  const [categories, range] = await Promise.all([
     seed(() => publicGet(storeEndpoints.categories), "categories"),
-    seed(() => publicGet(storeEndpoints.brands), "brands"),
     seed(() => loadProductPages(({ limit, offset }) => publicGet(productsPath({ limit, offset }))), "home-range")
   ]);
-  return <Home seed={{ categories, brands, range }} />;
+  return <Home seed={{ categories, range }} />;
 }

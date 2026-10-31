@@ -135,6 +135,7 @@ test("store.css is scoped to .ascend-storefront and leaves html/body alone", () 
   assert.ok(selectors.length > 0);
   for (const group of selectors) {
     for (const selector of group.split(",").map((s) => s.trim())) {
+      if (/^(from|to|\d+(\.\d+)?%)$/.test(selector)) continue; // a @keyframes step, not a selector
       assert.match(selector, /^\.(ascend-storefront|store-)/, `unscoped selector: ${selector}`);
     }
   }
