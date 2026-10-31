@@ -25,7 +25,8 @@ import {
   disposePhoneVerifier,
   getFirebaseConfigStatus,
   sendPhoneCode,
-  signOutPhoneProof
+  signOutPhoneProof,
+  warmPhoneAuth
 } from "@/lib/store/firebase";
 
 // Retailer login: phone number, six-digit code, then the one exchange of Firebase's proof for an
@@ -163,6 +164,12 @@ export default function RetailerLoginSheet({ intent, onClose }) {
       window.removeEventListener("popstate", onPopState);
     };
   }, [host, dismiss]);
+
+  // The SDK download used to start only when Send was tapped, adding seconds before the SMS was
+  // even requested. Typing the number takes longer than the download.
+  useEffect(() => {
+    warmPhoneAuth();
+  }, []);
 
   // Unmounting for any reason ends the challenge. Nothing Firebase-side outlives the dialog.
   useEffect(() => {

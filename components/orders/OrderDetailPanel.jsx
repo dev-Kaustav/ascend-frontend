@@ -151,6 +151,8 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // An error describes the inputs that were submitted; once they change it no longer applies.
+  useEffect(() => setError(""), [form]);
 
   const config = ACTION_CONFIG[order.status] || {};
   const allowedStatuses = ROLE_ACTIONS[role] || [];
@@ -177,7 +179,8 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
       if (nextStatus === "DELIVERED") {
         if (form.paymentStatus) body.payment_status = form.paymentStatus;
         if (form.paymentMode) body.payment_mode = form.paymentMode;
-        if (form.paymentAmount) body.payment_amount = Number(form.paymentAmount);
+        // "Paid" settles the pending amount server-side; only "Partial" carries an amount.
+        if (form.paymentStatus === "PARTIAL" && form.paymentAmount) body.payment_amount = Number(form.paymentAmount);
         // Best-effort, same rule as the driver's order list: a refused or failed location
         // must not block the delivery. Missing coordinates are recorded as missing.
         Object.assign(body, (await getCoords().catch(() => null)) || {});
@@ -214,8 +217,14 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
             ))}
           </select>
         )}
-        {config.primary.showPayment && (
+        {config.primary.showPayment && order.pending_amount === 0 && (
+          <p className="text-sm text-emerald-700">Already paid — nothing to collect.</p>
+        )}
+        {config.primary.showPayment && order.pending_amount !== 0 && (
           <div className="grid gap-2 sm:grid-cols-3">
+            {order.pending_amount != null && (
+              <p className="text-sm text-slate-600 sm:col-span-3">To collect: {formatCurrency(order.pending_amount)}</p>
+            )}
             <select
               value={form.paymentStatus || ""}
               onChange={(e) => setForm((prev) => ({ ...prev, paymentStatus: e.target.value }))}
@@ -238,15 +247,17 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
                   <option value="UPI">UPI</option>
                   <option value="CHEQUE">Cheque</option>
                 </select>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.paymentAmount || ""}
-                  onChange={(e) => setForm((prev) => ({ ...prev, paymentAmount: e.target.value }))}
-                  placeholder="Amount"
-                  className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
-                />
+                {form.paymentStatus === "PARTIAL" && (
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.paymentAmount || ""}
+                    onChange={(e) => setForm((prev) => ({ ...prev, paymentAmount: e.target.value }))}
+                    placeholder={order.pending_amount != null ? `Amount (of ${formatCurrency(order.pending_amount)})` : "Amount"}
+                    className="min-h-[44px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
+                  />
+                )}
               </>
             )}
           </div>

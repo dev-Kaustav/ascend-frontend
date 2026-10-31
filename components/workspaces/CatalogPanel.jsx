@@ -20,13 +20,20 @@ import { applySkuFieldChange, emptySku, toNumber } from "@/lib/skuPricing";
 
 const asText = (value) => (value === null || value === undefined ? "" : String(value));
 
+// Images 2-4 of the storefront carousel; image_url is image 1 and the thumbnail everywhere else.
+const EXTRA_IMAGE_FIELDS = ["image_url_2", "image_url_3", "image_url_4"];
+const blankSku = () => ({ ...emptySku(), ...Object.fromEntries(EXTRA_IMAGE_FIELDS.map((field) => [field, ""])) });
+
 // The stored URL is only ever an img src, never HTML or an href (T-08-17). A plain img rather
 // than next/image because these are hotlinked from arbitrary hosts (D-14).
-function Thumbnail({ url, name }) {
+function Thumbnail({ url, name, extraCount = 0 }) {
   if (!url) return "—";
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt={name || "SKU image"} loading="lazy" className="h-10 w-10 rounded-lg object-cover" />
+    <span className="inline-flex items-center gap-1.5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={name || "SKU image"} loading="lazy" className="h-10 w-10 rounded-lg object-cover" />
+      {extraCount ? <span className="text-xs text-slate-500">+{extraCount}</span> : null}
+    </span>
   );
 }
 
@@ -62,12 +69,15 @@ export default function AdminCatalog() {
   }, [fetchCategories]);
 
   const editor = useInlineRowEditor({
-    blank: emptySku,
+    blank: blankSku,
     toForm: useCallback((sku) => {
-      const form = emptySku();
+      const form = blankSku();
       Object.keys(form).forEach((key) => {
         if (key === "__lastEdited") return;
         form[key] = asText(sku[key]);
+      });
+      EXTRA_IMAGE_FIELDS.forEach((field, index) => {
+        form[field] = asText(sku.extra_image_urls?.[index]);
       });
       return form;
     }, []),
@@ -96,6 +106,8 @@ export default function AdminCatalog() {
         height_cm: toNumber(values.height_cm),
         // Empty box means "none" rather than "", so a cleared field really clears the column.
         image_url: values.image_url.trim() || null,
+        // Blank boxes are dropped server-side, so clearing all three clears the carousel.
+        extra_image_urls: EXTRA_IMAGE_FIELDS.map((field) => values[field].trim()),
         category_id: values.category_id ? Number(values.category_id) : null,
         net_weight_g: toNumber(values.net_weight_g)
       }),
@@ -191,9 +203,23 @@ export default function AdminCatalog() {
         accessorKey: "image_url",
         cell: ({ row }) =>
           editor.isEditing(row) ? (
-            <InlineText editor={editor} field="image_url" label="Image URL" placeholder="https://…" />
+            <div className="flex min-w-[14rem] flex-col gap-1">
+              {["image_url", ...EXTRA_IMAGE_FIELDS].map((field, index) => (
+                <InlineText
+                  key={field}
+                  editor={editor}
+                  field={field}
+                  label={`Image ${index + 1} URL`}
+                  placeholder={index === 0 ? "Image 1 (cover) https://…" : `Image ${index + 1} https://…`}
+                />
+              ))}
+            </div>
           ) : (
-            <Thumbnail url={row.original.image_url} name={row.original.name} />
+            <Thumbnail
+              url={row.original.image_url}
+              name={row.original.name}
+              extraCount={row.original.extra_image_urls?.length}
+            />
           )
       },
       {

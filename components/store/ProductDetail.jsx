@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRef, useState } from "react";
 import {
   CatalogueError,
   PriceBlock,
@@ -15,12 +16,53 @@ import ProductImage from "@/components/store/ProductImage";
 import { storeEndpoints } from "@/lib/store/api.mjs";
 import { isAvailable, listingHref, packOf, piecesLabel, productsPath, similarProducts } from "@/lib/store/catalogue.mjs";
 
-// One product: one real image, its full name, brand, net weight, the viewer's price and the
-// purchase control, then real products from the same category (never itself). Nothing the
-// catalogue does not hold is invented: no description, gallery or nutrition. Optional data that
-// is missing (image, weight) simply is not shown.
+// One product: its images (up to four, swipeable), full name, brand, net weight, the viewer's price
+// and the purchase control, then real products from the same category (never itself). Nothing the
+// catalogue does not hold is invented: no description or nutrition. Optional data that is missing
+// (image, weight) simply is not shown.
 
 const SIMILAR_LIMIT = 10;
+
+// A scroll-snap track, so a phone swipes natively; the thumbnails below jump to an image.
+function ProductGallery({ urls }) {
+  const trackRef = useRef(null);
+  const [active, setActive] = useState(0);
+  if (urls.length < 2) return <ProductImage src={urls[0]} />;
+
+  const show = (index) => {
+    const track = trackRef.current;
+    track?.scrollTo({ left: index * track.clientWidth, behavior: "smooth" });
+  };
+  return (
+    <div className="store-gallery">
+      <div
+        ref={trackRef}
+        className="store-gallery__track"
+        onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
+      >
+        {urls.map((url, index) => (
+          <div key={index} className="store-gallery__slide" aria-hidden={index !== active}>
+            <ProductImage src={url} lazy={index > 0} />
+          </div>
+        ))}
+      </div>
+      <div className="store-gallery__thumbs">
+        {urls.map((url, index) => (
+          <button
+            key={index}
+            type="button"
+            className="store-gallery__thumb"
+            aria-label={`Show image ${index + 1} of ${urls.length}`}
+            aria-current={index === active}
+            onClick={() => show(index)}
+          >
+            <ProductImage src={url} lazy />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function DetailSkeleton() {
   return (
@@ -98,7 +140,7 @@ export default function ProductDetail({ id, seed = null }) {
 
       <div className="store-detail">
         <div className="store-detail__image">
-          <ProductImage src={item.image_url} />
+          <ProductGallery urls={item.image_urls?.length ? item.image_urls : [item.image_url]} />
         </div>
 
         <div className="store-detail__info">

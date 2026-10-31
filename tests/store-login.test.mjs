@@ -212,6 +212,22 @@ test("a missing public config fails before the SDK is loaded or any request is m
   assert.equal(fake.log.length, 0);
 });
 
+test("warming loads the SDK once, makes no request, and the next send reuses it", async () => {
+  const { fake, phoneAuth } = makeAuth();
+  phoneAuth.warmPhoneAuth();
+  await phoneAuth.getFirebaseAuth();
+  assert.equal(fake.loads, 1);
+  assert.ok(!fake.log.some(([name]) => name === "signInWithPhoneNumber"));
+  await phoneAuth.sendPhoneCode("+919876543210", fakeContainer());
+  assert.equal(fake.loads, 1);
+});
+
+test("warming without a config is silent", () => {
+  const { fake, phoneAuth } = makeAuth({ getConfig: () => ({ ...CONFIG, apiKey: undefined }) });
+  assert.doesNotThrow(() => phoneAuth.warmPhoneAuth());
+  assert.equal(fake.loads, 0);
+});
+
 test("the config status reports presence only, never a value", () => {
   const { phoneAuth } = makeAuth({ getConfig: () => ({ ...CONFIG, authDomain: "" }) });
   assert.deepEqual(phoneAuth.getFirebaseConfigStatus(), { apiKey: true, authDomain: false, projectId: true, appId: true });

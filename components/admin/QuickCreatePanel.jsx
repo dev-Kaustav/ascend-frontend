@@ -82,7 +82,7 @@ export default function QuickCreatePanel({
   const canManageWarehouse = role === "ADMIN";
   const canManageBrand = role === "ADMIN" || role === "ACCOUNTANT";
   const canManageRetailer = role === "ADMIN";
-  const canManageSku = role === "ADMIN" || role === "WAREHOUSE_MANAGER" || role === "ACCOUNTANT";
+  const canManageSku = role === "ADMIN" || role === "WAREHOUSE_MANAGER";
   const canManageBeat = role === "ADMIN";
 
   const entityOptions = useMemo(() => {
@@ -290,15 +290,11 @@ export default function QuickCreatePanel({
       "cgst_amount",
       "igst_percent",
       "igst_amount",
-      "amount",
-      "weight",
-      "length_cm",
-      "width_cm",
-      "height_cm"
+      "amount"
     ];
     const missingFields = requiredFields.filter((field) => newSku[field] === "" || newSku[field] === null || newSku[field] === undefined);
     if (missingFields.length) {
-      setCreateError("All SKU fields are required.");
+      setCreateError("All SKU fields except weight and dimensions are required.");
       return;
     }
     const numericFields = [
@@ -319,7 +315,8 @@ export default function QuickCreatePanel({
       "width_cm",
       "height_cm"
     ];
-    const invalidNumbers = numericFields.filter((field) => toNumber(newSku[field]) === null);
+    // Blank is allowed only for weight and dimensions; the required check above caught the rest.
+    const invalidNumbers = numericFields.filter((field) => newSku[field] !== "" && toNumber(newSku[field]) === null);
     if (invalidNumbers.length) {
       setCreateError("All SKU numeric fields must be valid numbers.");
       return;

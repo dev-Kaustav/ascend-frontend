@@ -1098,6 +1098,49 @@
   height: 100%;
 }
 
+.store-gallery {
+  display: flex;
+  max-width: 480px;
+  margin: 0 auto;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.store-gallery__track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.store-gallery__track::-webkit-scrollbar {
+  display: none;
+}
+
+.store-gallery__slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+}
+
+.store-gallery__thumbs {
+  display: flex;
+  gap: 8px;
+}
+
+.store-gallery__thumb {
+  width: 56px;
+  min-height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer;
+}
+
+.store-gallery__thumb[aria-current="true"] {
+  border-color: var(--s-orange-text);
+}
+
 .store-detail__info {
   display: flex;
   min-width: 0;

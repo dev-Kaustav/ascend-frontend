@@ -133,7 +133,13 @@ export default function DriverOrders() {
         if (order.status === "OUT_FOR_DELIVERY") {
           return (
             <div className="flex flex-col gap-1.5 text-xs">
+              {order.pending_amount === 0 ? (
+                <span className="text-emerald-700">Already paid — nothing to collect.</span>
+              ) : (
               <div className="grid grid-cols-2 gap-1.5">
+                {order.pending_amount != null && (
+                  <span className="col-span-2 text-slate-600">To collect: {formatCurrency(order.pending_amount)}</span>
+                )}
                 <select
                   aria-label={`Payment status for order ${order.id}`}
                   value={rowUpdate.paymentStatus || ""}
@@ -158,26 +164,29 @@ export default function DriverOrders() {
                       <option value="UPI">UPI</option>
                       <option value="CHEQUE">Cheque</option>
                     </select>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={rowUpdate.paymentAmount || ""}
-                      onChange={(e) => updateRow(order.id, { paymentAmount: e.target.value })}
-                      placeholder="Amount"
-                      aria-label={`Payment amount for order ${order.id}`}
-                      className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
-                    />
+                    {rowUpdate.paymentStatus === "PARTIAL" && (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={rowUpdate.paymentAmount || ""}
+                        onChange={(e) => updateRow(order.id, { paymentAmount: e.target.value })}
+                        placeholder="Amount"
+                        aria-label={`Payment amount for order ${order.id}`}
+                        className="min-h-[48px] rounded-full border border-slate-200 bg-white px-3 py-1 text-base sm:text-sm"
+                      />
+                    )}
                   </>
                 )}
               </div>
+              )}
               <button
                 type="button"
                 disabled={rowUpdate.saving}
                 onClick={() => handleStatusUpdate(order.id, "DELIVERED", {
                   payment_status: rowUpdate.paymentStatus || undefined,
                   payment_mode: rowUpdate.paymentMode || undefined,
-                  payment_amount: rowUpdate.paymentAmount ? Number(rowUpdate.paymentAmount) : undefined,
+                  payment_amount: rowUpdate.paymentStatus === "PARTIAL" && rowUpdate.paymentAmount ? Number(rowUpdate.paymentAmount) : undefined,
                 })}
                 className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-full bg-emerald-700 px-4 text-xs font-semibold uppercase tracking-widest text-white transition-transform active:scale-[0.98] disabled:opacity-60"
               >

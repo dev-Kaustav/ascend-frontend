@@ -101,12 +101,12 @@ with sync_playwright() as p:
             page.get_by_role('button',name='On the road',exact=True).click()
             expect(page.locator('.field-order-card')).to_have_count(2)
             card=page.locator('.field-order-card').first
-            card.get_by_role('combobox').first.select_option('PAID')
+            card.get_by_role('combobox').first.select_option('PARTIAL')
             card.get_by_role('combobox').nth(1).select_option('CASH')
-            card.get_by_placeholder('Amount').fill('1260')
+            card.get_by_placeholder('Amount').fill('1000')
             card.get_by_role('button',name='Mark Delivered',exact=True).click()
             expect(page.locator('.field-order-card')).to_have_count(1)
-            assert any(body.get('status')=='DELIVERED' and body.get('payment_amount')==1260 and 'latitude' in body for _,body in mutations)
+            assert any(body.get('status')=='DELIVERED' and body.get('payment_amount')==1000 and 'latitude' in body for _,body in mutations)
         if role=='WAREHOUSE_MANAGER':
             page.get_by_role('button',name='All orders',exact=True).click()
             page.wait_for_load_state('networkidle')
