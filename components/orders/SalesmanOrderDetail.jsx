@@ -17,12 +17,13 @@ const formatRupee = (value) => `₹${rupees.format(Number(value) || 0)}`;
 const STATUS_STYLE = {
   PENDING: "bg-slate-100 text-slate-700",
   READY_TO_SHIP: "bg-sky-50 text-sky-700",
+  DRIVER_ASSIGNED: "bg-violet-50 text-violet-700",
   OUT_FOR_DELIVERY: "bg-amber-50 text-amber-800",
   DELIVERED: "bg-emerald-50 text-emerald-700",
   RETURNED: "bg-orange-50 text-orange-700",
   CANCELLED: "bg-rose-50 text-rose-700"
 };
-const STATUS_LABEL = { READY_TO_SHIP: "Ready to ship", OUT_FOR_DELIVERY: "On the road" };
+const STATUS_LABEL = { READY_TO_SHIP: "Ready to ship", DRIVER_ASSIGNED: "Awaiting rider", OUT_FOR_DELIVERY: "On the road" };
 const statusLabel = (status) => STATUS_LABEL[status] || toTitleCase(status || "");
 
 const packOf = (item) => {

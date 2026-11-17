@@ -279,6 +279,7 @@ export default function AdminOrders() {
             <option value="ALL">Status</option>
             <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
+            <option value="DRIVER_ASSIGNED">Awaiting rider</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="CANCELLED">Cancelled</option>

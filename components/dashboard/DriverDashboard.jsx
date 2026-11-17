@@ -20,7 +20,7 @@ export default function DriverDashboard() {
       try {
         const [recent, pickup, transit, delivered] = await Promise.all([
           apiFetch(`${apiEndpoints.orders.list}?limit=3`),
-          apiFetch(`${apiEndpoints.orders.list}?status=READY_TO_SHIP&limit=1`),
+          apiFetch(`${apiEndpoints.orders.list}?status=DRIVER_ASSIGNED&limit=1`),
           apiFetch(`${apiEndpoints.orders.list}?status=OUT_FOR_DELIVERY&limit=1`),
           apiFetch(`${apiEndpoints.orders.list}?status=DELIVERED&limit=1`)
         ]);

@@ -16,6 +16,7 @@ const STATUS_OPTIONS = [
   ["ALL", "All orders"],
   ["PENDING", "Pending"],
   ["READY_TO_SHIP", "Ready to ship"],
+  ["DRIVER_ASSIGNED", "Awaiting rider"],
   ["OUT_FOR_DELIVERY", "On the road"],
   ["DELIVERED", "Delivered"],
   ["CANCELLED", "Cancelled"]

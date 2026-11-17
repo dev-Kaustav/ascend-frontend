@@ -562,3 +562,13 @@ test("a failed invoice is worded locally; a stale or ended session is not", () =
   assert.equal(describeInvoiceError({ reason: "stale" }).kind, "stale");
   assert.equal(describeInvoiceError({ status: 401, reason: "session-expired" }).kind, "signed-out");
 });
+
+test("a rider being assigned reads to the shop as ready to ship, with the invoice still ahead", () => {
+  assert.equal(statusLabel("DRIVER_ASSIGNED"), "Ready to ship");
+  const progress = statusProgress("DRIVER_ASSIGNED");
+  assert.deepEqual(
+    progress.stages.map((stage) => [stage.status, stage.state]),
+    [["PENDING", "done"], ["READY_TO_SHIP", "current"], ["OUT_FOR_DELIVERY", "upcoming"], ["DELIVERED", "upcoming"]]
+  );
+  assert.equal(invoiceNote({ status: "DRIVER_ASSIGNED", invoice_available: false }).kind, "pending");
+});

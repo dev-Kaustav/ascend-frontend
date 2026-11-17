@@ -7,7 +7,7 @@ const NEVER_ISSUED_TONE = "bg-rose-50 text-rose-700 border border-rose-200";
 function resolveState(invoiceNumber, status) {
   if (typeof invoiceNumber === "string" && invoiceNumber.trim().length > 0) return "ISSUED";
   const normalizedStatus = String(status).toUpperCase();
-  if (normalizedStatus === "PENDING" || normalizedStatus === "READY_TO_SHIP") return "NOT_YET_ISSUED";
+  if (["PENDING", "READY_TO_SHIP", "DRIVER_ASSIGNED"].includes(normalizedStatus)) return "NOT_YET_ISSUED";
   if (normalizedStatus === "CANCELLED") return "NEVER_ISSUED";
   return "UNKNOWN";
 }

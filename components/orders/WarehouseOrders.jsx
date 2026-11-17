@@ -14,6 +14,15 @@ function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
 }
 
+// The moves a warehouse manager can make from each status (mirrors _ALLOWED_TRANSITIONS in
+// ascend-backend/app/services/order.py, which stays authoritative). Dispatch is the rider's
+// own accept, so it is not offered here.
+const WAREHOUSE_NEXT = {
+  PENDING: [["READY_TO_SHIP", "Accept order"]],
+  READY_TO_SHIP: [["DRIVER_ASSIGNED", "Assign rider"], ["CANCELLED", "Cancel order"]],
+  DRIVER_ASSIGNED: [["READY_TO_SHIP", "Unassign rider"], ["CANCELLED", "Cancel order"]],
+};
+
 export default function WarehouseOrders() {
   const [orders, setOrders] = useState([]);
   const [drivers, setDrivers] = useState([]);
@@ -151,7 +160,8 @@ export default function WarehouseOrders() {
         cell: ({ row }) => {
           const orderId = row.original.id;
           const rowUpdate = updates[orderId] || {};
-          const showDriverPicker = rowUpdate.status === "READY_TO_SHIP";
+          const showDriverPicker = rowUpdate.status === "DRIVER_ASSIGNED";
+          const nextOptions = WAREHOUSE_NEXT[row.original.status] || [];
           return (
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center gap-2">
@@ -162,9 +172,9 @@ export default function WarehouseOrders() {
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
                 >
                   <option value="">Set status</option>
-                  <option value="READY_TO_SHIP">Ready to ship</option>
-                  <option value="OUT_FOR_DELIVERY">Out for delivery</option>
-                  <option value="CANCELLED">Cancel order</option>
+                  {nextOptions.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
                 <button
                   type="button"
@@ -177,12 +187,12 @@ export default function WarehouseOrders() {
               </div>
               {showDriverPicker && (
                 <select
-                  aria-label={`Assign driver for order ${orderId}`}
-                    value={rowUpdate.deliveryDriverId || ""}
+                  aria-label={`Assign rider for order ${orderId}`}
+                  value={rowUpdate.deliveryDriverId || ""}
                   onChange={(event) => updateRow(orderId, { deliveryDriverId: event.target.value })}
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
                 >
-                  <option value="">Assign driver (required)</option>
+                  <option value="">Select rider (required)</option>
                   {drivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.name}
@@ -243,6 +253,7 @@ export default function WarehouseOrders() {
             <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
+            <option value="DRIVER_ASSIGNED">Awaiting rider</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="CANCELLED">Cancelled</option>

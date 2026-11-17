@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { getCoords } from "@/lib/geo";
-import { formatCurrency, formatDate, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
+import { formatCurrency, formatDate, formatDateTime, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
 
 import DataTable from "@/components/tables/DataTable";
 import InvoiceCell from "@/components/ui/InvoiceCell";
@@ -46,17 +46,20 @@ function DetailBlock({ title, children }) {
 const STATUS_BADGE = {
   PENDING: "bg-slate-100 text-slate-700",
   READY_TO_SHIP: "bg-sky-50 text-sky-700 border border-sky-200",
+  DRIVER_ASSIGNED: "bg-violet-50 text-violet-700 border border-violet-200",
   OUT_FOR_DELIVERY: "bg-amber-50 text-amber-700 border border-amber-200",
   DELIVERED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
   RETURNED: "bg-orange-50 text-orange-700 border border-orange-200",
   CANCELLED: "bg-rose-50 text-rose-700 border border-rose-200",
 };
 
+const STATUS_TEXT = { DRIVER_ASSIGNED: "Awaiting Rider" };
+
 function StatusBadge({ status }) {
   const cls = STATUS_BADGE[status] || "bg-slate-100 text-slate-700";
   return (
     <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-widest ${cls}`}>
-      {toTitleCase(status)}
+      {STATUS_TEXT[status] || toTitleCase(status)}
     </span>
   );
 }
@@ -76,7 +79,7 @@ function OrderTrailTimeline({ trails }) {
               <div className="flex items-start justify-between gap-3">
                 <StatusBadge status={trail.order_status} />
                 <span className="shrink-0 text-[11px] text-slate-400 tabular-nums">
-                  {formatDate(trail.created_at)}
+                  {formatDateTime(trail.created_at)}
                 </span>
               </div>
               {trail.description && (
@@ -95,11 +98,18 @@ function OrderTrailTimeline({ trails }) {
 
 const ACTION_CONFIG = {
   PENDING: {
-    primary: { label: "Mark Ready to Ship", nextStatus: "READY_TO_SHIP", showDriver: true },
+    primary: { label: "Accept Order", nextStatus: "READY_TO_SHIP" },
     cancel: true,
   },
   READY_TO_SHIP: {
-    primary: { label: "Mark Out for Delivery", nextStatus: "OUT_FOR_DELIVERY" },
+    primary: { label: "Assign Rider", nextStatus: "DRIVER_ASSIGNED", showDriver: true },
+    cancel: true,
+  },
+  // The rider accepting is the pickup: stock leaves and the invoice is issued. Admin can
+  // record it on the rider's behalf.
+  DRIVER_ASSIGNED: {
+    primary: { label: "Accept & Pick Up", adminLabel: "Mark Picked Up", nextStatus: "OUT_FOR_DELIVERY" },
+    back: { nextStatus: "READY_TO_SHIP" },
     cancel: true,
   },
   OUT_FOR_DELIVERY: {
@@ -112,21 +122,22 @@ const ACTION_CONFIG = {
 };
 
 const ROLE_ACTIONS = {
-  ADMIN: ["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY", "DELIVERED"],
-  WAREHOUSE_MANAGER: ["PENDING"],
-  DRIVER: ["READY_TO_SHIP", "OUT_FOR_DELIVERY"],
+  ADMIN: ["PENDING", "READY_TO_SHIP", "DRIVER_ASSIGNED", "OUT_FOR_DELIVERY", "DELIVERED"],
+  WAREHOUSE_MANAGER: ["PENDING", "READY_TO_SHIP"],
+  DRIVER: ["DRIVER_ASSIGNED", "OUT_FOR_DELIVERY"],
   RETAILER: [],
   SALESMAN: [],
   ACCOUNTANT: [],
   BRAND: [],
 };
 
-// Mirrors the four cancel rows of _ALLOWED_TRANSITIONS in
+// Mirrors the cancel rows of _ALLOWED_TRANSITIONS in
 // ascend-backend/app/services/order.py — the backend stays authoritative,
 // this only shapes which button is offered.
 const CANCEL_ROLES_BY_STATUS = {
   PENDING: new Set(["ADMIN", "RETAILER"]),
   READY_TO_SHIP: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
+  DRIVER_ASSIGNED: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
   OUT_FOR_DELIVERY: new Set(["ADMIN", "DRIVER"]),
   DELIVERED: new Set(["ADMIN"]),
 };
@@ -142,6 +153,14 @@ const CANCEL_ROLES_BY_STATUS = {
 // something to keep relying on: if a driver-requiring transition were ever granted to
 // another role, the select would render empty and submitAction would reject with
 // "Please select a driver" and nothing to select.
+// DRIVER_ASSIGNED -> READY_TO_SHIP: the rider declines, or the warehouse takes the order
+// back to give it to someone else. Same transition, named for who is doing it.
+const BACK_LABEL_BY_ROLE = {
+  DRIVER: "Decline",
+  WAREHOUSE_MANAGER: "Unassign Rider",
+  ADMIN: "Unassign Rider",
+};
+
 function roleNeedsDriverList(role) {
   return (ROLE_ACTIONS[role] || []).some((status) => ACTION_CONFIG[status]?.primary?.showDriver);
 }
@@ -151,6 +170,7 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [backSheetOpen, setBackSheetOpen] = useState(false);
   // An error describes the inputs that were submitted; once they change it no longer applies.
   useEffect(() => setError(""), [form]);
 
@@ -158,9 +178,11 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
   const allowedStatuses = ROLE_ACTIONS[role] || [];
   const canPrimary = config.primary && allowedStatuses.includes(order.status);
   const canCancel = config.cancel && (CANCEL_ROLES_BY_STATUS[order.status]?.has(role) ?? false);
-  // Two transitions cannot be a single tap: "Mark Ready to Ship" is rejected without a
-  // driver, and "Mark Delivered" carries cash collection. Those open the sheet instead of
-  // submitting straight from the bar.
+  const backLabel = config.back ? BACK_LABEL_BY_ROLE[role] : null;
+  const primaryLabel = canPrimary ? (role === "ADMIN" && config.primary.adminLabel) || config.primary.label : null;
+  // Two transitions cannot be a single tap: "Assign Rider" is rejected without a rider, and
+  // "Mark Delivered" carries cash collection. Those open the sheet instead of submitting
+  // straight from the bar.
   const needsInput = Boolean(canPrimary && (config.primary.showDriver || config.primary.showPayment));
 
   async function submitAction(nextStatus) {
@@ -168,13 +190,16 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
     setError("");
     try {
       const body = { status: nextStatus };
-      if (nextStatus === "READY_TO_SHIP") {
+      if (nextStatus === "DRIVER_ASSIGNED") {
         if (!form.driverId) {
-          setError("Please select a driver.");
+          setError("Please select a rider.");
           setSaving(false);
           return;
         }
         body.delivery_driver_id = Number(form.driverId);
+      }
+      if (order.status === "DRIVER_ASSIGNED" && nextStatus === "READY_TO_SHIP" && form.reason?.trim()) {
+        body.reason = form.reason.trim();
       }
       if (nextStatus === "DELIVERED") {
         if (form.paymentStatus) body.payment_status = form.paymentStatus;
@@ -191,6 +216,7 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
       });
       setForm({});
       setSheetOpen(false);
+      setBackSheetOpen(false);
       onUpdate();
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Update failed.");
@@ -211,7 +237,7 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
             onChange={(e) => setForm((prev) => ({ ...prev, driverId: e.target.value }))}
             className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
           >
-            <option value="">Select driver</option>
+            <option value="">Select rider</option>
             {drivers.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
@@ -268,10 +294,22 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
 
   const cancelLabel = order.status === "OUT_FOR_DELIVERY" ? "Refused at Shop" : "Cancel Order";
 
+  const reasonInput = (
+    <input
+      type="text"
+      maxLength={200}
+      value={form.reason || ""}
+      onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
+      placeholder="Reason (optional)"
+      aria-label="Reason"
+      className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
+    />
+  );
+
   return (
     <>
       {/* Desktop keeps the existing inline block unchanged. */}
-      {(canPrimary || canCancel) && (
+      {(canPrimary || canCancel || backLabel) && (
         <div className="hidden lg:block">
           <DetailBlock title="Actions">
             <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -284,11 +322,22 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
                     onClick={() => submitAction(config.primary.nextStatus)}
                     className="cursor-pointer rounded-full bg-[#1a1b2e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                   >
-                    {saving ? "Saving…" : config.primary.label}
+                    {saving ? "Saving…" : primaryLabel}
                   </button>
                 </div>
               )}
+              {backLabel && <div className="max-w-sm">{reasonInput}</div>}
               <div className="flex flex-wrap gap-2">
+                {backLabel && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => submitAction(config.back.nextStatus)}
+                    className="cursor-pointer rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-60"
+                  >
+                    {backLabel}
+                  </button>
+                )}
                 {canCancel && (
                   <button
                     type="button"
@@ -317,7 +366,17 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
             onClick={() => (needsInput ? setSheetOpen(true) : submitAction(config.primary.nextStatus))}
             className={BAR_ACTION_PRIMARY}
           >
-            {saving ? "Saving…" : config.primary.label}
+            {saving ? "Saving…" : primaryLabel}
+          </button>
+        )}
+        {backLabel && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setBackSheetOpen(true)}
+            className={BAR_ACTION_SECONDARY}
+          >
+            {backLabel}
           </button>
         )}
         {!canPrimary && secondaryActions}
@@ -333,7 +392,7 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
         )}
       </MobileActionBar>
 
-      <MobileSheet open={sheetOpen} title={config.primary?.label || "Confirm"} onClose={() => setSheetOpen(false)}>
+      <MobileSheet open={sheetOpen} title={primaryLabel || "Confirm"} onClose={() => setSheetOpen(false)}>
         {renderInputs()}
         {error && <p className="text-xs text-rose-500">{error}</p>}
         <button
@@ -342,9 +401,24 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
           onClick={() => submitAction(config.primary.nextStatus)}
           className={`${BAR_ACTION_PRIMARY} w-full`}
         >
-          {saving ? "Saving…" : config.primary?.label}
+          {saving ? "Saving…" : primaryLabel}
         </button>
       </MobileSheet>
+
+      {backLabel && (
+        <MobileSheet open={backSheetOpen} title={backLabel} onClose={() => setBackSheetOpen(false)}>
+          {reasonInput}
+          {error && <p className="text-xs text-rose-500">{error}</p>}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => submitAction(config.back.nextStatus)}
+            className={`${BAR_ACTION_PRIMARY} w-full`}
+          >
+            {saving ? "Saving…" : backLabel}
+          </button>
+        </MobileSheet>
+      )}
     </>
   );
 }
