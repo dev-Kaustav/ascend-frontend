@@ -1,231 +1,367 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import dayjs from "dayjs";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import { formatCurrency, formatNumber } from "@/lib/format";
-import StatCard from "@/components/layout/StatCard";
-import SectionCard from "@/components/layout/SectionCard";
-import LineChartCard from "@/components/charts/LineChartCard";
-import BarChartCard from "@/components/charts/BarChartCard";
-import PieChartCard from "@/components/charts/PieChartCard";
-import DateRangeFilter from "@/components/ui/DateRangeFilter";
-import WarehouseSelector from "@/components/ui/WarehouseSelector";
+import { formatCompactCurrency, formatCount, formatCurrency } from "@/lib/format";
+import { PAYMENT_LABEL } from "@/lib/orderStatus";
+import { PeriodColumns, ThinRing } from "@/components/charts/LedgerCharts";
 
-const PAYMENT_STATUS_COLORS = {
-  PAID:    "#34d399",
-  PARTIAL: "#f59e0b",
-  CREDIT:  "#f97316",
-  UNPAID:  "#f97316",
-};
+// The admin's home. One question: "what needs doing today, and is money coming in?" The work
+// waiting on the office comes first, then the money (sales, collections, what shops owe), then the
+// day's sales and the stock. Every figure comes from the server; nothing here is a placeholder.
+
+const WAITING = [
+  { key: "PENDING", label: "To accept", queue: "to-accept", note: "Accept to reserve stock" },
+  { key: "READY_TO_SHIP", label: "Needs a rider", queue: "needs-rider", note: "Accepted, no rider yet" },
+  { key: "OUT_FOR_DELIVERY", label: "Out for delivery", queue: "on-the-road", note: "With a rider now" },
+  { key: "PAYMENT_DUE", label: "Payment due", queue: "payment-due", note: "Delivered, not fully paid" },
+];
+
+const MONEY_TABS = [
+  { key: "sales", label: "Sales", format: formatCurrency, axis: formatCompactCurrency, note: "Invoiced value, by invoice date" },
+  { key: "collected", label: "Collected", format: formatCurrency, axis: formatCompactCurrency, note: "Payments received, by collection date" },
+  { key: "orders", label: "Orders", format: formatCount, axis: formatCount, note: "Orders placed, cancelled ones left out" },
+];
+
+const AGING = [
+  { key: "0_7", label: "Up to 7 days" },
+  { key: "7_15", label: "8 to 15 days" },
+  { key: "15_30", label: "16 to 30 days" },
+  { key: "30_plus", label: "Over 30 days", risk: true },
+];
+
+const PAYMENT_COLORS = { PAID: "#2e7d32", PARTIAL: "#c08a2b", CREDIT: "#a3a3a3", UNPAID: "#d4d4d4" };
+
+function fetchDashboard() {
+  return Promise.allSettled([
+    apiFetch(apiEndpoints.admin.summary),
+    apiFetch(apiEndpoints.admin.orderStatusSummary),
+    apiFetch(apiEndpoints.admin.outstandingSummary),
+    apiFetch(apiEndpoints.admin.dailySales),
+  ]);
+}
+
+function Panel({ title, aside, children, className = "" }) {
+  return (
+    <section className={`flex flex-col rounded-lg border border-line bg-white p-5 ${className}`}>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ViewAll({ href, children }) {
+  return (
+    <Link href={href} className="text-sm font-medium text-ink hover:underline">
+      {children}
+    </Link>
+  );
+}
+
+// "+12% vs 1–17 Oct". Higher is better for all three money figures, so a fall is the bad colour.
+function Change({ now, before, format, period }) {
+  if (!before) {
+    return <span className="text-muted">{now ? `${format(now)} new against ${period}` : `Nothing yet, nor in ${period}`}</span>;
+  }
+  const pct = ((now - before) / before) * 100;
+  const tone = pct > 0.5 ? "text-[#247b50]" : pct < -0.5 ? "text-[#c4242a]" : "text-muted";
+  const sign = pct > 0 ? "+" : "";
+  return (
+    <span className="text-muted">
+      <span className={`font-medium tabular-nums ${tone}`}>{`${sign}${pct.toFixed(0)}%`}</span> vs {format(before)} in {period}
+    </span>
+  );
+}
 
 export default function AdminDashboard() {
   const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [dateRange, setDateRange] = useState({ from: "", to: "" });
-  const [warehouseId, setWarehouseId] = useState(null);
-  const [outstandingSummary, setOutstandingSummary] = useState(null);
-  const [collectionSummary, setCollectionSummary] = useState(null);
+  const [queues, setQueues] = useState(null);
+  const [owed, setOwed] = useState(null);
   const [dailySales, setDailySales] = useState(null);
+  const [error, setError] = useState("");
+  const [moneyTab, setMoneyTab] = useState("sales");
+  const [updatedAt, setUpdatedAt] = useState(null);
+  const [refreshing, setRefreshing] = useState(true);
+
+  function apply([s, q, o, d]) {
+    if (s.status === "fulfilled") setSummary(s.value);
+    if (q.status === "fulfilled") setQueues(q.value || {});
+    if (o.status === "fulfilled") setOwed(o.value);
+    if (d.status === "fulfilled") setDailySales(d.value);
+    const failed = [s, q, o, d].filter((r) => r.status === "rejected").length;
+    setError(failed ? `Couldn't load ${failed === 4 ? "the dashboard" : "part of the dashboard"}. Figures shown may be incomplete.` : "");
+    setUpdatedAt(dayjs());
+    setRefreshing(false);
+  }
+
+  function refresh() {
+    setRefreshing(true);
+    fetchDashboard().then(apply);
+  }
 
   useEffect(() => {
     let active = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (dateRange.from) params.set("from_date", dateRange.from);
-        if (dateRange.to) params.set("to_date", dateRange.to);
-        if (warehouseId) params.set("warehouse_id", String(warehouseId));
-        const qs = params.toString();
-        const url = qs ? `${apiEndpoints.admin.summary}?${qs}` : apiEndpoints.admin.summary;
-        const response = await apiFetch(url);
-        if (!active) return;
-        setSummary(response);
-        setError("");
-      } catch (err) {
-        if (!active) return;
-        setError(err?.message || "Unable to load admin dashboard data.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-    load();
-    return () => { active = false; };
-  }, [dateRange, warehouseId]);
+    fetchDashboard().then((results) => {
+      if (active) apply(results);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  useEffect(() => {
-    let active = true;
-    async function loadDashboards() {
-      try {
-        const params = new URLSearchParams();
-        if (warehouseId) params.set("warehouse_id", String(warehouseId));
-        if (dateRange.from) params.set("from_date", dateRange.from);
-        if (dateRange.to) params.set("to_date", dateRange.to);
-        const qs = params.toString();
+  const money = summary?.money;
+  const tab = MONEY_TABS.find((t) => t.key === moneyTab);
+  const today = money ? dayjs(money.today) : dayjs();
+  const thisPeriod = `1–${today.date()} ${today.format("MMM")}`;
+  const lastPeriodEnd = Math.min(today.date(), today.subtract(1, "month").daysInMonth());
+  const lastPeriod = `1–${lastPeriodEnd} ${today.subtract(1, "month").format("MMM")}`;
+  const weeks = (money?.weeks || []).map((w) => ({ ...w, label: dayjs(w.week_start).format("D MMM") }));
 
-        const [os, cs, ds] = await Promise.allSettled([
-          apiFetch(`${apiEndpoints.admin.outstandingSummary}${qs ? `?${qs}` : ""}`),
-          apiFetch(`${apiEndpoints.admin.collectionsSummary}${warehouseId ? `?warehouse_id=${warehouseId}` : ""}`),
-          apiFetch(`${apiEndpoints.admin.dailySales}${qs ? `?${qs}` : ""}`),
-        ]);
-        if (!active) return;
-        if (os.status === "fulfilled") setOutstandingSummary(os.value);
-        if (cs.status === "fulfilled") setCollectionSummary(cs.value);
-        if (ds.status === "fulfilled") setDailySales(ds.value);
-      } catch {}
-    }
-    loadDashboards();
-    return () => { active = false; };
-  }, [dateRange, warehouseId]);
+  const owedShops = owed?.by_retailer?.filter((r) => r.pending > 0) || [];
+  const agingMax = Math.max(1, ...AGING.map((a) => owed?.aging?.[a.key] || 0));
 
-  const metrics = useMemo(() => ({
-    totalOrders:       summary?.orders?.total || 0,
-    revenue:           summary?.orders?.revenue || 0,
-    outstanding:       summary?.orders?.outstanding || 0,
-    inventoryValue:    summary?.inventory?.inventory_value ?? null,
-    lowStockCount:     summary?.inventory?.low_stock_count || 0,
-    lowStockThreshold: summary?.inventory?.low_stock_threshold || 0,
-  }), [summary]);
+  const paymentCounts = summary?.orders?.payment_status || {};
+  const paymentParts = ["PAID", "PARTIAL", "CREDIT", "UNPAID"]
+    .filter((key) => paymentCounts[key])
+    .map((key) => ({ key, label: PAYMENT_LABEL[key], value: paymentCounts[key], color: PAYMENT_COLORS[key] }));
+  const paymentTotal = paymentParts.reduce((sum, p) => sum + p.value, 0);
 
-  const ordersTimeline     = summary?.orders_over_time || [];
-  const salesByWarehouse   = summary?.sales_by_warehouse || [];
-  const inventoryByWarehouse = summary?.inventory?.by_warehouse || [];
-  const paymentStatusCounts  = summary?.orders?.payment_status || {};
-  const paymentStatusData = Object.entries(paymentStatusCounts).map(([key, value]) => ({
-    label: key.charAt(0) + key.slice(1).toLowerCase(),
-    value,
-    color: PAYMENT_STATUS_COLORS[key] || "#94a3b8",
-  }));
+  const salesDays = (dailySales?.days || []).slice(0, 4);
+  const stock = summary?.inventory;
 
-  const isFiltered = Boolean(dateRange.from || dateRange.to);
-
-  if (loading) {
-    return <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">Loading admin overview…</div>;
-  }
-
-  if (error) {
-    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
-  }
+  const waitingCount = (queues?.PENDING || 0) + (queues?.READY_TO_SHIP || 0);
+  const finding = owed
+    ? `${formatCurrency(owed.total_outstanding || 0)} owed by ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}${
+        waitingCount ? `; ${waitingCount} ${waitingCount === 1 ? "order is" : "orders are"} waiting on the office.` : "."
+      }`
+    : "Loading today's figures…";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            {isFiltered ? "Filtered range" : "All time"}
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted">{finding}</p>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-muted">
+          {updatedAt ? <span>Updated {updatedAt.format("HH:mm")}</span> : null}
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="h-9 rounded-md border border-control bg-white px-3 font-medium text-ink hover:bg-raised disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+      </header>
+
+      {error ? <p className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 text-sm text-[#92400e]">{error}</p> : null}
+
+      {/* Waiting on the office: each cell opens that queue on the orders screen. */}
+      <nav aria-label="Orders waiting" className="grid grid-cols-2 divide-line rounded-lg border border-line bg-white lg:grid-cols-4 lg:divide-x">
+        {WAITING.map((item) => {
+          const count = queues ? queues[item.key] || 0 : null;
+          return (
+            <Link
+              key={item.key}
+              href={`/app/orders?queue=${item.queue}`}
+              className="group px-5 py-4 transition-colors first:rounded-l-lg last:rounded-r-lg hover:bg-surface-soft"
+            >
+              <span className="block text-[13px] text-muted group-hover:text-ink">{item.label}</span>
+              <span className={`mt-0.5 block text-2xl font-semibold tabular-nums ${count ? "text-ink" : "text-muted"}`}>
+                {count === null ? "–" : count}
+              </span>
+              <span className="block text-xs text-muted">
+                {item.key === "PAYMENT_DUE" && owed ? `${formatCurrency(owed.total_outstanding || 0)} to collect` : item.note}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Money coming in: the month so far as tabs over twelve weeks of the same figure. */}
+        <section className="rounded-lg border border-line bg-white lg:col-span-2">
+          <div role="tablist" aria-label="Money" className="grid grid-cols-3 border-b border-line">
+            {MONEY_TABS.map((t) => {
+              const selected = t.key === moneyTab;
+              const now = money?.month_to_date?.[t.key] || 0;
+              const before = money?.previous_month_to_date?.[t.key] || 0;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setMoneyTab(t.key)}
+                  className={`-mb-px border-b-2 px-5 py-4 text-left transition-colors ${selected ? "border-ink" : "border-transparent hover:bg-surface-soft"}`}
+                >
+                  <span className={`block text-[13px] ${selected ? "text-ink" : "text-muted"}`}>{t.label}, {thisPeriod}</span>
+                  <span className={`mt-0.5 block text-2xl tabular-nums text-ink ${selected ? "font-bold" : "font-normal"}`}>
+                    {money ? t.format(now) : "–"}
+                  </span>
+                  <span className="mt-0.5 block text-xs">
+                    {money ? <Change now={now} before={before} format={t.format} period={lastPeriod} /> : " "}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="px-5 pb-4 pt-3">
+            <div className="mb-1 flex items-baseline justify-between gap-3 text-xs text-muted">
+              <span>{tab.note}, per week, last 12 weeks</span>
+              <span>This week in maroon</span>
+            </div>
+            {money ? (
+              <PeriodColumns
+                data={weeks}
+                dataKey={moneyTab}
+                format={tab.format}
+                axisFormat={tab.axis}
+                labelFormat={(label) => `Week of ${label}`}
+              />
+            ) : (
+              <div className="h-[220px]" />
+            )}
+          </div>
+        </section>
+
+        <Panel title="Owed by shops" aside={<ViewAll href="/app/retailers?tab=outstanding">View all</ViewAll>}>
+          <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">{owed ? formatCurrency(owed.total_outstanding || 0) : "–"}</p>
+          <p className="text-xs text-muted">
+            {owed ? `${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}, delivered orders not fully paid` : " "}
           </p>
-          <WarehouseSelector value={warehouseId} onChange={setWarehouseId} />
-        </div>
-        <DateRangeFilter from={dateRange.from} to={dateRange.to} onChange={setDateRange} />
+          <ul className="mt-4 space-y-2.5">
+            {AGING.map((a) => {
+              const amount = owed?.aging?.[a.key] || 0;
+              return (
+                <li key={a.key}>
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="text-muted">{a.label}</span>
+                    <span className={`tabular-nums ${a.risk && amount ? "font-medium text-data" : amount ? "text-ink" : "text-muted"}`}>
+                      {formatCurrency(amount)}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 rounded-full bg-raised">
+                    <div
+                      className={`h-1 rounded-full ${a.risk ? "bg-data" : "bg-ink"}`}
+                      style={{ width: `${(amount / agingMax) * 100}%` }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {owedShops.length ? (
+            <div className="mt-4 border-t border-line pt-3">
+              <p className="mb-1.5 text-xs text-muted">Owing the most</p>
+              <ul className="space-y-1.5 text-sm">
+                {owedShops.slice(0, 3).map((shop) => (
+                  <li key={shop.retailer_id} className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-ink">{shop.retailer_name}</span>
+                    <span className="shrink-0 tabular-nums text-ink">{formatCurrency(shop.pending)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <StatCard title="Total Orders" value={formatNumber(metrics.totalOrders)} subtitle="Outgoing orders recorded" accent="sky" />
-        <StatCard title="Total Revenue" value={formatCurrency(metrics.revenue)} subtitle="Derived from outgoing orders" accent="emerald" />
-        <StatCard title="Outstanding" value={formatCurrency(metrics.outstanding)} subtitle="Open against unpaid orders" accent="amber" />
-        <StatCard
-          title="Inventory Value"
-          value={metrics.inventoryValue !== null ? formatCurrency(metrics.inventoryValue) : "—"}
-          subtitle={metrics.inventoryValue !== null ? "Costed inventory on hand" : "Unit cost not available"}
-          accent="sky"
-        />
-        <StatCard title="Low Stock SKUs" value={formatNumber(metrics.lowStockCount)} subtitle={`Below ${metrics.lowStockThreshold} units`} accent="rose" />
-      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Orders by payment" aside={<span className="text-xs text-muted">All time</span>}>
+          <div className="flex items-center gap-5">
+            <ThinRing parts={paymentParts} />
+            <table className="w-full text-sm">
+              <tbody>
+                {paymentParts.map((part) => (
+                  <tr key={part.key}>
+                    <td className="py-1">
+                      <span className="mr-2 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: part.color }} />
+                      {part.label}
+                    </td>
+                    <td className="py-1 text-right tabular-nums text-ink">{part.value}</td>
+                    <td className="w-12 py-1 text-right tabular-nums text-muted">{Math.round((part.value / paymentTotal) * 100)}%</td>
+                  </tr>
+                ))}
+                {paymentParts.length ? (
+                  <tr className="border-t border-rule">
+                    <td className="pt-2 text-muted">All orders</td>
+                    <td className="pt-2 text-right tabular-nums text-ink">{paymentTotal}</td>
+                    <td />
+                  </tr>
+                ) : null}
+                {!paymentParts.length ? (
+                  <tr>
+                    <td className="py-1 text-muted">No orders yet.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <LineChartCard
-          title="Orders over time"
-          subtitle="Outgoing orders"
-          data={ordersTimeline}
-          lines={[{ dataKey: "orders", name: "Orders", color: "#22c55e" }]}
-        />
-        <BarChartCard
-          title="Sales by warehouse"
-          subtitle="Order volume"
-          data={salesByWarehouse}
-          bars={[{ dataKey: "orders", name: "Orders", color: "#38bdf8" }]}
-        />
-        <PieChartCard title="Payment status" subtitle="Paid vs outstanding" data={paymentStatusData} />
-      </div>
-
-      {(outstandingSummary || collectionSummary) && (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {outstandingSummary && (
-            <StatCard
-              title="Total Outstanding"
-              value={formatCurrency(outstandingSummary.total_outstanding || 0)}
-              subtitle={`Recovery rate: ${outstandingSummary.recovery_rate || 0}%`}
-              accent="rose"
-            />
-          )}
-          {collectionSummary && (
-            <StatCard
-              title="Today's Collection"
-              value={formatCurrency(collectionSummary.grand_total || 0)}
-              subtitle={`${Object.keys(collectionSummary.by_mode || {}).length} payment modes`}
-              accent="emerald"
-            />
-          )}
-          {outstandingSummary && (
-            <StatCard
-              title="Recovery Rate"
-              value={`${outstandingSummary.recovery_rate || 0}%`}
-              subtitle={`Recovered: ${formatCurrency(outstandingSummary.total_recovered || 0)}`}
-              accent="amber"
-            />
-          )}
-        </div>
-      )}
-
-      {dailySales && dailySales.days?.length > 0 && (
-        <SectionCard title="Today's Sales" subtitle="Salesman-level performance">
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-y-1.5">
+        <Panel title="Recent sales days" aside={<ViewAll href="/app/finance?tab=daily-sales">Daily sales</ViewAll>}>
+          {salesDays.length ? (
+            <table className="w-full text-sm">
               <thead>
-                <tr>
-                  {["Salesman", "Dispatched", "Delivered", "Cancelled", "Amount"].map((h) => (
-                    <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{h}</th>
-                  ))}
+                <tr className="text-xs text-muted">
+                  <th className="pb-1.5 text-left font-normal">Day</th>
+                  <th className="pb-1.5 text-right font-normal">Orders</th>
+                  <th className="pb-1.5 text-right font-normal">Delivered</th>
+                  <th className="pb-1.5 text-right font-normal">Amount</th>
                 </tr>
               </thead>
               <tbody>
-                {(dailySales.days[0]?.by_salesman || []).slice(0, 7).map((sm) => (
-                  <tr key={sm.salesman_id} className="rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)]">
-                    <td className="px-3 py-2.5 text-sm font-medium text-slate-800">{sm.salesman_name}</td>
-                    <td className="px-3 py-2.5 text-sm text-slate-600">{sm.orders}</td>
-                    <td className="px-3 py-2.5 text-sm text-emerald-600 font-medium">{sm.delivered}</td>
-                    <td className="px-3 py-2.5 text-sm text-rose-600 font-medium">{sm.cancelled}</td>
-                    <td className="px-3 py-2.5 text-sm font-medium text-slate-900">{formatCurrency(sm.amount)}</td>
+                {salesDays.map((day) => (
+                  <tr key={day.date} className="border-t border-rule">
+                    <td className="py-2 text-ink">
+                      {dayjs(day.date).format("ddd D MMM")}
+                      {day.by_salesman?.[0]?.salesman_name ? (
+                        <span className="block text-xs text-muted">
+                          {day.by_salesman.map((sm) => sm.salesman_name).filter(Boolean).slice(0, 2).join(", ")}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{day.total_orders}</td>
+                    <td className="py-2 text-right tabular-nums">{day.delivered}</td>
+                    <td className="py-2 text-right tabular-nums text-ink">{formatCurrency(day.total_amount)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          <a href="/app/finance?tab=daily-sales" className="mt-3 inline-block text-xs text-slate-500 hover:text-slate-800 cursor-pointer">
-            View Full Daily Sales →
-          </a>
-        </SectionCard>
-      )}
-
-      <SectionCard title="Inventory value by warehouse" subtitle="Units on hand by location">
-        <div className="grid gap-4 md:grid-cols-2">
-          {inventoryByWarehouse.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-400">
-              No inventory records available.
-            </div>
           ) : (
-            inventoryByWarehouse.map((entry) => (
-              <div key={entry.warehouse_id || entry.warehouse_name} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-                <p className="text-xs uppercase tracking-widest text-slate-400">
-                  {entry.warehouse_name || `WH-${entry.warehouse_id}`}
-                </p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(entry.units)} units</p>
-              </div>
-            ))
+            <p className="text-sm text-muted">{dailySales ? "No sales recorded yet." : "\u00a0"}</p>
           )}
-        </div>
-      </SectionCard>
+        </Panel>
+
+        <Panel title="Stock" aside={<ViewAll href="/app/operations">View inventory</ViewAll>}>
+          <p className="text-[13px] text-muted">Value on hand, at landing price</p>
+          <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">
+            {stock ? (stock.inventory_value === null ? "—" : formatCurrency(stock.inventory_value)) : "–"}
+          </p>
+          {stock?.unpriced_skus ? (
+            <p className="text-xs text-muted">{stock.unpriced_skus} SKUs have no landing price and are not counted.</p>
+          ) : null}
+          <p className="mb-1.5 mt-4 text-xs text-muted">Fewest units left</p>
+          <ul className="space-y-1.5 text-sm">
+            {(stock?.lowest || []).map((row) => (
+              <li key={row.sku_id} className="flex items-baseline justify-between gap-3">
+                <span className="truncate text-ink" title={row.code || row.name}>{row.name}</span>
+                <span className={`shrink-0 tabular-nums ${row.units ? "text-ink" : "font-medium text-data"}`}>
+                  {row.units ? `${formatCount(row.units)} units` : "Out of stock"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
     </div>
   );
 }

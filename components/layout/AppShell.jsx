@@ -299,7 +299,7 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
 
   const rowClass = (active = false) =>
     cn(
-      "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
+      "flex h-10 items-center gap-3 rounded-md px-3 text-[15px] transition-colors",
       sidebarCollapsed && "lg:justify-center lg:gap-0 lg:px-0",
       active ? "bg-white/[0.1] font-medium text-white" : "text-white/65 hover:bg-white/[0.05] hover:text-white"
     );
@@ -325,7 +325,7 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
           <Link href="/app/dashboard" className="flex items-center gap-2.5" aria-label="Ascend workspace home">
             <AscendMark />
             <div className={cn("leading-tight", sidebarCollapsed && "lg:hidden")}>
-              <div className="text-sm font-semibold text-white">Ascend Foods</div>
+              <div className="text-[15px] font-semibold text-white">Ascend Foods</div>
               <div className="text-xs text-white/50">{roleLabel} workspace</div>
             </div>
           </Link>
@@ -352,7 +352,7 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
                   aria-current={isActive ? "page" : undefined}
                   className={rowClass(isActive)}
                 >
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center opacity-80">
+                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center opacity-80 [&>svg]:h-[18px] [&>svg]:w-[18px]">
                     <NavGlyph label={item.label} />
                   </span>
                   <span className={cn("truncate", sidebarCollapsed && "lg:hidden")}>{item.label}</span>
