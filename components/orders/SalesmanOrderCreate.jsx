@@ -369,10 +369,10 @@ export default function SalesmanOrderCreate() {
       </FieldSection>
 
       {/* Payment: the same two-column shape as brand / warehouse. Blank received = credit. */}
-      <FieldSection title="Payment">
-        <div className="grid grid-cols-2 gap-3">
+      <FieldSection title="Payment (optional)">
+        <div className={`grid gap-3 ${isCredit ? "grid-cols-1" : "grid-cols-2"}`}>
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold text-slate-500">Received</span>
+            <span className="text-xs font-semibold text-slate-500">Amount received</span>
             <span className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-slate-400">₹</span>
               <input
@@ -387,16 +387,15 @@ export default function SalesmanOrderCreate() {
               />
             </span>
           </label>
-          <FieldSelect
+          {!isCredit ? <FieldSelect
             label="Mode"
-            value={isCredit ? "CREDIT" : paymentMode}
+            value={paymentMode}
             onChange={setPaymentMode}
-            disabled={isCredit}
-            options={isCredit ? [["CREDIT", "Credit"]] : PAYMENT_MODES}
-          />
+            options={PAYMENT_MODES}
+          /> : null}
         </div>
         <p className="text-xs text-slate-500">
-          {isCredit ? "Nothing received, so this is a credit order." : "Leave Received blank for a credit order."}
+          {isCredit ? "Leave blank to book on credit. No payment is recorded." : "Clear Amount received to book on credit."}
         </p>
       </FieldSection>
 
