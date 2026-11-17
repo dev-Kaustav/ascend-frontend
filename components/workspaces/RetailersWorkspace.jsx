@@ -26,9 +26,17 @@ export default function RetailersWorkspace() {
   ];
 
   return (
-    <div className="space-y-4">
-      {role === "ADMIN" ? <div className="flex justify-end"><Link href="/app/imports" className="inline-flex min-h-11 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600">Import retailer data</Link></div> : null}
-      <WorkspaceTabs title="Retailers" subtitle="Retailer records, onboarding, coverage, outstanding balances, and collections in one workspace." tabs={tabs} />
-    </div>
+    <WorkspaceTabs
+      title="Retailers"
+      subtitle="Shops we supply: their details, beats, coverage, what they owe and what they have paid."
+      tabs={tabs}
+      actions={
+        role === "ADMIN" ? (
+          <Link href="/app/imports" className="inline-flex h-9 items-center rounded-md border border-control bg-white px-3 text-sm font-medium text-ink hover:bg-raised">
+            Import retailer data
+          </Link>
+        ) : null
+      }
+    />
   );
 }

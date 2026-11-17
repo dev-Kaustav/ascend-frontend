@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { apiEndpoints, apiFetch, apiFetchBlob } from "@/lib/api";
+import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ORDER_QUEUES, PAYMENT_LABEL, PAYMENT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/orderStatus";
 import useIsDesktop from "@/lib/hooks/useIsDesktop";
@@ -42,6 +42,8 @@ export default function OrdersQueue({ role }) {
   const [summary, setSummary] = useState(null);
   const [orders, setOrders] = useState([]);
   const [total, setTotal] = useState(0);
+  const [totalValue, setTotalValue] = useState(null);
+  const [salesmen, setSalesmen] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
@@ -54,8 +56,11 @@ export default function OrdersQueue({ role }) {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const requestId = useRef(0);
 
-  // The queue lives in the URL (?queue=), so a refresh or a shared link opens the same list.
+  // The queue and the salesman live in the URL (?queue=, ?salesman=), so a refresh or a shared link
+  // opens the same list: one salesman's orders, counts and value are their sales at a glance.
   const requestedQueue = searchParams.get("queue");
+  const salesmanId = searchParams.get("salesman") || "";
+  const salesmanName = salesmen.find((sm) => String(sm.id) === salesmanId)?.name;
   const queue = useMemo(() => {
     const byKey = ORDER_QUEUES.find((q) => q.key === requestedQueue);
     if (byKey) return byKey;
@@ -65,12 +70,14 @@ export default function OrdersQueue({ role }) {
     return ORDER_QUEUES.find((q) => q.key !== "all" && q.count(summary) > 0) || ORDER_QUEUES.at(-1);
   }, [requestedQueue, summary, setup.defaultQueue]);
 
-  function chooseQueue(key) {
+  function setParam(key, value) {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("queue", key);
+    if (value) params.set(key, value);
+    else params.delete(key);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     setPage(1);
   }
+  const chooseQueue = (key) => setParam("queue", key);
 
   // Search waits for a pause in typing; the field itself never unmounts while results load.
   useEffect(() => {
@@ -92,12 +99,14 @@ export default function OrdersQueue({ role }) {
     if (extra.channel !== "ALL") params.set("channel", extra.channel);
     if (extra.fromDate) params.set("from_date", extra.fromDate);
     if (extra.toDate) params.set("to_date", extra.toDate);
+    if (salesmanId) params.set("salesman_id", salesmanId);
     return params;
   }
 
   async function loadSummary() {
     try {
-      setSummary((await apiFetch(apiEndpoints.admin.orderStatusSummary)) || {});
+      const query = salesmanId ? `?salesman_id=${salesmanId}` : "";
+      setSummary((await apiFetch(`${apiEndpoints.admin.orderStatusSummary}${query}`)) || {});
     } catch (err) {
       setSummary({});
       setError(err?.message || "Couldn't load the order counts.");
@@ -116,6 +125,7 @@ export default function OrdersQueue({ role }) {
       if (id !== requestId.current) return; // a newer request has replaced this one
       setOrders(response?.items || []);
       setTotal(response?.total || 0);
+      setTotalValue(response?.total_value ?? null);
       setError("");
     } catch (err) {
       if (id === requestId.current) setError(err?.message || "Couldn't load orders.");
@@ -126,11 +136,23 @@ export default function OrdersQueue({ role }) {
 
   useEffect(() => {
     loadSummary();
-  }, []);
+  }, [salesmanId]);
 
   useEffect(() => {
     loadOrders();
-  }, [queue?.key, page, search, extra]);
+  }, [queue?.key, page, search, extra, salesmanId]);
+
+  useEffect(() => {
+    let active = true;
+    apiFetchCached(apiEndpoints.admin.lookups)
+      .then((lookups) => {
+        if (active) setSalesmen([...(lookups?.salesmen || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function refresh() {
     loadSummary();
@@ -268,6 +290,7 @@ export default function OrdersQueue({ role }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Orders</h1>
           <p className="mt-1 text-sm text-muted">
+            {salesmanName ? <span className="font-medium text-ink">{salesmanName}&rsquo;s orders. </span> : null}
             {summary === null
               ? "Counting orders…"
               : needsAction
@@ -331,6 +354,15 @@ export default function OrdersQueue({ role }) {
             size="sm"
             className="max-w-xs"
           />
+          {/* SelectBar is always w-full; the wrapper sets its width. */}
+          <div className="w-48">
+            <SelectBar size="sm" aria-label="Salesman" value={salesmanId} onChange={(event) => setParam("salesman", event.target.value)}>
+              <option value="">All salesmen</option>
+              {salesmen.map((sm) => (
+                <option key={sm.id} value={String(sm.id)}>{sm.name}</option>
+              ))}
+            </SelectBar>
+          </div>
           <button
             type="button"
             aria-expanded={showFilters}
@@ -341,6 +373,12 @@ export default function OrdersQueue({ role }) {
           </button>
           <span className="ml-auto text-sm tabular-nums text-muted">
             {loading ? "Loading…" : total ? `${firstRow}–${lastRow} of ${total}` : "0 orders"}
+            {!loading && totalValue !== null && total ? (
+              <span className="text-ink" title="Value of these orders, cancelled ones left out unless listed">
+                {" · "}
+                {formatCurrency(totalValue)}
+              </span>
+            ) : null}
           </span>
         </div>
 

@@ -378,7 +378,7 @@ export default function AdminCatalog() {
           columns={skuColumns}
           data={editor.withDraftRow(pageRows)}
           emptyLabel="No SKUs match."
-          tableClassName="w-max min-w-[1600px]"
+          tableClassName="min-w-[1600px]"
         />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>

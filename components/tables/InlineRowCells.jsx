@@ -126,9 +126,10 @@ export function AddRowButton({ label, onClick, disabled }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="cursor-pointer rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40"
+      // Desktop: the ledger's one near-black primary, sentence case. Phones keep the pill.
+      className="cursor-pointer rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition-colors hover:bg-slate-700 disabled:opacity-40 lg:h-9 lg:rounded-md lg:bg-accent lg:py-0 lg:text-sm lg:font-medium lg:normal-case lg:tracking-normal lg:hover:bg-accent-strong"
     >
-      {label}
+      {label.replace(/^\+\s*/, "")}
     </button>
   );
 }

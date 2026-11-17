@@ -178,7 +178,7 @@ export default function AdminBrands() {
           columns={columns}
           data={editor.withDraftRow(filteredBrands)}
           emptyLabel="No brands match."
-          tableClassName="w-max min-w-[900px]"
+          tableClassName="min-w-[900px]"
         />
       </SectionCard>
     </div>

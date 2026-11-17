@@ -8,6 +8,7 @@ import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import SearchSelect from "@/components/ui/SearchSelect";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
+import SkuCell from "@/components/ui/SkuCell";
 import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
 import { formatDate, formatDateTime } from "@/lib/format";
 
@@ -168,6 +169,9 @@ export default function StockLedgerPanel() {
     }
   };
 
+  // Photos come from the catalogue lookups this screen already loads; nothing here edits them.
+  const skuById = useMemo(() => new Map(lookups.skus.map((sku) => [sku.id, sku])), [lookups.skus]);
+
   const summaryColumns = useMemo(
     () => [
       {
@@ -175,10 +179,13 @@ export default function StockLedgerPanel() {
         accessorKey: "sku_name",
         meta: { mobilePrimary: true },
         cell: ({ row }) => (
-          <div>
-            <p className="font-semibold text-slate-800">{row.original.sku_name}</p>
-            <p className="text-xs text-slate-400">{[row.original.sku_code, row.original.brand_name].filter(Boolean).join(" · ")}</p>
-          </div>
+          <SkuCell
+            name={row.original.sku_name}
+            code={row.original.sku_code}
+            imageUrl={skuById.get(row.original.sku_id)?.image_url}
+            sub={row.original.brand_name}
+            size="sm"
+          />
         )
       },
       { header: "Warehouse", accessorKey: "warehouse_name" },
@@ -193,7 +200,7 @@ export default function StockLedgerPanel() {
         cell: ({ getValue }) => <span className="font-semibold text-slate-900">{qty(getValue())}</span>
       }
     ],
-    []
+    [skuById]
   );
 
   const movementColumns = useMemo(
@@ -203,10 +210,13 @@ export default function StockLedgerPanel() {
         accessorKey: "sku_name",
         meta: { mobilePrimary: true },
         cell: ({ row }) => (
-          <div>
-            <p className="font-semibold text-slate-800">{row.original.sku_name}</p>
-            <p className="text-xs text-slate-400">{row.original.warehouse_name}</p>
-          </div>
+          <SkuCell
+            name={row.original.sku_name}
+            code={skuById.get(row.original.sku_id)?.code}
+            imageUrl={skuById.get(row.original.sku_id)?.image_url}
+            sub={row.original.warehouse_name}
+            size="sm"
+          />
         )
       },
       { header: "Date", accessorKey: "created_at", cell: ({ getValue }) => formatDateTime(getValue()) },
@@ -251,7 +261,7 @@ export default function StockLedgerPanel() {
         cell: ({ getValue }) => <span className="font-semibold text-slate-900">{new Intl.NumberFormat("en-IN").format(getValue())}</span>
       }
     ],
-    []
+    [skuById]
   );
 
   const summaryPageCount = Math.max(1, Math.ceil(data.summary.length / PAGE_SIZE));

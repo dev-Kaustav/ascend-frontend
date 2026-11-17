@@ -8,7 +8,7 @@ function isTabAllowed(tab, role) {
   return !tab.roles?.length || tab.roles.includes(role);
 }
 
-export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
+export default function WorkspaceTabs({ title, subtitle, tabs = [], actions = null }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -46,9 +46,12 @@ export default function WorkspaceTabs({ title, subtitle, tabs = [] }) {
           Below lg the earlier card and pill tabs stay, for the field apps. */}
       <section className="field-workspace-heading max-lg:rounded-[1.75rem] max-lg:border max-lg:border-slate-200/70 max-lg:bg-white max-lg:px-7 max-lg:py-6 max-lg:shadow-[0_24px_60px_-44px_rgba(15,23,42,0.28)]">
         <div className="flex flex-col gap-5 lg:gap-4">
-          <div>
-            <h1 className="text-[2rem] font-bold tracking-[-0.03em] text-slate-900 lg:text-2xl lg:font-semibold lg:tracking-[-0.01em] lg:text-ink">{title}</h1>
-            <p className="mt-2 text-sm text-slate-600 lg:mt-1 lg:text-muted">{subtitle}</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-[2rem] font-bold tracking-[-0.03em] text-slate-900 lg:text-2xl lg:font-semibold lg:tracking-[-0.01em] lg:text-ink">{title}</h1>
+              <p className="mt-2 text-sm text-slate-600 lg:mt-1 lg:text-muted">{subtitle}</p>
+            </div>
+            {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
           </div>
           <div className="field-workspace-tabs flex flex-wrap gap-2.5 lg:gap-6 lg:border-b lg:border-line" role="tablist">
             {visibleTabs.map((tab) => {

@@ -28,7 +28,7 @@ const HOME_CONFIG = {
     primary: { label: "Manage orders", href: "/app/orders", icon: Package },
     shortcuts: [
       { label: "Inventory", detail: "Check and receive stock", href: "/app/operations?tab=inventory", icon: Package },
-      { label: "Drivers", detail: "Your delivery team", href: "/app/operations?tab=drivers", icon: Truck }
+      { label: "Outlets", detail: "Find shops and routes", href: "/app/outlet-finder", icon: MapPinned }
     ]
   }
 };

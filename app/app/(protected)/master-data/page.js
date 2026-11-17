@@ -6,19 +6,20 @@ import CatalogPanel from "@/components/workspaces/CatalogPanel";
 
 export default function MasterDataWorkspacePage() {
   const tabs = [
-    {
-      key: "brands",
-      label: "Brands",
-      description: "Brand records and primary contacts maintained from one workspace.",
-      roles: ["ADMIN"],
-      render: () => <BrandsPanel />
-    },
+    // Catalog first: it is what people open this page for, so it is the default tab.
     {
       key: "catalog",
       label: "Catalog",
       description: "SKU catalog, pricing fields, and product dimensions managed together.",
       roles: ["ADMIN"],
       render: () => <CatalogPanel />
+    },
+    {
+      key: "brands",
+      label: "Brands",
+      description: "Brand records and primary contacts maintained from one workspace.",
+      roles: ["ADMIN"],
+      render: () => <BrandsPanel />
     }
   ];
 

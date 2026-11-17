@@ -423,7 +423,7 @@ export default function RetailersPanel() {
                 setPage(1);
               }}
               aria-label="Rows per page"
-              className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+              className="cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500 lg:h-9 lg:rounded-md lg:border-control lg:py-0 lg:text-sm lg:font-normal lg:normal-case lg:tracking-normal lg:text-ink"
             >
               {[25, 50, 100].map((size) => (
                 <option key={size} value={size}>
@@ -487,7 +487,7 @@ export default function RetailersPanel() {
           data={editor.withDraftRow(pageRows)}
           emptyLabel="No retailers match."
           renderMobileRow={renderMobileRow}
-          tableClassName="w-max min-w-[1300px]"
+          tableClassName="min-w-[1300px]"
         />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>

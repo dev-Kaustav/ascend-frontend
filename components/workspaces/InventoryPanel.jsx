@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
-import { formatDate, formatNumber, formatSkuLabel } from "@/lib/format";
+import { formatCount, formatDate } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
-import BarChartCard from "@/components/charts/BarChartCard";
+import SkuCell from "@/components/ui/SkuCell";
 
 import { roleCanManageInventory } from "@/lib/workspaceRoutes";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -79,7 +79,7 @@ export default function WarehouseInventory() {
   const skuMap = useMemo(() => {
     const map = new Map();
     skus.forEach((sku) => {
-      map.set(sku.id, formatSkuLabel(sku));
+      map.set(sku.id, sku);
     });
     return map;
   }, [skus]);
@@ -102,23 +102,25 @@ export default function WarehouseInventory() {
   const inventoryRows = useMemo(() => {
     return inventory.map((item) => ({
       ...item,
-      sku_name: skuMap.get(item.sku_id),
+      sku: skuMap.get(item.sku_id),
+      sku_name: skuMap.get(item.sku_id)?.name || item.sku_name,
       warehouse_name: warehouseMap.get(item.warehouse_id),
       expiry_date: getExpiry(item),
       days_to_expiry: daysToExpiry(getExpiry(item))
     }));
   }, [inventory, skuMap, warehouseMap]);
 
+  // Units on hand per SKU across warehouses, most first.
   const bySku = useMemo(() => {
     const grouped = new Map();
     inventory.forEach((item) => {
-      const label = skuMap.get(item.sku_id) || item.sku_name || `SKU ${item.sku_id}`;
-      const current = grouped.get(label) || { label, quantity: 0 };
+      const current = grouped.get(item.sku_id) || { skuId: item.sku_id, sku: skuMap.get(item.sku_id), name: item.sku_name, quantity: 0 };
       current.quantity += item.total_quantity || 0;
-      grouped.set(label, current);
+      grouped.set(item.sku_id, current);
     });
-    return Array.from(grouped.values());
+    return Array.from(grouped.values()).sort((a, b) => b.quantity - a.quantity);
   }, [inventory, skuMap]);
+  const bySkuMax = Math.max(1, ...bySku.map((row) => row.quantity));
 
   const nearExpiry = useMemo(() => {
     return inventoryRows.filter((item) => item.days_to_expiry !== null && item.days_to_expiry < 30);
@@ -133,7 +135,7 @@ export default function WarehouseInventory() {
       {
         header: "SKU",
         accessorKey: "sku_id",
-        cell: ({ row }) => row.original.sku_name || `SKU ${row.original.sku_id}`
+        cell: ({ row }) => <SkuCell sku={row.original.sku} name={row.original.sku_name} />
       },
       {
         header: "Warehouse",
@@ -144,7 +146,7 @@ export default function WarehouseInventory() {
         header: "Total",
         accessorKey: "total_quantity",
         meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.total_quantity)
+        cell: ({ row }) => formatCount(row.original.total_quantity)
       },
       {
         // What the allocator would actually honour: physical stock less what is reserved
@@ -153,7 +155,7 @@ export default function WarehouseInventory() {
         header: "Available",
         accessorKey: "available_quantity",
         meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.available_quantity)
+        cell: ({ row }) => formatCount(row.original.available_quantity)
       },
       {
         header: "Expired",
@@ -163,7 +165,7 @@ export default function WarehouseInventory() {
           const expired = row.original.expired_quantity || 0;
           return (
             <span className={expired > 0 ? "font-semibold text-amber-700" : undefined}>
-              {formatNumber(expired)}
+              {formatCount(expired)}
             </span>
           );
         }
@@ -172,7 +174,7 @@ export default function WarehouseInventory() {
         header: "Reserved",
         accessorKey: "reserved_quantity",
         meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.reserved_quantity)
+        cell: ({ row }) => formatCount(row.original.reserved_quantity)
       },
       {
         header: "Earliest Expiry",
@@ -207,13 +209,28 @@ export default function WarehouseInventory() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-3">
-        <BarChartCard
-          title="Stock by SKU"
-          subtitle="Total quantity on hand"
-          data={bySku}
-          bars={[{ dataKey: "quantity", name: "Units", color: "#0ea5e9" }]}
-        />
+      {/* items-start: a short list keeps its own height instead of stretching into a blank card. */}
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <SectionCard title="Stock by SKU" subtitle="Units on hand, most first">
+          {bySku.length ? (
+            <ul className="space-y-3">
+              {bySku.slice(0, 8).map((row) => (
+                <li key={row.skuId}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <SkuCell sku={row.sku} name={row.name} size="sm" />
+                    <span className="shrink-0 tabular-nums text-ink">{formatCount(row.quantity)}</span>
+                  </div>
+                  <div className="ml-11 mt-1 h-0.5 rounded-full bg-raised">
+                    <div className="h-0.5 rounded-full bg-ink" style={{ width: `${(row.quantity / bySkuMax) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+              {bySku.length > 8 ? <li className="text-xs text-muted">{bySku.length - 8} more in the table below</li> : null}
+            </ul>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-400">No stock recorded.</div>
+          )}
+        </SectionCard>
         <SectionCard title="Near-expiry batches" subtitle="Less than 30 days to expiry">
           {nearExpiry.length ? (
             <div className="space-y-3">
@@ -222,10 +239,12 @@ export default function WarehouseInventory() {
                   key={`${item.sku_id}-${item.warehouse_id}`}
                   className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700"
                 >
-                  <p className="font-semibold">{item.sku_name || `SKU ${item.sku_id}`}</p>
-                  <p className="text-xs">
-                    {item.days_to_expiry} days • {item.warehouse_name || `WH ${item.warehouse_id}`}
-                  </p>
+                  <SkuCell
+                    sku={item.sku}
+                    name={item.sku_name}
+                    size="sm"
+                    sub={`${item.days_to_expiry} days left · ${item.warehouse_name || `WH ${item.warehouse_id}`}`}
+                  />
                 </div>
               ))}
             </div>
@@ -243,8 +262,7 @@ export default function WarehouseInventory() {
                   key={`${item.sku_id}-${item.warehouse_id}`}
                   className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"
                 >
-                  <p className="font-semibold">{item.sku_name || `SKU ${item.sku_id}`}</p>
-                  <p className="text-xs">{item.warehouse_name || `WH ${item.warehouse_id}`}</p>
+                  <SkuCell sku={item.sku} name={item.sku_name} size="sm" sub={item.warehouse_name || `WH ${item.warehouse_id}`} />
                 </div>
               ))}
             </div>
