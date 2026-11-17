@@ -217,7 +217,7 @@ export default function OrderDesk({ orderId, onClose, onOrderUpdate }) {
   const { order, drivers, loading, error, reload } = useOrderDetail(orderId, role);
   const [downloading, setDownloading] = useState(false);
   const total = order ? order.grand_total ?? order.total_amount : 0;
-  const paid = useMemo(() => (order?.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0), [order]);
+  const paid = order?.amount_paid ?? 0;
 
   function handleUpdate() {
     reload();

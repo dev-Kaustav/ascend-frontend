@@ -7,10 +7,13 @@ import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatCompactCurrency, formatCount, formatCurrency } from "@/lib/format";
 import { PAYMENT_LABEL } from "@/lib/orderStatus";
 import { PeriodColumns, ThinRing } from "@/components/charts/LedgerCharts";
+import PeriodSelect, { ALL_TIME, describePeriod, periodQuery } from "@/components/ui/PeriodSelect";
 
 // The admin's home. One question: "what needs doing today, and is money coming in?" The work
 // waiting on the office comes first, then the money (sales, collections, what shops owe), then the
-// day's sales and the stock. Every figure comes from the server; nothing here is a placeholder.
+// day's sales and the stock. Every figure comes from the server (app/services/metrics.py); this
+// screen adds nothing up. Sales, collected, orders and sales days follow the period; what shops
+// owe, the queues and stock are as of now.
 
 const WAITING = [
   { key: "PENDING", label: "To accept", queue: "to-accept", note: "Accept to reserve stock" },
@@ -34,12 +37,14 @@ const AGING = [
 
 const PAYMENT_COLORS = { PAID: "#2e7d32", PARTIAL: "#c08a2b", CREDIT: "#a3a3a3", UNPAID: "#d4d4d4" };
 
-function fetchDashboard() {
+function fetchDashboard(period) {
+  const query = periodQuery(period).toString();
+  const withPeriod = (url) => (query ? `${url}?${query}` : url);
   return Promise.allSettled([
-    apiFetch(apiEndpoints.admin.summary),
+    apiFetch(withPeriod(apiEndpoints.admin.summary)),
     apiFetch(apiEndpoints.admin.orderStatusSummary),
     apiFetch(apiEndpoints.admin.outstandingSummary),
-    apiFetch(apiEndpoints.admin.dailySales),
+    apiFetch(withPeriod(apiEndpoints.admin.dailySales)),
   ]);
 }
 
@@ -63,10 +68,11 @@ function ViewAll({ href, children }) {
   );
 }
 
-// "+12% vs 1–17 Oct". Higher is better for all three money figures, so a fall is the bad colour.
+// "+12% vs ₹40,000 in the 30 days before". Higher is better for all three money figures, so a
+// fall is the bad colour.
 function Change({ now, before, format, period }) {
   if (!before) {
-    return <span className="text-muted">{now ? `${format(now)} new against ${period}` : `Nothing yet, nor in ${period}`}</span>;
+    return <span className="text-muted">{now ? `Nothing in ${period}` : `Nothing, nor in ${period}`}</span>;
   }
   const pct = ((now - before) / before) * 100;
   const tone = pct > 0.5 ? "text-[#247b50]" : pct < -0.5 ? "text-[#c4242a]" : "text-muted";
@@ -85,6 +91,7 @@ export default function AdminDashboard() {
   const [dailySales, setDailySales] = useState(null);
   const [error, setError] = useState("");
   const [moneyTab, setMoneyTab] = useState("sales");
+  const [period, setPeriod] = useState(ALL_TIME);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [refreshing, setRefreshing] = useState(true);
 
@@ -99,14 +106,20 @@ export default function AdminDashboard() {
     setRefreshing(false);
   }
 
-  function refresh() {
+  function load(nextPeriod) {
     setRefreshing(true);
-    fetchDashboard().then(apply);
+    fetchDashboard(nextPeriod).then(apply);
+  }
+
+  function changePeriod(nextPeriod) {
+    setPeriod(nextPeriod);
+    // A custom range waits until both ends are set.
+    if (nextPeriod.key !== "custom" || (nextPeriod.from && nextPeriod.to)) load(nextPeriod);
   }
 
   useEffect(() => {
     let active = true;
-    fetchDashboard().then((results) => {
+    fetchDashboard(ALL_TIME).then((results) => {
       if (active) apply(results);
     });
     return () => {
@@ -116,11 +129,11 @@ export default function AdminDashboard() {
 
   const money = summary?.money;
   const tab = MONEY_TABS.find((t) => t.key === moneyTab);
-  const today = money ? dayjs(money.today) : dayjs();
-  const thisPeriod = `1–${today.date()} ${today.format("MMM")}`;
-  const lastPeriodEnd = Math.min(today.date(), today.subtract(1, "month").daysInMonth());
-  const lastPeriod = `1–${lastPeriodEnd} ${today.subtract(1, "month").format("MMM")}`;
-  const weeks = (money?.weeks || []).map((w) => ({ ...w, label: dayjs(w.week_start).format("D MMM") }));
+  const periodLabel = describePeriod(period);
+  const span = money ? dayjs(money.to).diff(dayjs(money.from), "day") + 1 : 0;
+  const previousLabel = `the ${span} ${span === 1 ? "day" : "days"} before`;
+  const perMonth = money?.bucket === "month";
+  const buckets = (money?.buckets || []).map((b) => ({ ...b, label: dayjs(b.start).format(perMonth ? "MMM YYYY" : "D MMM") }));
 
   const owedShops = owed?.by_retailer?.filter((r) => r.pending > 0) || [];
   const agingMax = Math.max(1, ...AGING.map((a) => owed?.aging?.[a.key] || 0));
@@ -129,14 +142,14 @@ export default function AdminDashboard() {
   const paymentParts = ["PAID", "PARTIAL", "CREDIT", "UNPAID"]
     .filter((key) => paymentCounts[key])
     .map((key) => ({ key, label: PAYMENT_LABEL[key], value: paymentCounts[key], color: PAYMENT_COLORS[key] }));
-  const paymentTotal = paymentParts.reduce((sum, p) => sum + p.value, 0);
+  const paymentTotal = summary?.orders?.total || 0;
 
   const salesDays = (dailySales?.days || []).slice(0, 4);
   const stock = summary?.inventory;
 
   const waitingCount = (queues?.PENDING || 0) + (queues?.READY_TO_SHIP || 0);
   const finding = owed
-    ? `${formatCurrency(owed.total_outstanding || 0)} owed by ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}${
+    ? `${formatCurrency(owed.total_outstanding || 0)} outstanding across ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}${
         waitingCount ? `; ${waitingCount} ${waitingCount === 1 ? "order is" : "orders are"} waiting on the office.` : "."
       }`
     : "Loading today's figures…";
@@ -148,11 +161,12 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Dashboard</h1>
           <p className="mt-1 text-sm text-muted">{finding}</p>
         </div>
-        <div className="flex items-center gap-3 text-sm text-muted">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
           {updatedAt ? <span>Updated {updatedAt.format("HH:mm")}</span> : null}
+          <PeriodSelect value={period} onChange={changePeriod} />
           <button
             type="button"
-            onClick={refresh}
+            onClick={() => load(period)}
             disabled={refreshing}
             className="h-9 rounded-md border border-control bg-white px-3 font-medium text-ink hover:bg-raised disabled:opacity-60"
           >
@@ -186,13 +200,13 @@ export default function AdminDashboard() {
       </nav>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Money coming in: the month so far as tabs over twelve weeks of the same figure. */}
+        {/* Money coming in: the period's totals as tabs over the same figure per week or month. */}
         <section className="rounded-lg border border-line bg-white lg:col-span-2">
           <div role="tablist" aria-label="Money" className="grid grid-cols-3 border-b border-line">
             {MONEY_TABS.map((t) => {
               const selected = t.key === moneyTab;
-              const now = money?.month_to_date?.[t.key] || 0;
-              const before = money?.previous_month_to_date?.[t.key] || 0;
+              const now = money?.totals?.[t.key] || 0;
+              const before = money?.previous?.[t.key] || 0;
               return (
                 <button
                   key={t.key}
@@ -202,12 +216,12 @@ export default function AdminDashboard() {
                   onClick={() => setMoneyTab(t.key)}
                   className={`-mb-px border-b-2 px-5 py-4 text-left transition-colors ${selected ? "border-ink" : "border-transparent hover:bg-surface-soft"}`}
                 >
-                  <span className={`block text-[13px] ${selected ? "text-ink" : "text-muted"}`}>{t.label}, {thisPeriod}</span>
+                  <span className={`block text-[13px] ${selected ? "text-ink" : "text-muted"}`}>{t.label}, {periodLabel.toLowerCase()}</span>
                   <span className={`mt-0.5 block text-2xl tabular-nums text-ink ${selected ? "font-bold" : "font-normal"}`}>
                     {money ? t.format(now) : "–"}
                   </span>
                   <span className="mt-0.5 block text-xs">
-                    {money ? <Change now={now} before={before} format={t.format} period={lastPeriod} /> : " "}
+                    {money?.previous ? <Change now={now} before={before} format={t.format} period={previousLabel} /> : " "}
                   </span>
                 </button>
               );
@@ -215,16 +229,16 @@ export default function AdminDashboard() {
           </div>
           <div className="px-5 pb-4 pt-3">
             <div className="mb-1 flex items-baseline justify-between gap-3 text-xs text-muted">
-              <span>{tab.note}, per week, last 12 weeks</span>
-              <span>This week in maroon</span>
+              <span>{tab.note}, per {perMonth ? "month" : "week"}</span>
+              <span>Latest {perMonth ? "month" : "week"} in maroon</span>
             </div>
             {money ? (
               <PeriodColumns
-                data={weeks}
+                data={buckets}
                 dataKey={moneyTab}
                 format={tab.format}
                 axisFormat={tab.axis}
-                labelFormat={(label) => `Week of ${label}`}
+                labelFormat={(label) => (perMonth ? label : `Week of ${label}`)}
               />
             ) : (
               <div className="h-[220px]" />
@@ -232,10 +246,10 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <Panel title="Owed by shops" aside={<ViewAll href="/app/retailers?tab=outstanding">View all</ViewAll>}>
+        <Panel title="Total outstanding" aside={<ViewAll href="/app/retailers?tab=outstanding">View all</ViewAll>}>
           <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">{owed ? formatCurrency(owed.total_outstanding || 0) : "–"}</p>
           <p className="text-xs text-muted">
-            {owed ? `${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}, delivered orders not fully paid` : " "}
+            {owed ? `As of today · ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}, delivered orders not fully paid` : " "}
           </p>
           <ul className="mt-4 space-y-2.5">
             {AGING.map((a) => {
@@ -275,7 +289,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Panel title="Orders by payment" aside={<span className="text-xs text-muted">All time</span>}>
+        <Panel title="Orders by payment" aside={<span className="text-xs text-muted">{periodLabel}</span>}>
           <div className="flex items-center gap-5">
             <ThinRing parts={paymentParts} />
             <table className="w-full text-sm">

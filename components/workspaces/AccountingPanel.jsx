@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
+import Link from "next/link";
+import { apiEndpoints, apiFetch } from "@/lib/api";
 import DateRangeFilter from "@/components/ui/DateRangeFilter";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
@@ -11,42 +12,14 @@ import LineChartCard from "@/components/charts/LineChartCard";
 import BarChartCard from "@/components/charts/BarChartCard";
 import InvoiceCell from "@/components/ui/InvoiceCell";
 
-function getOrderTotal(order) {
-  if (!order) return 0;
-  if (typeof order.total_amount === "number") return order.total_amount;
-  if (order.total_amount !== undefined && order.total_amount !== null) {
-    const parsed = Number(order.total_amount);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  if (!order?.items?.length) return 0;
-  const total = order.items.reduce((sum, item) => {
-    const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
-    return sum + base;
-  }, 0);
-  return Math.round((total + Number.EPSILON) * 100) / 100;
-}
+// Every figure here comes from the server (app/services/metrics.py): what shops owe is the same
+// number the dashboard and Retailers › Outstanding show; this screen adds nothing up.
 
-function getPaymentDate(payment) {
-  return payment?.created_at || payment?.payment_date || payment?.date || null;
-}
-
-function getCreditNoteAmount(note) {
-  if (!note) return 0;
-  if (typeof note.amount === "number") return note.amount;
-  if (note.amount !== undefined && note.amount !== null) {
-    const parsed = Number(note.amount);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  if (!note.items?.length) return 0;
-  const total = note.items.reduce((sum, item) => sum + (item.quantity || 0) * (item.unit_price || 0), 0);
-  return Math.round((total + Number.EPSILON) * 100) / 100;
-}
-
-export default function AdminAccounting() {
-  const [orders, setOrders] = useState([]);
+export default function AdminAccounting({ warehouseId }) {
+  const [owed, setOwed] = useState(null);
+  const [cancelled, setCancelled] = useState(null);
   const [payments, setPayments] = useState([]);
   const [credits, setCredits] = useState([]);
-  const [retailers, setRetailers] = useState([]);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [paymentsTotalAmount, setPaymentsTotalAmount] = useState(null);
   const [paymentsDailyTotals, setPaymentsDailyTotals] = useState([]);
@@ -67,29 +40,18 @@ export default function AdminAccounting() {
 
   useEffect(() => {
     let active = true;
-    async function loadOrders() {
+    async function loadOwed() {
       setLoading(true);
       try {
-        const lookupsPromise = apiFetchCached(apiEndpoints.admin.lookups);
-        const limit = 200;
-        let offset = 0;
-        let combined = [];
-        let total = null;
-        // Fetch in pages to respect backend limit (<=200)
-        // Stop early if we read all or hit a short page.
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const resp = await apiFetch(`${apiEndpoints.admin.orders}?limit=${limit}&offset=${offset}`);
-          const items = resp?.items || [];
-          combined = combined.concat(items);
-          total = resp?.total ?? combined.length;
-          offset += limit;
-          if (!resp?.total || combined.length >= total || items.length < limit) break;
-        }
-        const lookupsResponse = await lookupsPromise;
+        const params = new URLSearchParams();
+        if (warehouseId) params.set("warehouse_id", String(warehouseId));
+        const [summary, onCancelled] = await Promise.all([
+          apiFetch(`${apiEndpoints.admin.outstandingSummary}?${params.toString()}`),
+          apiFetch(apiEndpoints.admin.cancelledMoney)
+        ]);
         if (!active) return;
-        setOrders(combined);
-        setRetailers(lookupsResponse?.retailers || []);
+        setOwed(summary);
+        setCancelled(onCancelled);
         setError("");
       } catch (err) {
         if (!active) return;
@@ -98,11 +60,11 @@ export default function AdminAccounting() {
         if (active) setLoading(false);
       }
     }
-    loadOrders();
+    loadOwed();
     return () => {
       active = false;
     };
-  }, []);
+  }, [warehouseId]);
 
   useEffect(() => {
     let active = true;
@@ -165,80 +127,19 @@ export default function AdminAccounting() {
     };
   }, [creditsPage, creditsPageSize, creditsDateRange]);
 
-  const totals = useMemo(() => {
-    const receivables = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
-    const collected =
-      paymentsTotalAmount !== null
-        ? paymentsTotalAmount
-        : payments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const creditsTotal =
-      creditsTotalAmount !== null
-        ? creditsTotalAmount
-        : credits.reduce((sum, note) => sum + getCreditNoteAmount(note), 0);
-
-    return { receivables, collected, creditsTotal };
-  }, [orders, payments, credits, paymentsTotalAmount, creditsTotalAmount]);
-
-  const retailerMap = useMemo(() => {
-    const map = new Map();
-    retailers.forEach((retailer) => {
-      map.set(retailer.id, retailer.name);
-    });
-    return map;
-  }, [retailers]);
-
-  const orderMap = useMemo(() => {
-    const map = new Map();
-    orders.forEach((order) => {
-      map.set(order.id, order);
-    });
-    return map;
-  }, [orders]);
-
-  const paymentRows = useMemo(() => {
-    return payments.map((payment) => {
-      const order = orderMap.get(payment.order_id);
-      const retailerId = order?.to_entity_id;
-      return {
-        ...payment,
-        retailer_id: retailerId,
-        retailer_name: retailerMap.get(retailerId)
-      };
-    });
-  }, [orderMap, payments, retailerMap]);
-
-  const paymentsOverTime = useMemo(() => {
-    if (paymentsDailyTotals.length) {
-      return paymentsDailyTotals.map((entry) => ({
+  const paymentsOverTime = useMemo(
+    () =>
+      paymentsDailyTotals.map((entry) => ({
         label: new Date(entry.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
         amount: entry.amount || 0
-      }));
-    }
-    const grouped = new Map();
-    payments.forEach((payment) => {
-      const date = getPaymentDate(payment);
-      if (!date) return;
-      const label = new Date(date).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
-      const current = grouped.get(label) || { label, amount: 0 };
-      current.amount += payment.amount || 0;
-      grouped.set(label, current);
-    });
-    return Array.from(grouped.values());
-  }, [payments, paymentsDailyTotals]);
+      })),
+    [paymentsDailyTotals]
+  );
 
-  const outstandingByRetailer = useMemo(() => {
-    const grouped = new Map();
-    orders.forEach((order) => {
-      const status = String(order.payment_status || "CREDIT").toUpperCase();
-      if (status === "PAID") return;
-      const retailer = retailerMap.get(order.to_entity_id) || order.to_entity_name || order.to_entity_id || "Retailer";
-      const label = typeof retailer === "string" ? retailer : `Retailer ${retailer}`;
-      const current = grouped.get(label) || { label, amount: 0 };
-      current.amount += getOrderTotal(order);
-      grouped.set(label, current);
-    });
-    return Array.from(grouped.values());
-  }, [orders, retailerMap]);
+  const outstandingByRetailer = useMemo(
+    () => (owed?.by_retailer || []).map((row) => ({ label: row.retailer_name, amount: row.pending })),
+    [owed]
+  );
 
   const paymentColumns = useMemo(
     () => [
@@ -265,7 +166,7 @@ export default function AdminAccounting() {
       {
         header: "Date",
         accessorKey: "created_at",
-        cell: ({ row }) => formatDate(getPaymentDate(row.original))
+        cell: ({ row }) => formatDate(row.original.collection_date || row.original.created_at)
       }
     ],
     []
@@ -291,7 +192,7 @@ export default function AdminAccounting() {
       {
         header: "Amount",
         accessorKey: "amount",
-        cell: ({ row }) => formatCurrency(getCreditNoteAmount(row.original))
+        cell: ({ row }) => formatCurrency(row.original.amount)
       },
       {
         header: "Reason",
@@ -327,24 +228,36 @@ export default function AdminAccounting() {
     <div className="space-y-6">
       <div className="grid gap-4 lg:grid-cols-3">
         <StatCard
-          title="Total Receivables"
-          value={formatCurrency(totals.receivables)}
-          subtitle="From outgoing orders"
+          title="Total outstanding"
+          value={formatCurrency(owed?.total_outstanding || 0)}
+          subtitle="As of today, delivered orders not fully paid"
           accent="sky"
         />
         <StatCard
           title="Total Collected"
-          value={formatCurrency(totals.collected)}
+          value={formatCurrency(paymentsTotalAmount || 0)}
           subtitle={`${formatNumber(paymentsTotal)} payments logged`}
           accent="emerald"
         />
         <StatCard
           title="Total Credits Issued"
-          value={formatCurrency(totals.creditsTotal)}
+          value={formatCurrency(creditsTotalAmount || 0)}
           subtitle={`${formatNumber(creditsTotal)} credit notes`}
           accent="amber"
         />
       </div>
+
+      {cancelled?.payments_total ? (
+        <p className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 text-sm text-[#92400e]">
+          {formatCurrency(cancelled.payments_total)} recorded on {cancelled.orders} cancelled{" "}
+          {cancelled.orders === 1 ? "order" : "orders"}
+          {cancelled.invoices ? `, and ${cancelled.invoices} ${cancelled.invoices === 1 ? "invoice" : "invoices"} issued on them` : ""}.
+          It counts in no total. Refund it or move it to the right order.{" "}
+          <Link href="/app/orders?queue=all&status=CANCELLED" className="font-medium underline">
+            Review cancelled orders
+          </Link>
+        </p>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <LineChartCard
@@ -396,7 +309,7 @@ export default function AdminAccounting() {
           <>
             <DataTable
               columns={paymentColumns}
-              data={paymentRows}
+              data={payments}
               emptyLabel={paymentsLoading ? "Loading payments..." : "No payments available."}
             />
             <div className="mt-4 flex items-center justify-between text-xs text-slate-500">

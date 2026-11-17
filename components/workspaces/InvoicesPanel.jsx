@@ -14,21 +14,6 @@ function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
 }
 
-function getOrderTotal(order) {
-  if (!order) return 0;
-  if (typeof order.total_amount === "number") return order.total_amount;
-  if (order.total_amount !== undefined && order.total_amount !== null) {
-    const parsed = Number(order.total_amount);
-    if (!Number.isNaN(parsed)) return parsed;
-  }
-  if (!order?.items?.length) return 0;
-  const total = order.items.reduce((sum, item) => {
-    const base = (item.quantity || 0) * (item.unit_price || 0) - (item.discount_amount || 0);
-    return sum + base;
-  }, 0);
-  return Math.round((total + Number.EPSILON) * 100) / 100;
-}
-
 export default function AdminInvoices() {
   const [orders, setOrders] = useState([]);
   const [retailers, setRetailers] = useState([]);
@@ -38,6 +23,9 @@ export default function AdminInvoices() {
     paymentStatus: "ALL"
   });
   const [total, setTotal] = useState(0);
+  // Counted by the server for the filtered list (app/services/metrics.py), not from this page.
+  const [billed, setBilled] = useState(0);
+  const [paidCount, setPaidCount] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [lookupsLoaded, setLookupsLoaded] = useState(false);
@@ -71,14 +59,23 @@ export default function AdminInvoices() {
         if (filters.status !== "ALL") params.set("status", filters.status);
         if (filters.paymentStatus !== "ALL") params.set("payment_status", filters.paymentStatus);
 
+        const paidParams = new URLSearchParams(params);
+        paidParams.set("limit", "1");
+        paidParams.set("offset", "0");
+        paidParams.set("payment_status", "PAID");
         const lookupsPromise = lookupsLoaded ? Promise.resolve(null) : apiFetchCached(apiEndpoints.admin.lookups);
-        const [ordersResponse, lookupsResponse] = await Promise.all([
+        const [ordersResponse, paidResponse, lookupsResponse] = await Promise.all([
           apiFetch(`${apiEndpoints.admin.orders}?${params.toString()}`),
+          filters.paymentStatus === "ALL" || filters.paymentStatus === "PAID"
+            ? apiFetch(`${apiEndpoints.admin.orders}?${paidParams.toString()}`)
+            : Promise.resolve({ total: 0 }),
           lookupsPromise
         ]);
         if (!active) return;
         setOrders(ordersResponse?.items || []);
         setTotal(ordersResponse?.total || 0);
+        setBilled(ordersResponse?.total_value || 0);
+        setPaidCount(paidResponse?.total || 0);
         if (lookupsResponse) {
           setRetailers(lookupsResponse?.retailers || []);
           setLookupsLoaded(true);
@@ -104,15 +101,6 @@ export default function AdminInvoices() {
     });
     return map;
   }, [retailers]);
-
-  const totals = useMemo(() => {
-    const totalInvoices = total;
-    const totalBilled = orders.reduce((sum, order) => sum + getOrderTotal(order), 0);
-    const paidInvoices = orders.filter(
-      (order) => String(order.payment_status || "CREDIT").toUpperCase() === "PAID"
-    ).length;
-    return { totalInvoices, totalBilled, paidInvoices };
-  }, [orders, total]);
 
   const columns = useMemo(
     () => [
@@ -153,7 +141,7 @@ export default function AdminInvoices() {
       {
         header: "Amount",
         accessorKey: "amount",
-        cell: ({ row }) => formatCurrency(getOrderTotal(row.original))
+        cell: ({ row }) => formatCurrency(row.original.total_amount)
       },
       {
         header: "Date",
@@ -222,19 +210,19 @@ export default function AdminInvoices() {
       <div className="grid gap-4 lg:grid-cols-3">
         <StatCard
           title="Invoices"
-          value={formatNumber(totals.totalInvoices)}
+          value={formatNumber(total)}
           subtitle="Issued invoices"
           accent="sky"
         />
         <StatCard
           title="Total Billed"
-          value={formatCurrency(totals.totalBilled)}
+          value={formatCurrency(billed)}
           subtitle="Invoice value"
           accent="emerald"
         />
         <StatCard
           title="Paid Invoices"
-          value={formatNumber(totals.paidInvoices)}
+          value={formatNumber(paidCount)}
           subtitle="Fully paid"
           accent="amber"
         />

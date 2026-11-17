@@ -49,8 +49,9 @@ export default function OrdersQueue({ role }) {
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [extra, setExtra] = useState({ channel: "ALL", paymentStatus: "ALL", status: "ALL", fromDate: "", toDate: "" });
+  // ?status= opens the All list on one status, e.g. the cancelled orders Finance asks to review.
+  const [extra, setExtra] = useState(() => ({ channel: "ALL", paymentStatus: "ALL", status: searchParams.get("status") || "ALL", fromDate: "", toDate: "" }));
+  const [showFilters, setShowFilters] = useState(() => Boolean(searchParams.get("status")));
   const [exporting, setExporting] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
