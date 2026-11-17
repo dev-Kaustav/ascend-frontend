@@ -19,21 +19,15 @@ const WAITING = [
   { key: "PENDING", label: "To accept", queue: "to-accept", note: "Accept to reserve stock" },
   { key: "READY_TO_SHIP", label: "Needs a rider", queue: "needs-rider", note: "Accepted, no rider yet" },
   { key: "OUT_FOR_DELIVERY", label: "Out for delivery", queue: "on-the-road", note: "With a rider now" },
-  { key: "PAYMENT_DUE", label: "Payment due", queue: "payment-due", note: "Delivered, not fully paid" },
+  { key: "PAYMENT_DUE", label: "Payment due", queue: "payment-due", note: "Orders with a balance" },
 ];
 
 const MONEY_TABS = [
-  { key: "sales", label: "Sales", format: formatCurrency, axis: formatCompactCurrency, note: "Invoiced value, by invoice date" },
+  { key: "sales", label: "Invoiced sales", format: formatCurrency, axis: formatCompactCurrency, note: "Invoiced value, by invoice date" },
   { key: "collected", label: "Collected", format: formatCurrency, axis: formatCompactCurrency, note: "Payments received, by collection date" },
   { key: "orders", label: "Orders", format: formatCount, axis: formatCount, note: "Orders placed, cancelled ones left out" },
 ];
 
-const AGING = [
-  { key: "0_7", label: "Up to 7 days" },
-  { key: "7_15", label: "8 to 15 days" },
-  { key: "15_30", label: "16 to 30 days" },
-  { key: "30_plus", label: "Over 30 days", risk: true },
-];
 
 const PAYMENT_COLORS = { PAID: "#2e7d32", PARTIAL: "#c08a2b", CREDIT: "#a3a3a3", UNPAID: "#d4d4d4" };
 
@@ -94,6 +88,7 @@ export default function AdminDashboard() {
   const [period, setPeriod] = useState(ALL_TIME);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [refreshing, setRefreshing] = useState(true);
+  const [showCalculation, setShowCalculation] = useState(false);
 
   function apply([s, q, o, d]) {
     if (s.status === "fulfilled") setSummary(s.value);
@@ -136,7 +131,6 @@ export default function AdminDashboard() {
   const buckets = (money?.buckets || []).map((b) => ({ ...b, label: dayjs(b.start).format(perMonth ? "MMM YYYY" : "D MMM") }));
 
   const owedShops = owed?.by_retailer?.filter((r) => r.pending > 0) || [];
-  const agingMax = Math.max(1, ...AGING.map((a) => owed?.aging?.[a.key] || 0));
 
   const paymentCounts = summary?.orders?.payment_status || {};
   const paymentParts = ["PAID", "PARTIAL", "CREDIT", "UNPAID"]
@@ -147,19 +141,13 @@ export default function AdminDashboard() {
   const salesDays = (dailySales?.days || []).slice(0, 4);
   const stock = summary?.inventory;
 
-  const waitingCount = (queues?.PENDING || 0) + (queues?.READY_TO_SHIP || 0);
-  const finding = owed
-    ? `${formatCurrency(owed.total_outstanding || 0)} outstanding across ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}${
-        waitingCount ? `; ${waitingCount} ${waitingCount === 1 ? "order is" : "orders are"} waiting on the office.` : "."
-      }`
-    : "Loading today's figures…";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 [&_.text-sm]:text-[14px] [&_.text-xs]:text-[12px]">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted">{finding}</p>
+
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
           {updatedAt ? <span>Updated {updatedAt.format("HH:mm")}</span> : null}
@@ -177,32 +165,48 @@ export default function AdminDashboard() {
 
       {error ? <p className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 text-sm text-[#92400e]">{error}</p> : null}
 
-      {/* Waiting on the office: each cell opens that queue on the orders screen. */}
-      <nav aria-label="Orders waiting" className="grid grid-cols-2 divide-line rounded-lg border border-line bg-white lg:grid-cols-4 lg:divide-x">
+      <nav aria-label="Orders waiting" className="flex flex-wrap gap-2">
         {WAITING.map((item) => {
           const count = queues ? queues[item.key] || 0 : null;
+          const attention = item.key === "PENDING" || item.key === "READY_TO_SHIP";
           return (
-            <Link
-              key={item.key}
-              href={`/app/orders?queue=${item.queue}`}
-              className="group px-5 py-4 transition-colors first:rounded-l-lg last:rounded-r-lg hover:bg-surface-soft"
-            >
-              <span className="block text-[13px] text-muted group-hover:text-ink">{item.label}</span>
-              <span className={`mt-0.5 block text-2xl font-semibold tabular-nums ${count ? "text-ink" : "text-muted"}`}>
-                {count === null ? "–" : count}
-              </span>
-              <span className="block text-xs text-muted">
-                {item.key === "PAYMENT_DUE" && owed ? `${formatCurrency(owed.total_outstanding || 0)} to collect` : item.note}
-              </span>
+            <Link key={item.key} href={`/app/orders?queue=${item.queue}`} className={`inline-flex min-h-[44px] items-center gap-3 rounded-md border px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${attention && count ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100" : "border-control bg-white text-ink hover:border-ink hover:bg-raised"}`}>
+              {item.label}<span className="tabular-nums">{count === null ? "…" : count}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <section aria-label="Outstanding balances" className="rounded-lg border border-line bg-white">
+        <div className="flex flex-col divide-line sm:flex-row sm:flex-wrap sm:divide-x">
+          <div className="flex-1 p-5 sm:min-w-[180px]">
+            <h2 className="text-sm font-medium text-muted">Total outstanding</h2>
+            <p className="mt-2 text-[30px] font-semibold leading-tight tabular-nums text-ink">{owed ? formatCurrency(owed.total_outstanding) : "…"}</p>
+            <p className="mt-2 text-xs text-muted">As of today · {owedShops.length} shops</p>
+          </div>
+          {(owed?.breakdown || [{ key: "dispatched", label: "Delivered / out for delivery" }, { key: "pending", label: "Pending orders" }]).map((part) => (
+            <div key={part.key} className="flex-1 border-t p-5 sm:min-w-[180px] sm:border-t-0">
+              <h3 className="text-sm font-medium text-muted">{part.label}</h3>
+              <p className="mt-2 text-[24px] font-semibold leading-tight tabular-nums text-ink">{owed ? formatCurrency(part.amount) : "…"}</p>
+              <p className="mt-2 text-xs text-muted">{part.orders === undefined ? "…" : `${part.orders} orders with a balance`}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-3">
+          <button type="button" aria-expanded={showCalculation} onClick={() => setShowCalculation((open) => !open)} className="text-sm font-medium text-ink underline decoration-control underline-offset-4 hover:decoration-ink">{showCalculation ? "Hide calculation" : "How it’s calculated"}</button>
+          <ViewAll href="/app/retailers?tab=outstanding">View outstanding orders →</ViewAll>
+        </div>
+        {showCalculation && owed?.reconciliation ? (
+          <dl className="space-y-2 border-t border-line bg-surface-soft px-5 py-4 text-sm">
+            {[["Order value · all time", owed.reconciliation.order_value], ["Collected against these orders", owed.reconciliation.collected], ...(owed.reconciliation.credits > 0 ? [["Credits applied", owed.reconciliation.credits]] : []), ...(owed.reconciliation.excess_payments > 0 ? [["Excess payments on settled orders", owed.reconciliation.excess_payments]] : [])].map(([label, amount]) => <div key={label} className="flex items-baseline justify-between gap-4"><dt className="text-muted">{label}</dt><dd className="tabular-nums text-ink">{formatCurrency(amount)}</dd></div>)}
+          </dl>
+        ) : null}
+      </section>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Money coming in: the period's totals as tabs over the same figure per week or month. */}
-        <section className="rounded-lg border border-line bg-white lg:col-span-2">
-          <div role="tablist" aria-label="Money" className="grid grid-cols-3 border-b border-line">
+        <section className="min-w-0 rounded-lg border border-line bg-white lg:col-span-2">
+          <div role="tablist" aria-label="Money" className="grid grid-cols-1 border-b border-line sm:grid-cols-3">
             {MONEY_TABS.map((t) => {
               const selected = t.key === moneyTab;
               const now = money?.totals?.[t.key] || 0;
@@ -214,15 +218,13 @@ export default function AdminDashboard() {
                   role="tab"
                   aria-selected={selected}
                   onClick={() => setMoneyTab(t.key)}
-                  className={`-mb-px border-b-2 px-5 py-4 text-left transition-colors ${selected ? "border-ink" : "border-transparent hover:bg-surface-soft"}`}
+                  className={`-mb-px border-b-2 px-5 py-4 text-left transition-colors max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:items-center max-sm:gap-x-3 ${selected ? "border-ink" : "border-transparent hover:bg-surface-soft"}`}
                 >
                   <span className={`block text-[13px] ${selected ? "text-ink" : "text-muted"}`}>{t.label}, {periodLabel.toLowerCase()}</span>
-                  <span className={`mt-0.5 block text-2xl tabular-nums text-ink ${selected ? "font-bold" : "font-normal"}`}>
+                  <span className={`mt-0.5 block text-2xl tabular-nums text-ink max-sm:mt-0 max-sm:text-[20px] ${selected ? "font-bold" : "font-normal"}`}>
                     {money ? t.format(now) : "–"}
                   </span>
-                  <span className="mt-0.5 block text-xs">
-                    {money?.previous ? <Change now={now} before={before} format={t.format} period={previousLabel} /> : " "}
-                  </span>
+                  {money?.previous ? <span className="mt-0.5 block text-xs max-sm:col-span-2"><Change now={now} before={before} format={t.format} period={previousLabel} /></span> : null}
                 </button>
               );
             })}
@@ -234,6 +236,7 @@ export default function AdminDashboard() {
             </div>
             {money ? (
               <PeriodColumns
+                height={200}
                 data={buckets}
                 dataKey={moneyTab}
                 format={tab.format}
@@ -246,49 +249,29 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <Panel title="Total outstanding" aside={<ViewAll href="/app/retailers?tab=outstanding">View all</ViewAll>}>
-          <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">{owed ? formatCurrency(owed.total_outstanding || 0) : "–"}</p>
-          <p className="text-xs text-muted">
-            {owed ? `As of today · ${owedShops.length} ${owedShops.length === 1 ? "shop" : "shops"}, delivered orders not fully paid` : " "}
+        <Panel title="Stock" aside={<ViewAll href="/app/operations">View inventory</ViewAll>}>
+          <p className="text-[13px] text-muted">Value on hand, at landing price</p>
+          <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">
+            {stock ? (stock.inventory_value === null ? "—" : formatCurrency(stock.inventory_value)) : "–"}
           </p>
-          <ul className="mt-4 space-y-2.5">
-            {AGING.map((a) => {
-              const amount = owed?.aging?.[a.key] || 0;
-              return (
-                <li key={a.key}>
-                  <div className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-muted">{a.label}</span>
-                    <span className={`tabular-nums ${a.risk && amount ? "font-medium text-data" : amount ? "text-ink" : "text-muted"}`}>
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-                  <div className="mt-1 h-1 rounded-full bg-raised">
-                    <div
-                      className={`h-1 rounded-full ${a.risk ? "bg-data" : "bg-ink"}`}
-                      style={{ width: `${(amount / agingMax) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {owedShops.length ? (
-            <div className="mt-4 border-t border-line pt-3">
-              <p className="mb-1.5 text-xs text-muted">Owing the most</p>
-              <ul className="space-y-1.5 text-sm">
-                {owedShops.slice(0, 3).map((shop) => (
-                  <li key={shop.retailer_id} className="flex items-baseline justify-between gap-3">
-                    <span className="truncate text-ink">{shop.retailer_name}</span>
-                    <span className="shrink-0 tabular-nums text-ink">{formatCurrency(shop.pending)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {stock?.unpriced_skus ? (
+            <p className="text-xs text-muted">{stock.unpriced_skus} SKUs have no landing price and are not counted.</p>
           ) : null}
+          <p className="mb-1.5 mt-4 text-xs text-muted">Fewest units left</p>
+          <ul className="space-y-1.5 text-sm">
+            {(stock?.lowest || []).map((row) => (
+              <li key={row.sku_id} className="flex items-baseline justify-between gap-3">
+                <span className="truncate text-ink" title={row.code || row.name}>{row.name}</span>
+                <span className={`shrink-0 tabular-nums ${row.units ? "text-ink" : "font-medium text-data"}`}>
+                  {row.units ? `${formatCount(row.units)} units` : "Out of stock"}
+                </span>
+              </li>
+            ))}
+          </ul>
         </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Panel title="Orders by payment" aside={<span className="text-xs text-muted">{periodLabel}</span>}>
           <div className="flex items-center gap-5">
             <ThinRing parts={paymentParts} />
@@ -355,26 +338,7 @@ export default function AdminDashboard() {
           )}
         </Panel>
 
-        <Panel title="Stock" aside={<ViewAll href="/app/operations">View inventory</ViewAll>}>
-          <p className="text-[13px] text-muted">Value on hand, at landing price</p>
-          <p className="text-[28px] font-bold leading-tight tabular-nums text-ink">
-            {stock ? (stock.inventory_value === null ? "—" : formatCurrency(stock.inventory_value)) : "–"}
-          </p>
-          {stock?.unpriced_skus ? (
-            <p className="text-xs text-muted">{stock.unpriced_skus} SKUs have no landing price and are not counted.</p>
-          ) : null}
-          <p className="mb-1.5 mt-4 text-xs text-muted">Fewest units left</p>
-          <ul className="space-y-1.5 text-sm">
-            {(stock?.lowest || []).map((row) => (
-              <li key={row.sku_id} className="flex items-baseline justify-between gap-3">
-                <span className="truncate text-ink" title={row.code || row.name}>{row.name}</span>
-                <span className={`shrink-0 tabular-nums ${row.units ? "text-ink" : "font-medium text-data"}`}>
-                  {row.units ? `${formatCount(row.units)} units` : "Out of stock"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ const HOME_CONFIG = {
     description: "Prepare orders, assign drivers and stay on top of stock.",
     primary: { label: "Manage orders", href: "/app/orders", icon: Package },
     shortcuts: [
-      { label: "Inventory", detail: "Check and receive stock", href: "/app/operations?tab=inventory", icon: Package },
+      { label: "Inventory", detail: "Check and receive stock", href: "/app/operations", icon: Package },
       { label: "Outlets", detail: "Find shops and routes", href: "/app/outlet-finder", icon: MapPinned }
     ]
   }

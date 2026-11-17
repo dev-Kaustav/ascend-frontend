@@ -17,7 +17,7 @@ const PRESETS = [
 export const ALL_TIME = { key: "all", from: "", to: "" };
 
 function rangeFor(key) {
-  const today = dayjs();
+  const today = dayjs(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const iso = (d) => d.format("YYYY-MM-DD");
   if (key === "month") return { from: iso(today.startOf("month")), to: iso(today) };
   if (key === "30") return { from: iso(today.subtract(29, "day")), to: iso(today) };

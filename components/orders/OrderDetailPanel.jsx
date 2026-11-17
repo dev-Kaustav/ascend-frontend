@@ -116,13 +116,10 @@ const ACTION_CONFIG = {
     primary: { label: "Mark Delivered", nextStatus: "DELIVERED", showPayment: true },
     cancel: true,
   },
-  DELIVERED: {
-    cancel: true,
-  },
 };
 
 const ROLE_ACTIONS = {
-  ADMIN: ["PENDING", "READY_TO_SHIP", "DRIVER_ASSIGNED", "OUT_FOR_DELIVERY", "DELIVERED"],
+  ADMIN: ["PENDING", "READY_TO_SHIP", "DRIVER_ASSIGNED", "OUT_FOR_DELIVERY"],
   WAREHOUSE_MANAGER: ["PENDING", "READY_TO_SHIP"],
   DRIVER: ["DRIVER_ASSIGNED", "OUT_FOR_DELIVERY"],
   RETAILER: [],
@@ -139,7 +136,6 @@ const CANCEL_ROLES_BY_STATUS = {
   READY_TO_SHIP: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
   DRIVER_ASSIGNED: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
   OUT_FOR_DELIVERY: new Set(["ADMIN", "DRIVER"]),
-  DELIVERED: new Set(["ADMIN"]),
 };
 
 // Whether this role can reach any transition that needs a driver chosen. Derived from
@@ -324,7 +320,7 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
                   type="button"
                   disabled={saving}
                   onClick={() => submitAction(config.primary.nextStatus)}
-                  className="h-9 cursor-pointer rounded-md bg-accent px-4 text-sm font-medium text-white hover:bg-accent-strong disabled:opacity-60"
+                  className={`h-9 cursor-pointer rounded-md px-4 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 ${order.status === "PENDING" ? "bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-700" : order.status === "READY_TO_SHIP" ? "bg-sky-700 hover:bg-sky-800 focus-visible:outline-sky-700" : "bg-accent hover:bg-accent-strong focus-visible:outline-ink"}`}
                 >
                   {saving ? "Saving…" : primaryLabel}
                 </button>

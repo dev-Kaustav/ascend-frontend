@@ -98,7 +98,7 @@ export default function WarehouseInventoryAdd() {
       });
       invalidateApiCache(apiEndpoints.admin.lookups);
       notify("Inventory added.");
-      router.push("/app/operations?tab=inventory");
+      router.push("/app/operations");
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Unable to add inventory.");
     } finally {
@@ -121,7 +121,7 @@ export default function WarehouseInventoryAdd() {
         subtitle="Receive stock into a warehouse."
         actions={
           <Link
-            href="/app/operations?tab=inventory"
+            href="/app/operations"
             className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
           >
             Back to Inventory

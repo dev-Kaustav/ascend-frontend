@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import StatCard from "@/components/layout/StatCard";
+import { formatCurrency, formatDate, formatCount, formatCompactCurrency } from "@/lib/format";
+import PeriodSelect, { ALL_TIME, describePeriod, periodQuery } from "@/components/ui/PeriodSelect";
 import SectionCard from "@/components/layout/SectionCard";
-import LineChartCard from "@/components/charts/LineChartCard";
+import { PeriodColumns } from "@/components/charts/LedgerCharts";
 import DataTable from "@/components/tables/DataTable";
 
 function getPaymentDate(payment) {
@@ -13,6 +13,8 @@ function getPaymentDate(payment) {
 }
 
 export default function AdminCashCollection() {
+  const [period, setPeriod] = useState(ALL_TIME);
+  const [totalAmount, setTotalAmount] = useState(null);
   const [payments, setPayments] = useState([]);
   const [paymentsTotal, setPaymentsTotal] = useState(0);
   const [dailyTotals, setDailyTotals] = useState([]);
@@ -26,13 +28,14 @@ export default function AdminCashCollection() {
     async function load() {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
+        const params = periodQuery(period);
         params.set("limit", String(pageSize));
         params.set("offset", String((page - 1) * pageSize));
         const response = await apiFetch(`${apiEndpoints.admin.accountingPayments}?${params.toString()}`);
         if (!active) return;
         const items = response?.items || response || [];
         setPayments(items);
+        setTotalAmount(response?.total_amount ?? null);
         setPaymentsTotal(response?.total ?? items.length);
         setDailyTotals(response?.daily_totals || []);
         setError("");
@@ -47,80 +50,24 @@ export default function AdminCashCollection() {
     return () => {
       active = false;
     };
-  }, [page, pageSize]);
+  }, [page, pageSize, period]);
 
-  const stats = useMemo(() => {
-    const today = new Date();
-    const last7 = new Date();
-    last7.setDate(today.getDate() - 7);
-    const last30 = new Date();
-    last30.setDate(today.getDate() - 30);
-    let collectedToday = 0;
-    let collected7 = 0;
-    let collected30 = 0;
-
-    if (dailyTotals.length) {
-      dailyTotals.forEach((entry) => {
-        const date = new Date(entry.date);
-        if (Number.isNaN(date.getTime())) return;
-        if (date.toDateString() === today.toDateString()) {
-          collectedToday += entry.amount || 0;
-        }
-        if (date >= last7) {
-          collected7 += entry.amount || 0;
-        }
-        if (date >= last30) {
-          collected30 += entry.amount || 0;
-        }
-      });
-    } else {
-      payments.forEach((payment) => {
-        const dateValue = getPaymentDate(payment);
-        if (!dateValue) return;
-        const date = new Date(dateValue);
-        if (date.toDateString() === today.toDateString()) {
-          collectedToday += payment.amount || 0;
-        }
-        if (date >= last7) {
-          collected7 += payment.amount || 0;
-        }
-        if (date >= last30) {
-          collected30 += payment.amount || 0;
-        }
-      });
-    }
-    return { collectedToday, collected7, collected30 };
-  }, [payments, dailyTotals]);
-
-  const chartTotals = useMemo(() => {
-    if (dailyTotals.length) {
-      return dailyTotals.map((entry) => ({
-        label: new Date(entry.date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
-        value: entry.amount || 0
-      }));
-    }
-    const grouped = new Map();
-    payments.forEach((payment) => {
-      const dateValue = getPaymentDate(payment);
-      if (!dateValue) return;
-      const label = new Date(dateValue).toLocaleDateString("en-IN", { month: "short", day: "numeric" });
-      const current = grouped.get(label) || { label, value: 0 };
-      current.value += payment.amount || 0;
-      grouped.set(label, current);
-    });
-    return Array.from(grouped.values());
-  }, [payments, dailyTotals]);
+  const chartTotals = dailyTotals.map((entry) => ({
+    label: entry.date,
+    value: entry.amount
+  }));
 
   const columns = useMemo(
     () => [
       {
-        header: "Order ID",
+        header: "Order",
         accessorKey: "order_id",
         cell: ({ row }) => `#${row.original.order_id}`
       },
       {
         header: "Amount",
         accessorKey: "amount",
+        meta: { type: "number" },
         cell: ({ row }) => formatCurrency(row.original.amount)
       },
       {
@@ -137,55 +84,26 @@ export default function AdminCashCollection() {
     []
   );
 
-  if (loading) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
-        Loading cash collection…
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">
-        {error}
-      </div>
-    );
-  }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <StatCard
-          title="Collected Today"
-          value={formatCurrency(stats.collectedToday)}
-          subtitle="Same-day receipts"
-          accent="emerald"
-        />
-        <StatCard
-          title="Last 7 Days"
-          value={formatCurrency(stats.collected7)}
-          subtitle="Weekly cash flow"
-          accent="sky"
-        />
-        <StatCard
-          title="Last 30 Days"
-          value={formatCurrency(stats.collected30)}
-          subtitle="Monthly receipts"
-          accent="amber"
-        />
+    <div className="space-y-5 max-lg:px-[2px] [&_.text-sm]:text-[14px] [&_.text-xs]:text-[12px]">
+      {error ? <p role="alert" className="text-sm text-rose-800">{error}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">Collections · {describePeriod(period)}</p>
+        <PeriodSelect value={period} onChange={(value) => { setPeriod(value); setPage(1); }} />
       </div>
+      <dl className="grid grid-cols-2 divide-x divide-line rounded-lg border border-line bg-white p-4">
+        <div className="pr-4"><dt className="text-sm text-muted">Total collected</dt><dd className="mt-1 text-2xl font-semibold tabular-nums text-ink">{formatCurrency(totalAmount)}</dd></div>
+        <div className="pl-4"><dt className="text-sm text-muted">Payments</dt><dd className="mt-1 text-2xl font-semibold tabular-nums text-ink">{formatCount(paymentsTotal)}</dd></div>
+      </dl>
 
-      <LineChartCard
-        title="Daily cash collection"
-        subtitle="Payments captured per day"
-        data={chartTotals}
-        lines={[{ dataKey: "value", name: "Collected", color: "#22c55e" }]}
-      />
+      <SectionCard title="Daily cash collection" subtitle={describePeriod(period)}>
+        <PeriodColumns data={chartTotals} dataKey="value" format={formatCurrency} axisFormat={formatCompactCurrency} height={180} />
+      </SectionCard>
 
       <SectionCard
         title="Payment log"
-        subtitle={`${formatNumber(paymentsTotal)} payments captured`}
+        subtitle={`${formatCount(paymentsTotal)} payments captured`}
         actions={
           <select
             value={pageSize}
@@ -193,7 +111,7 @@ export default function AdminCashCollection() {
               setPageSize(Number(event.target.value));
               setPage(1);
             }}
-            className="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500"
+            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500"
           >
             {[10, 20, 50, 100].map((size) => (
               <option key={size} value={size}>
@@ -203,7 +121,7 @@ export default function AdminCashCollection() {
           </select>
         }
       >
-        <DataTable columns={columns} data={payments} emptyLabel="No payment records yet." />
+        <DataTable mobileCardClassName="!rounded-lg !shadow-none [&_dt]:!text-muted [&_dt]:!normal-case [&_dt]:!tracking-normal" columns={columns} data={payments} emptyLabel={loading ? "Loading payments…" : "No payments in this period."} />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
             Page {page} of {Math.max(1, Math.ceil(paymentsTotal / pageSize))}
@@ -213,7 +131,7 @@ export default function AdminCashCollection() {
               type="button"
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               disabled={page === 1}
-              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+              className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-50"
             >
               Prev
             </button>
@@ -221,7 +139,7 @@ export default function AdminCashCollection() {
               type="button"
               onClick={() => setPage((prev) => prev + 1)}
               disabled={page >= Math.ceil(paymentsTotal / pageSize)}
-              className="rounded-full border border-slate-200 px-3 py-1 disabled:opacity-50"
+              className="rounded-md border border-slate-200 px-3 py-1 disabled:opacity-50"
             >
               Next
             </button>

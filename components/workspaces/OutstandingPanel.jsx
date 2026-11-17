@@ -10,14 +10,14 @@ import DataTable from "@/components/tables/DataTable";
 import InvoiceCell from "@/components/ui/InvoiceCell";
 
 const PAGE_SIZE = 50;
-const VIEWS = ["Bill-wise", "Salesman Summary", "Outlet Summary"];
+const VIEWS = ["Order-wise", "Salesman Summary", "Outlet Summary"];
 
 export default function OutstandingPanel({ warehouseId }) {
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [salesmen, setSalesmen] = useState([]);
   const [salesmanId, setSalesmanId] = useState("");
   const [outletSearch, setOutletSearch] = useState("");
-  const [view, setView] = useState("Bill-wise");
+  const [view, setView] = useState("Order-wise");
   const [page, setPage] = useState(1);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -401,7 +401,7 @@ export default function OutstandingPanel({ warehouseId }) {
           </div>
         }
       >
-        {view === "Bill-wise" && (
+        {view === "Order-wise" && (
           <>
             <DataTable
               columns={billColumns}

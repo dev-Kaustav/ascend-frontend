@@ -36,7 +36,8 @@ export default function DataTable({
   onRowClick,
   renderMobileRow,
   tableClassName = "",
-  containerClassName = ""
+  containerClassName = "",
+  mobileCardClassName = ""
 }) {
   const table = useReactTable({
     data: data || [],
@@ -100,7 +101,7 @@ export default function DataTable({
                     tabIndex={onRowClick ? 0 : undefined}
                     className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] ${
                       onRowClick ? "cursor-pointer active:bg-slate-50" : ""
-                    }`}
+                    } ${mobileCardClassName}`}
                   >
                     {primary ? (
                       <div className="mb-2 text-base font-semibold text-slate-900">

@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import DateRangeFilter from "@/components/ui/DateRangeFilter";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import PeriodSelect, { ALL_TIME, describePeriod } from "@/components/ui/PeriodSelect";
+import { formatCurrency, formatDate, formatCount } from "@/lib/format";
 import SectionCard from "@/components/layout/SectionCard";
-import StatCard from "@/components/layout/StatCard";
 import DataTable from "@/components/tables/DataTable";
 import LineChartCard from "@/components/charts/LineChartCard";
 import BarChartCard from "@/components/charts/BarChartCard";
@@ -35,8 +34,8 @@ export default function AdminAccounting({ warehouseId }) {
   const [error, setError] = useState("");
   const [paymentsError, setPaymentsError] = useState("");
   const [creditsError, setCreditsError] = useState("");
-  const [paymentsDateRange, setPaymentsDateRange] = useState({ from: "", to: "" });
-  const [creditsDateRange, setCreditsDateRange] = useState({ from: "", to: "" });
+  const [paymentsDateRange, setPaymentsDateRange] = useState(ALL_TIME);
+  const [creditsDateRange, setCreditsDateRange] = useState(ALL_TIME);
 
   useEffect(() => {
     let active = true;
@@ -225,27 +224,14 @@ export default function AdminAccounting({ warehouseId }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <StatCard
-          title="Total outstanding"
-          value={formatCurrency(owed?.total_outstanding || 0)}
-          subtitle="As of today, delivered orders not fully paid"
-          accent="sky"
-        />
-        <StatCard
-          title="Total Collected"
-          value={formatCurrency(paymentsTotalAmount || 0)}
-          subtitle={`${formatNumber(paymentsTotal)} payments logged`}
-          accent="emerald"
-        />
-        <StatCard
-          title="Total Credits Issued"
-          value={formatCurrency(creditsTotalAmount || 0)}
-          subtitle={`${formatNumber(creditsTotal)} credit notes`}
-          accent="amber"
-        />
-      </div>
+    <div className="space-y-6 max-lg:px-[2px] [&_.text-sm]:text-[14px] [&_.text-xs]:text-[12px]">
+      <dl className="grid divide-line rounded-lg border border-line bg-white sm:grid-cols-3 sm:divide-x">
+        {[
+          ["Total outstanding", formatCurrency(owed?.total_outstanding || 0), "As of today, across all non-cancelled orders"],
+          ["Total collected", formatCurrency(paymentsTotalAmount || 0), `${formatCount(paymentsTotal)} payments · ${describePeriod(paymentsDateRange)}`],
+          ["Credits issued", formatCurrency(creditsTotalAmount || 0), `${formatCount(creditsTotal)} credit notes`],
+        ].map(([label, value, caption]) => <div key={label} className="p-4"><dt className="text-sm text-muted">{label}</dt><dd className="mt-1 text-2xl font-semibold tabular-nums text-ink">{value}</dd><p className="mt-1 text-xs text-muted">{caption}</p></div>)}
+      </dl>
 
       {cancelled?.payments_total ? (
         <p className="rounded-lg border border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 text-sm text-[#92400e]">
@@ -264,13 +250,13 @@ export default function AdminAccounting({ warehouseId }) {
           title="Payments collected over time"
           subtitle="Daily collection trend"
           data={paymentsOverTime}
-          lines={[{ dataKey: "amount", name: "Amount", color: "#14b8a6" }]}
+          lines={[{ dataKey: "amount", name: "Amount", color: "#5e0b26" }]}
         />
         <BarChartCard
           title="Outstanding by retailer"
           subtitle="Open balance per account"
           data={outstandingByRetailer}
-          bars={[{ dataKey: "amount", name: "Outstanding", color: "#f97316" }]}
+          bars={[{ dataKey: "amount", name: "Outstanding", color: "#5e0b26" }]}
         />
       </div>
 
@@ -279,9 +265,9 @@ export default function AdminAccounting({ warehouseId }) {
         subtitle="Captured collections"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <DateRangeFilter
-              from={paymentsDateRange.from}
-              to={paymentsDateRange.to}
+            <PeriodSelect
+              label="Payments period"
+              value={paymentsDateRange}
               onChange={(r) => { setPaymentsDateRange(r); setPaymentsPage(1); }}
             />
             <select
@@ -307,7 +293,7 @@ export default function AdminAccounting({ warehouseId }) {
           </div>
         ) : (
           <>
-            <DataTable
+            <DataTable mobileCardClassName="!rounded-lg !shadow-none [&_dt]:!text-muted [&_dt]:!normal-case [&_dt]:!tracking-normal"
               columns={paymentColumns}
               data={payments}
               emptyLabel={paymentsLoading ? "Loading payments..." : "No payments available."}
@@ -344,9 +330,9 @@ export default function AdminAccounting({ warehouseId }) {
         subtitle="Issued credits"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <DateRangeFilter
-              from={creditsDateRange.from}
-              to={creditsDateRange.to}
+            <PeriodSelect
+              label="Credits period"
+              value={creditsDateRange}
               onChange={(r) => { setCreditsDateRange(r); setCreditsPage(1); }}
             />
             <select
@@ -372,7 +358,7 @@ export default function AdminAccounting({ warehouseId }) {
           </div>
         ) : (
           <>
-            <DataTable
+            <DataTable mobileCardClassName="!rounded-lg !shadow-none [&_dt]:!text-muted [&_dt]:!normal-case [&_dt]:!tracking-normal"
               columns={creditColumns}
               data={credits}
               emptyLabel={creditsLoading ? "Loading credit notes..." : "No credit notes available."}
