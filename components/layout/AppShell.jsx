@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import dayjs from "dayjs";
 import { getAccessToken, getUserFromToken, logout } from "@/lib/auth";
 import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
@@ -267,6 +266,17 @@ function NavGlyph({ label }) {
 
 const COLLAPSED_KEY = "app-shell-collapsed";
 
+// The Ascend peak and chevron (public/icon.svg), in the brand's maroon, cream and gold.
+function AscendMark() {
+  return (
+    <svg viewBox="0 0 34 34" aria-hidden="true" className="h-8 w-8 shrink-0">
+      <rect width="34" height="34" rx="7" fill="#5e0b26" />
+      <path d="M5 28 16.8 5 29 28h-7.3l-4.9-10.2L12 28H5Z" fill="#fff6e7" />
+      <path d="m10.5 22.2 6.3-4.4 6.6 4.4" fill="none" stroke="#f3c452" strokeWidth="2.4" />
+    </svg>
+  );
+}
+
 export default function AppShell({ navItems = [], roleLabel, role, children }) {
   const pathname = usePathname();
   const token = getAccessToken();
@@ -277,6 +287,7 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
   // rendered once collapsed=false and again with the stored value, and the paired
   // write-effect fired on mount too, rewriting the value it had just read.
   const sidebarCollapsed = useStoredValue(COLLAPSED_KEY) === "true";
+  const activeItem = navItems.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
 
   const handleCollapseToggle = () => {
     if (window.innerWidth < 1024) {
@@ -286,169 +297,115 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
     writeStored(COLLAPSED_KEY, String(!sidebarCollapsed));
   };
 
+  const rowClass = (active = false) =>
+    cn(
+      "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
+      sidebarCollapsed && "lg:justify-center lg:gap-0 lg:px-0",
+      active ? "bg-white/[0.1] font-medium text-white" : "text-white/65 hover:bg-white/[0.05] hover:text-white"
+    );
+
   return (
-    <div className={cn("min-h-dvh bg-canvas text-slate-900 app-shell", fieldRole && "field-app")}>
+    <div className={cn("min-h-dvh bg-canvas text-ink app-shell", fieldRole && "field-app")}>
       {fieldRole ? <FieldMobileNavigation role={role} /> : null}
       {sidebarOpen ? (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-56 flex-col border-r border-white/10 bg-sidebar transition-[transform,width] duration-200 ease-out ${
-          sidebarCollapsed ? "lg:w-[84px]" : "lg:w-56"
-        } ${
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-60 flex-col bg-[#161412] transition-[transform,width] duration-200 ease-out",
+          sidebarCollapsed ? "lg:w-[68px]" : "lg:w-60",
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
+        )}
       >
-        <div className={`flex items-center border-b border-white/10 py-4 ${sidebarCollapsed ? "justify-between px-4 lg:justify-center lg:px-2" : "justify-between px-4"}`}>
-          <Link href="/" className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:justify-center lg:gap-0" : ""}`}>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-accent-strong text-sm font-semibold text-white shadow-lg shadow-accent/30">
-              AF
-            </div>
-            <div className={sidebarCollapsed ? "lg:hidden" : ""}>
-              <div className="text-lg font-semibold tracking-tight text-white">Ascend</div>
-              <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">{roleLabel}</div>
+        <div className={cn("flex h-14 items-center justify-between px-4", sidebarCollapsed && "lg:justify-center lg:px-2")}>
+          <Link href="/app/dashboard" className="flex items-center gap-2.5" aria-label="Ascend workspace home">
+            <AscendMark />
+            <div className={cn("leading-tight", sidebarCollapsed && "lg:hidden")}>
+              <div className="text-sm font-semibold text-white">Ascend Foods</div>
+              <div className="text-xs text-white/50">{roleLabel} workspace</div>
             </div>
           </Link>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            className="text-slate-500 transition hover:text-white lg:hidden"
+            className="text-white/60 transition hover:text-white lg:hidden"
             aria-label="Close navigation"
           >
             <CloseIcon />
           </button>
         </div>
 
-        <HoverScrollbar as="nav" className="flex-1 p-3">
-          <div className="space-y-1">
+        <HoverScrollbar as="nav" className="flex-1 px-3 py-2" aria-label="Workspace">
+          <div className="space-y-0.5">
             {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                pathname.startsWith(`${item.href}/`);
+              const isActive = item === activeItem;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
                   title={item.label}
-                  className={`flex rounded-xl py-2.5 text-base font-medium transition-all duration-200 ${
-                    sidebarCollapsed ? "items-center gap-2.5 px-2.5 lg:justify-center lg:gap-0 lg:px-0" : "items-center gap-2.5 px-2.5"
-                  } ${
-                    isActive ? "bg-white/[0.09] text-white" : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
-                  }`}
+                  aria-current={isActive ? "page" : undefined}
+                  className={rowClass(isActive)}
                 >
-                  <span className="flex h-4 w-4 items-center justify-center">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center opacity-80">
                     <NavGlyph label={item.label} />
                   </span>
-                  <span className={`truncate ${sidebarCollapsed ? "lg:hidden" : ""}`}>{item.label}</span>
+                  <span className={cn("truncate", sidebarCollapsed && "lg:hidden")}>{item.label}</span>
                 </Link>
               );
             })}
           </div>
         </HoverScrollbar>
 
-        <div className="border-t border-white/10 px-3 py-4">
-          <div className={`mb-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500 ${sidebarCollapsed ? "lg:hidden" : ""}`}>Account</div>
-
-          <Link
-            href="/app/profile"
-            title="Profile"
-            className={`flex items-center rounded-xl py-2.5 text-slate-300 transition-colors hover:bg-white/[0.04] hover:text-white ${
-              sidebarCollapsed ? "gap-3 px-2 lg:justify-center lg:px-0" : "gap-3 px-2"
-            }`}
-          >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.1] text-sm font-semibold text-accent/80">
+        <div className="space-y-0.5 border-t border-white/10 px-3 py-3">
+          <Link href="/app/profile" title="Profile" className={cn(rowClass(pathname === "/app/profile"), "h-11")}>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-xs font-semibold text-white">
               {getInitials(user?.email)}
-            </div>
-            <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
-              <div className="truncate text-sm font-semibold text-white">{user?.email || "User"}</div>
-              <div className="truncate text-[11px] text-slate-500">{roleLabel}</div>
-            </div>
+            </span>
+            <span className={cn("min-w-0", sidebarCollapsed && "lg:hidden")}>
+              <span className="block truncate text-sm text-white">{user?.email || "Account"}</span>
+              <span className="block truncate text-xs text-white/50">{roleLabel}</span>
+            </span>
           </Link>
-
-          <div className={`mt-3 space-y-1 ${sidebarCollapsed ? "lg:flex lg:flex-col lg:items-center" : ""}`}>
-            <button
-              type="button"
-              onClick={logout}
-              title="Sign out"
-              className={`flex items-center rounded-xl py-2.5 text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-white ${
-                sidebarCollapsed ? "gap-3 px-2 lg:justify-center lg:px-0" : "gap-3 px-2"
-              }`}
-            >
-              <SignOutIcon />
-              <span className={`text-sm ${sidebarCollapsed ? "lg:hidden" : ""}`}>Sign out</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleCollapseToggle}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              className={`flex items-center rounded-xl py-2.5 text-slate-400 transition-colors hover:bg-white/[0.04] hover:text-white ${
-                sidebarCollapsed ? "gap-3 px-2 lg:justify-center lg:px-0" : "gap-3 px-2"
-              }`}
-            >
-              <CollapseIcon collapsed={sidebarCollapsed} />
-              <span className={`text-sm ${sidebarCollapsed ? "lg:hidden" : ""}`}>Collapse</span>
-            </button>
-          </div>
+          <button type="button" onClick={logout} title="Sign out" className={cn(rowClass(), "w-full")}>
+            <SignOutIcon />
+            <span className={cn(sidebarCollapsed && "lg:hidden")}>Sign out</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleCollapseToggle}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(rowClass(), "hidden w-full lg:flex")}
+          >
+            <CollapseIcon collapsed={sidebarCollapsed} />
+            <span className={cn(sidebarCollapsed && "lg:hidden")}>Collapse</span>
+          </button>
         </div>
       </aside>
 
-      <div className={`${sidebarCollapsed ? "lg:pl-[84px]" : "lg:pl-56"}`}>
-        <header className={cn("sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur", fieldRole && "hidden lg:block")}>
-          <div className="flex items-center justify-between gap-4 px-5 py-3 sm:px-6">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="text-slate-600 transition hover:text-slate-900 lg:hidden"
-                onClick={() => setSidebarOpen(true)}
-                aria-label="Open navigation"
-              >
-                <MenuIcon />
-              </button>
-              <div>
-                <div className="text-xs text-slate-500">{dayjs().format("dddd, MMMM D, YYYY")}</div>
-                <div className="mt-0.5 flex items-center gap-2">
-                  <span className="text-base font-semibold text-slate-900">Welcome back</span>
-                  <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-accent">
-                    {roleLabel}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Link
-                href="/app/profile"
-                className="hidden cursor-pointer items-center gap-3 px-1 py-1.5 transition-colors hover:text-slate-900 sm:flex"
-              >
-                <div className="text-right">
-                  <div className="max-w-[16rem] truncate text-sm font-semibold text-slate-900">{user?.email || "User"}</div>
-                  <div className="mt-0.5 flex items-center justify-end gap-2">
-                    <span className="text-[11px] uppercase tracking-[0.18em] text-slate-500">{roleLabel}</span>
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  </div>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-strong text-xs font-semibold text-white shadow-lg shadow-accent/20">
-                  {getInitials(user?.email)}
-                </div>
-              </Link>
-              <Link
-                href="/app/profile"
-                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-xs font-semibold text-slate-800 shadow-sm transition-colors hover:bg-slate-50 sm:hidden"
-                aria-label="Open profile"
-              >
-                {getInitials(user?.email)}
-              </Link>
-            </div>
-          </div>
+      <div className={sidebarCollapsed ? "lg:pl-[68px]" : "lg:pl-60"}>
+        {/* Phones and tablets only: the sidebar folds behind a menu button. The field roles have
+            their own header (FieldMobileNavigation), so this bar is not shown for them. */}
+        <header className={cn("sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 lg:hidden", fieldRole && "hidden")}>
+          <button
+            type="button"
+            className="-ml-1 flex h-10 w-10 items-center justify-center text-slate-600 hover:text-ink"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation"
+          >
+            <MenuIcon />
+          </button>
+          <AscendMark />
+          <span className="truncate text-sm font-semibold text-ink">{activeItem?.label || "Ascend"}</span>
         </header>
 
-        <main id="main-content" className="app-main p-5 pb-28 sm:p-6 lg:pb-6">
-          <div className="space-y-6">{children}</div>
+        <main id="main-content" className="app-main px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8">
+          <div className="space-y-4">{children}</div>
         </main>
       </div>
     </div>

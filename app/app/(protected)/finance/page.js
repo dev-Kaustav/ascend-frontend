@@ -31,6 +31,8 @@ export default function FinanceWorkspacePage() {
       label: "Credit Notes",
       description: "Issued credits and adjustments grouped with finance operations.",
       roles: ["ADMIN", "ACCOUNTANT"],
+      // No credit note has ever been issued; kept reachable at ?tab=credit-notes (2026-11-17).
+      hidden: true,
       render: () => <CreditNotesPanel warehouseId={warehouseId} />
     },
     {

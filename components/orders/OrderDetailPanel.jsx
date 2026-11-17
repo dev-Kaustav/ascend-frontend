@@ -165,7 +165,7 @@ function roleNeedsDriverList(role) {
   return (ROLE_ACTIONS[role] || []).some((status) => ACTION_CONFIG[status]?.primary?.showDriver);
 }
 
-function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = null }) {
+export function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = null }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -235,7 +235,8 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
           <select
             value={form.driverId || ""}
             onChange={(e) => setForm((prev) => ({ ...prev, driverId: e.target.value }))}
-            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
+            aria-label="Rider"
+            className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm lg:h-9 lg:min-h-0 lg:rounded-md lg:border-control lg:py-0"
           >
             <option value="">Select rider</option>
             {drivers.map((d) => (
@@ -308,50 +309,49 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
 
   return (
     <>
-      {/* Desktop keeps the existing inline block unchanged. */}
+      {/* Desktop: the next step as one quiet panel: its inputs, one near-black primary, the
+          way back as a secondary, and cancelling as a red text action at the far end. */}
       {(canPrimary || canCancel || backLabel) && (
         <div className="hidden lg:block">
-          <DetailBlock title="Actions">
-            <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+          <div className="space-y-3 rounded-lg border border-line bg-white p-4">
+            {canPrimary && (config.primary.showDriver || config.primary.showPayment) ? (
+              <div className="max-w-md space-y-2">{renderInputs()}</div>
+            ) : null}
+            {backLabel && <div className="max-w-md">{reasonInput}</div>}
+            <div className="flex flex-wrap items-center gap-2">
               {canPrimary && (
-                <div className="space-y-2">
-                  {renderInputs()}
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => submitAction(config.primary.nextStatus)}
-                    className="cursor-pointer rounded-full bg-[#1a1b2e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {saving ? "Saving…" : primaryLabel}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => submitAction(config.primary.nextStatus)}
+                  className="h-9 cursor-pointer rounded-md bg-accent px-4 text-sm font-medium text-white hover:bg-accent-strong disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : primaryLabel}
+                </button>
               )}
-              {backLabel && <div className="max-w-sm">{reasonInput}</div>}
-              <div className="flex flex-wrap gap-2">
-                {backLabel && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => submitAction(config.back.nextStatus)}
-                    className="cursor-pointer rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                  >
-                    {backLabel}
-                  </button>
-                )}
-                {canCancel && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => submitAction("CANCELLED")}
-                    className="cursor-pointer rounded-full border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-600 disabled:opacity-60"
-                  >
-                    {cancelLabel}
-                  </button>
-                )}
-              </div>
-              {error && <p className="text-xs text-rose-500">{error}</p>}
+              {backLabel && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => submitAction(config.back.nextStatus)}
+                  className="h-9 cursor-pointer rounded-md border border-control bg-white px-4 text-sm font-medium text-ink hover:bg-raised disabled:opacity-60"
+                >
+                  {backLabel}
+                </button>
+              )}
+              {canCancel && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => submitAction("CANCELLED")}
+                  className="ml-auto h-9 cursor-pointer px-2 text-sm font-medium text-[#c4242a] hover:underline disabled:opacity-60"
+                >
+                  {cancelLabel}
+                </button>
+              )}
             </div>
-          </DetailBlock>
+            {error && <p className="text-sm text-[#c4242a]">{error}</p>}
+          </div>
         </div>
       )}
 
@@ -423,13 +423,13 @@ function OrderActionBar({ order, role, drivers, onUpdate, secondaryActions = nul
   );
 }
 
-export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
+// Loads one order and, for roles that can assign one, the riders to choose from. Shared by this
+// panel (phones and the field roles) and the desktop order desk.
+export function useOrderDetail(orderId, role) {
   const [order, setOrder] = useState(null);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(Boolean(orderId));
   const [error, setError] = useState("");
-  const [downloading, setDownloading] = useState(false);
-  const { role } = useAuth();
 
   async function loadOrder() {
     if (!orderId) return;
@@ -453,7 +453,27 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
 
   useEffect(() => {
     loadOrder();
-  }, [orderId]);
+  }, [orderId, role]);
+
+  return { order, drivers, loading, error, reload: loadOrder };
+}
+
+export async function downloadInvoicePdf(orderId) {
+  const { blob, filename } = await apiFetchBlob(apiEndpoints.orders.invoicePdf(orderId));
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || `invoice-${orderId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
+  const [downloading, setDownloading] = useState(false);
+  const { role } = useAuth();
+  const { order, drivers, loading, error, reload: loadOrder } = useOrderDetail(orderId, role);
 
   function handleOrderUpdate() {
     loadOrder();
@@ -464,15 +484,7 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
     if (!orderId || downloading) return;
     setDownloading(true);
     try {
-      const { blob, filename } = await apiFetchBlob(apiEndpoints.orders.invoicePdf(orderId));
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename || `invoice-${orderId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      await downloadInvoicePdf(orderId);
     } finally {
       setDownloading(false);
     }

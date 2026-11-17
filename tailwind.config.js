@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 const config = {
-  content: ["./app/**/*.{js,jsx}", "./components/**/*.{js,jsx}"],
+  content: ["./app/**/*.{js,jsx}", "./components/**/*.{js,jsx}", "./lib/**/*.{js,jsx,mjs}"],
   theme: {
     extend: {
       colors: {
@@ -14,6 +14,13 @@ const config = {
         "accent-strong": "var(--color-accent-strong)",
         "accent-soft":   "var(--color-accent-soft)",
         sidebar:         "var(--color-sidebar)",
+        // Staff workspace ledger tokens (defined on .app-shell in app/app/app.css)
+        line:            "var(--color-border)",
+        rule:            "var(--ledger-rule)",
+        control:         "var(--ledger-control)",
+        raised:          "var(--ledger-raised)",
+        data:            "var(--ledger-data)",
+        "data-soft":     "var(--ledger-data-soft)",
         // Static darks used only in sidebar decorative elements
         night:     "#0b0614",
         nightSoft: "#160b27",

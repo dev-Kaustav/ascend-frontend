@@ -1,20 +1,22 @@
 "use client";
 
-import {  } from "react";
-
-import AdminOrders from "@/components/orders/AdminOrders";
-import AccountantOrders from "@/components/orders/AccountantOrders";
+import OrdersQueue from "@/components/orders/OrdersQueue";
 import WarehouseOrders from "@/components/orders/WarehouseOrders";
 import SalesmanOrders from "@/components/orders/SalesmanOrders";
 import DriverOrders from "@/components/orders/DriverOrders";
 import { useAuth } from "@/components/auth/AuthProvider";
+import useIsDesktop from "@/lib/hooks/useIsDesktop";
 
 export default function OrdersPage() {
   const { role } = useAuth();
+  const isDesktop = useIsDesktop();
 
-  if (role === "ADMIN") return <AdminOrders />;
-  if (role === "ACCOUNTANT") return <AccountantOrders />;
-  if (role === "WAREHOUSE_MANAGER") return <WarehouseOrders />;
+  if (role === "ADMIN" || role === "ACCOUNTANT") return <OrdersQueue role={role} />;
+  // The warehouse manager works the same queue at a desk; on a phone the field screen stays.
+  if (role === "WAREHOUSE_MANAGER") {
+    if (isDesktop === null) return null;
+    return isDesktop ? <OrdersQueue role={role} /> : <WarehouseOrders />;
+  }
   if (role === "SALESMAN") return <SalesmanOrders />;
   if (role === "DRIVER") return <DriverOrders />;
 

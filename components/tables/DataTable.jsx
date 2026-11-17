@@ -137,7 +137,7 @@ export default function DataTable({
       </div>
 
       <div className={`hidden overflow-x-auto max-w-full ${renderMobileRow ? "lg:block" : "md:block"} ${containerClassName}`}>
-      <table className={`w-full min-w-[720px] border-separate border-spacing-y-2 text-sm ${tableClassName}`}>
+      <table className={`w-full min-w-[720px] border-collapse text-sm ${tableClassName}`}>
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id}>
@@ -146,7 +146,7 @@ export default function DataTable({
                 return (
                   <th
                     key={header.id}
-                    className={`px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 whitespace-normal break-words ${ALIGN_CLASS[align]}`}
+                    className={`h-9 border-b border-line px-3 text-xs font-normal text-muted whitespace-nowrap ${ALIGN_CLASS[align]}`}
                   >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
@@ -158,7 +158,7 @@ export default function DataTable({
         <tbody>
           {table.getRowModel().rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-slate-400">
+              <td colSpan={columns.length} className="px-3 py-8 text-center text-muted">
                 {emptyLabel}
               </td>
             </tr>
@@ -166,15 +166,22 @@ export default function DataTable({
             table.getRowModel().rows.map((row) => (
               <tr
                 key={row.id}
-                onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                className={`rounded-2xl border border-slate-200 bg-white shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] ${
-                  onRowClick ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-24px_rgba(15,23,42,0.35)]" : ""
-                }`}
+                onClick={
+                  onRowClick
+                    ? (event) => {
+                        // Same rule as the phone cards: a row's own buttons and fields must not
+                        // also open the row.
+                        if (event.target.closest("button, a, select, input, textarea, label")) return;
+                        onRowClick(row.original);
+                      }
+                    : undefined
+                }
+                className={`border-b border-rule last:border-0 ${onRowClick ? "cursor-pointer transition-colors hover:bg-surface-soft" : ""}`}
               >
                 {row.getVisibleCells().map((cell) => {
                   const align = resolveAlign(cell.column.columnDef);
                   return (
-                    <td key={cell.id} className={`px-4 py-3.5 text-slate-600 ${ALIGN_CLASS[align]}`}>
+                    <td key={cell.id} className={`h-12 px-3 py-2 text-slate-700 ${ALIGN_CLASS[align]}`}>
                       {renderCell(cell)}
                     </td>
                   );

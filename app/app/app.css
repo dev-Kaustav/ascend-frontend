@@ -1,23 +1,38 @@
-:root {
-  --app-ink: #1d1d1f;
-  --app-muted: #6b7280;
-  --app-accent: #7c3aed;
-  --app-accent-strong: #5b21b6;
-  --app-sidebar: #0f0f0f;
-}
-
+/* Staff workspace tokens ("achromatic ledger"). The chrome is ink and grey; the one hue, Ascend
+   maroon, goes only on the data that needs attention. Scoped to .app-shell so the storefront and
+   landing pages keep globals.css. The field app (phones) overrides these below 1024px. */
 .app-shell {
-  font-family: var(--font-body), "DM Sans", "Avenir Next", sans-serif;
-  color: var(--app-ink);
+  --color-bg: #f4f3f1;          /* stone ground */
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8f8f7;
+  --color-ink: #0a0a0a;
+  --color-muted: #6b6b6b;
+  --color-accent: #141414;      /* the one primary action: near-black */
+  --color-accent-strong: #000000;
+  --color-accent-soft: #eeeeee;
+  --color-border: #e6e6e6;
+  --color-sidebar: #f4f3f1;
+  --ledger-raised: #efeeec;     /* hover and the active nav pill */
+  --ledger-rule: #f0f0f0;       /* row rules */
+  --ledger-control: #d4d4d4;    /* input and select borders */
+  --ledger-data: #5e0b26;       /* Ascend maroon, on data only */
+  --ledger-data-soft: #f6e9ed;
+  font-family: var(--font-geist), "Geist", Inter, system-ui, sans-serif;
+  color: var(--color-ink);
+  font-size: 14px;
 }
 
 .app-shell h1,
 .app-shell h2,
 .app-shell h3,
 .app-shell h4 {
-  font-family: var(--font-display), "DM Sans", "Avenir Next", sans-serif;
-  letter-spacing: -0.02em;
+  font-family: inherit;
+  letter-spacing: -0.01em;
 }
+
+.app-shell .num,
+.app-shell table td,
+.app-shell table th { font-variant-numeric: tabular-nums; }
 
 /* Field workspace: phone and tablet layouts share one touch-first shell. */
 @media (max-width: 1023px) {

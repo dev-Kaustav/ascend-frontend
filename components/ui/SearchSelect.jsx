@@ -9,7 +9,7 @@ import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } fro
 // 16px on phones so iOS Safari does not zoom the page in on focus; 14px from md up.
 // See the note on the same constant in components/ui/InputBars.jsx.
 const BASE_BAR_CLASSNAME =
-  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-base md:text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#7c3aed] focus:outline-none focus:ring-1 focus:ring-[#7c3aed]/30";
+  "w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-base md:text-sm text-slate-700 transition-all duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-400/30";
 
 // Phones and tablets: a coarse pointer. Subscribed with a server snapshot of false, so the server
 // render and the first client render agree and React does not warn about a mismatch.
@@ -217,7 +217,7 @@ export default function SearchSelect({
                 aria-label={`Search ${ariaLabel || placeholder}`}
                 aria-controls={`${instanceId}-listbox`}
                 autoComplete="off"
-                className="h-11 w-full rounded-lg bg-slate-50 pl-9 pr-3 text-base text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25"
+                className="h-11 w-full rounded-lg bg-slate-50 pl-9 pr-3 text-base text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-400/30"
               />
             </div>
           ) : null}
