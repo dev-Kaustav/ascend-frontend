@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import WorkspaceTabs from "@/components/layout/WorkspaceTabs";
 import WarehouseSelector from "@/components/ui/WarehouseSelector";
 import AccountingPanel from "@/components/workspaces/AccountingPanel";
 import InvoicesPanel from "@/components/workspaces/InvoicesPanel";
 import CreditNotesPanel from "@/components/workspaces/CreditNotesPanel";
 import DailySalesPanel from "@/components/workspaces/DailySalesPanel";
+import CashCollectionPanel from "@/components/workspaces/CashCollectionPanel";
 
 export default function FinanceWorkspacePage() {
   const [warehouseId, setWarehouseId] = useState(null);
+  const searchParams = useSearchParams();
 
   const tabs = [
     {
@@ -36,6 +39,13 @@ export default function FinanceWorkspacePage() {
       render: () => <CreditNotesPanel warehouseId={warehouseId} />
     },
     {
+      key: "collections",
+      label: "Collections",
+      description: "Collected payments across all warehouses, receipt trends, and the payment log.",
+      roles: ["ADMIN", "ACCOUNTANT"],
+      render: () => <CashCollectionPanel />
+    },
+    {
       key: "daily-sales",
       label: "Daily Sales",
       description: "Daily sales summary with salesman-level delivery and cancellation breakdown.",
@@ -46,12 +56,12 @@ export default function FinanceWorkspacePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      {searchParams.get("tab") !== "collections" ? <div className="flex justify-end">
         <WarehouseSelector value={warehouseId} onChange={setWarehouseId} />
-      </div>
+      </div> : null}
       <WorkspaceTabs
         title="Finance"
-        subtitle="Accounting, invoices, credits, and daily sales."
+        subtitle="Accounting, invoices, collections, credits, and daily sales."
         tabs={tabs}
       />
     </div>

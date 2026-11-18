@@ -27,7 +27,8 @@ test('old retailer tab URLs redirect to their matching consolidated tabs', async
     ['/app/master-data', 'retailers', '/app/retailers?tab=directory'],
     ['/app/operations', 'coverage', '/app/retailers?tab=coverage'],
     ['/app/finance', 'outstanding', '/app/retailers?tab=outstanding'],
-    ['/app/finance', 'collection', '/app/retailers?tab=collections']
+    ['/app/finance', 'collection', '/app/finance?tab=collections'],
+    ['/app/retailers', 'collections', '/app/finance?tab=collections']
   ];
   assert.equal(rules.length, expected.length);
   for (const [source, value, destination] of expected) {

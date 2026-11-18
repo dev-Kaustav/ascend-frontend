@@ -5,7 +5,8 @@ const nextConfig = {
       { source: "/app/master-data", tab: "retailers", destination: "/app/retailers?tab=directory" },
       { source: "/app/operations", tab: "coverage", destination: "/app/retailers?tab=coverage" },
       { source: "/app/finance", tab: "outstanding", destination: "/app/retailers?tab=outstanding" },
-      { source: "/app/finance", tab: "collection", destination: "/app/retailers?tab=collections" }
+      { source: "/app/finance", tab: "collection", destination: "/app/finance?tab=collections" },
+      { source: "/app/retailers", tab: "collections", destination: "/app/finance?tab=collections" }
     ].map(({ source, tab, destination }) => ({
       source,
       has: [{ type: "query", key: "tab", value: tab }],

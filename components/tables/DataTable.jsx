@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 
 const ALIGN_CLASS = {
@@ -35,6 +36,7 @@ export default function DataTable({
   emptyLabel = "No records",
   onRowClick,
   renderMobileRow,
+  renderExpandedRow,
   tableClassName = "",
   containerClassName = "",
   mobileCardClassName = ""
@@ -68,7 +70,7 @@ export default function DataTable({
                 return <li key={row.id}>{renderMobileRow(row.original, (columnId) => {
                   const cell = row.getVisibleCells().find((item) => item.column.id === columnId);
                   return cell ? renderCell(cell) : null;
-                })}</li>;
+                })}{renderExpandedRow?.(row.original)}</li>;
               }
               const cells = row.getVisibleCells().filter((cell) => !cell.column.columnDef.meta?.mobileHidden);
               const primary = cells.find((cell) => cell.column.columnDef.meta?.mobilePrimary);
@@ -90,6 +92,7 @@ export default function DataTable({
                     onKeyDown={
                       onRowClick
                         ? (event) => {
+                            if (event.target !== event.currentTarget) return;
                             if (event.key === "Enter" || event.key === " ") {
                               event.preventDefault();
                               onRowClick(row.original);
@@ -130,6 +133,7 @@ export default function DataTable({
                         </div>
                       ))}
                   </div>
+                  {renderExpandedRow?.(row.original)}
                 </li>
               );
             })}
@@ -164,9 +168,10 @@ export default function DataTable({
               </td>
             </tr>
           ) : (
-            table.getRowModel().rows.map((row) => (
+            table.getRowModel().rows.map((row) => {
+              const expanded = renderExpandedRow?.(row.original);
+              return <Fragment key={row.id}>
               <tr
-                key={row.id}
                 onClick={
                   onRowClick
                     ? (event) => {
@@ -188,7 +193,9 @@ export default function DataTable({
                   );
                 })}
               </tr>
-            ))
+              {expanded ? <tr><td colSpan={columns.length} className="p-0">{expanded}</td></tr> : null}
+              </Fragment>;
+            })
           )}
         </tbody>
       </table>
