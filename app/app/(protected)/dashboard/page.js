@@ -1,14 +1,15 @@
 "use client";
 
-import {  } from "react";
-
-import AdminDashboard from "@/components/dashboard/AdminDashboard";
-import AccountantDashboard from "@/components/dashboard/AccountantDashboard";
-import WarehouseDashboard from "@/components/dashboard/WarehouseDashboard";
-import SalesmanDashboard from "@/components/dashboard/SalesmanDashboard";
-import DriverDashboard from "@/components/dashboard/DriverDashboard";
-import BrandDashboard from "@/components/dashboard/BrandDashboard";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/components/auth/AuthProvider";
+
+// One chunk per role: a rider's phone downloads the rider's dashboard, not the admin's charts.
+const AdminDashboard = dynamic(() => import("@/components/dashboard/AdminDashboard"));
+const AccountantDashboard = dynamic(() => import("@/components/dashboard/AccountantDashboard"));
+const WarehouseDashboard = dynamic(() => import("@/components/dashboard/WarehouseDashboard"));
+const SalesmanDashboard = dynamic(() => import("@/components/dashboard/SalesmanDashboard"));
+const DriverDashboard = dynamic(() => import("@/components/dashboard/DriverDashboard"));
+const BrandDashboard = dynamic(() => import("@/components/dashboard/BrandDashboard"));
 
 export default function DashboardPage() {
   const { role } = useAuth();

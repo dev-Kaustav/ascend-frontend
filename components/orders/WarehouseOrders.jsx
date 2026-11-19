@@ -15,12 +15,11 @@ function getOrderDate(order) {
 }
 
 // The moves a warehouse manager can make from each status (mirrors _ALLOWED_TRANSITIONS in
-// ascend-backend/app/services/order.py, which stays authoritative). Dispatch is the rider's
-// own accept, so it is not offered here.
+// ascend-backend/app/services/order.py, which stays authoritative). Choosing a rider sends the
+// order out at once: there is no separate rider accept/pickup.
 const WAREHOUSE_NEXT = {
   PENDING: [["READY_TO_SHIP", "Accept order"]],
-  READY_TO_SHIP: [["DRIVER_ASSIGNED", "Assign rider"], ["CANCELLED", "Cancel order"]],
-  DRIVER_ASSIGNED: [["READY_TO_SHIP", "Unassign rider"], ["CANCELLED", "Cancel order"]],
+  READY_TO_SHIP: [["OUT_FOR_DELIVERY", "Assign rider & send out"], ["CANCELLED", "Cancel order"]],
 };
 
 export default function WarehouseOrders() {
@@ -160,7 +159,7 @@ export default function WarehouseOrders() {
         cell: ({ row }) => {
           const orderId = row.original.id;
           const rowUpdate = updates[orderId] || {};
-          const showDriverPicker = rowUpdate.status === "DRIVER_ASSIGNED";
+          const showDriverPicker = rowUpdate.status === "OUT_FOR_DELIVERY";
           const nextOptions = WAREHOUSE_NEXT[row.original.status] || [];
           return (
             <div className="flex flex-col gap-2 text-xs">
@@ -253,7 +252,6 @@ export default function WarehouseOrders() {
             <option value="ALL">All Statuses</option>
             <option value="PENDING">Pending</option>
             <option value="READY_TO_SHIP">Ready to ship</option>
-            <option value="DRIVER_ASSIGNED">Awaiting rider</option>
             <option value="OUT_FOR_DELIVERY">Out for delivery</option>
             <option value="DELIVERED">Delivered</option>
             <option value="CANCELLED">Cancelled</option>

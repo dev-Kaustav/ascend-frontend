@@ -25,7 +25,8 @@ export default function DriverOrders() {
   const pageSize = 20;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ status: "DRIVER_ASSIGNED" });
+  // A rider opens on what is in their hands now: orders sent out with them, still to deliver.
+  const [filters, setFilters] = useState({ status: "OUT_FOR_DELIVERY" });
   const [updates, setUpdates] = useState({});
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
@@ -115,34 +116,6 @@ export default function DriverOrders() {
       cell: ({ row }) => {
         const order = row.original;
         const rowUpdate = updates[order.id] || {};
-        if (order.status === "DRIVER_ASSIGNED") {
-          return (
-            <div className="flex flex-col gap-1.5 text-xs">
-              <button
-                type="button"
-                disabled={rowUpdate.saving}
-                onClick={() => handleStatusUpdate(order.id, "OUT_FOR_DELIVERY")}
-                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full bg-slate-900 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-white disabled:opacity-60"
-              >
-                {rowUpdate.saving ? "Saving…" : "Accept & Pick Up"}
-              </button>
-              <button
-                type="button"
-                disabled={rowUpdate.saving}
-                onClick={() => {
-                  // Cancelling the prompt keeps the order; an empty answer declines without a reason.
-                  const reason = window.prompt("Decline this order? Add a reason (optional).", "");
-                  if (reason === null) return;
-                  handleStatusUpdate(order.id, "READY_TO_SHIP", reason.trim() ? { reason: reason.trim() } : {});
-                }}
-                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-700 disabled:opacity-60"
-              >
-                Decline
-              </button>
-              {rowUpdate.error && <span className="text-rose-500">{rowUpdate.error}</span>}
-            </div>
-          );
-        }
         if (order.status === "OUT_FOR_DELIVERY") {
           return (
             <div className="flex flex-col gap-1.5 text-xs">
@@ -246,7 +219,6 @@ export default function DriverOrders() {
           className="hidden lg:block rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm"
         >
           <option value="ALL">All Statuses</option>
-          <option value="DRIVER_ASSIGNED">New (awaiting you)</option>
           <option value="OUT_FOR_DELIVERY">Out for delivery</option>
           <option value="DELIVERED">Delivered</option>
           <option value="CANCELLED">Cancelled</option>

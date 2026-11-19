@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { getAccessToken, getUserFromToken, logout } from "@/lib/auth";
 import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
 import FieldMobileNavigation from "@/components/layout/FieldMobileNavigation";
 import { isFieldRole } from "@/lib/navigation";
 import { cn } from "@/lib/cn";
+import { prefetchNextScreensWhenIdle, prefetchRoute } from "@/lib/prefetch";
 
 function getInitials(email) {
   if (!email) return "U";
@@ -283,6 +285,10 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
   const user = getUserFromToken(token);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const fieldRole = isFieldRole(role);
+  const queryClient = useQueryClient();
+
+  // Once the first screen has loaded and the browser is idle, warm the screens this role opens next.
+  useEffect(() => prefetchNextScreensWhenIdle(queryClient, role), [queryClient, role]);
   // localStorage is the source of truth for this preference. The previous read-effect
   // rendered once collapsed=false and again with the stored value, and the paired
   // write-effect fired on mount too, rewriting the value it had just read.
@@ -348,6 +354,9 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setSidebarOpen(false)}
+                  onMouseEnter={() => prefetchRoute(queryClient, item.href, role)}
+                  onFocus={() => prefetchRoute(queryClient, item.href, role)}
+                  onTouchStart={() => prefetchRoute(queryClient, item.href, role)}
                   title={item.label}
                   aria-current={isActive ? "page" : undefined}
                   className={rowClass(isActive)}

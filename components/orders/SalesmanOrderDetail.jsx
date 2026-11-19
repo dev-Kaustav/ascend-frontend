@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { FileDown, MapPin } from "lucide-react";
-import { apiEndpoints, apiFetch, apiFetchBlob } from "@/lib/api";
+import { MapPin } from "lucide-react";
+import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
 import FieldSection from "@/components/field/FieldSection";
 import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
 import SalesmanCashCollection from "@/components/orders/SalesmanCashCollection";
+import { OrderDocumentButton } from "@/components/orders/OrderSections";
 
 // The salesman's order screen, read like an app: who and what first, then the bill, then money,
 // then the small print. Same card and type scale as the new-order screen (components/field).
@@ -43,7 +44,6 @@ const formatQuantity = (item) => {
 export default function SalesmanOrderDetail({ orderId }) {
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
-  const [downloading, setDownloading] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -54,27 +54,21 @@ export default function SalesmanOrderDetail({ orderId }) {
     }
   }, [orderId]);
 
+  // The first load sets state from the promise, not the effect body, and drops a response that
+  // arrives after the screen moved to another order. `load` is the reload after a collection.
   useEffect(() => {
-    load();
-  }, [load]);
-
-  async function downloadInvoice() {
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const { blob, filename } = await apiFetchBlob(apiEndpoints.orders.invoicePdf(orderId));
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename || `invoice-${orderId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } finally {
-      setDownloading(false);
-    }
-  }
+    let current = true;
+    apiFetch(apiEndpoints.orders.detail(orderId))
+      .then((next) => {
+        if (!current) return;
+        setOrder(next);
+        setError("");
+      })
+      .catch((err) => current && setError(err?.message || "Unable to load this order."));
+    return () => {
+      current = false;
+    };
+  }, [orderId]);
 
   if (error) {
     return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-600">{error}</div>;
@@ -220,20 +214,14 @@ export default function SalesmanOrderDetail({ orderId }) {
         </FieldSection>
       ) : null}
 
-      {/* The invoice exists only once the order is dispatched; until then there is nothing to download. */}
-      {order.invoice_number ? (
+      {/* The invoice once the order is dispatched; before that, the order summary. */}
+      {order.invoice_number || order.status !== "CANCELLED" ? (
         <>
           <div className="hidden justify-end lg:flex">
-            <button type="button" onClick={downloadInvoice} disabled={downloading} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-60">
-              <FileDown className="h-4 w-4" />
-              {downloading ? "Preparing…" : "Invoice PDF"}
-            </button>
+            <OrderDocumentButton order={order} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white disabled:opacity-60" />
           </div>
           <MobileActionBar>
-            <button type="button" onClick={downloadInvoice} disabled={downloading} className={`${BAR_ACTION_PRIMARY} gap-2`}>
-              <FileDown className="h-4 w-4" />
-              {downloading ? "Preparing…" : "Invoice PDF"}
-            </button>
+            <OrderDocumentButton order={order} className={`${BAR_ACTION_PRIMARY} gap-2`} />
           </MobileActionBar>
         </>
       ) : null}

@@ -1,115 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiEndpoints, apiFetch } from "@/lib/api";
+import { invalidateOrders, queryPath } from "@/lib/query";
 import { getCoords } from "@/lib/geo";
-import { formatCurrency, formatDate, formatDateTime, formatNumber, formatPercent, toTitleCase } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 
-import DataTable from "@/components/tables/DataTable";
-import InvoiceCell from "@/components/ui/InvoiceCell";
+import {
+  CreditNotes,
+  Facts,
+  History,
+  Lines,
+  MoneySummary,
+  OrderDocumentButton,
+  Payments,
+  ProgressStrip,
+  Section,
+  StatusPill,
+} from "@/components/orders/OrderSections";
 import SalesmanCashCollection from "@/components/orders/SalesmanCashCollection";
 import MobileActionBar, {
   BAR_ACTION_PRIMARY,
-  BAR_ACTION_SECONDARY,
   BAR_ACTION_DANGER,
 } from "@/components/layout/MobileActionBar";
+
+// Narrower than the primary, never flex-1, so the next step keeps most of the bar.
+const BAR_ACTION_MORE =
+  "inline-flex min-h-[44px] shrink-0 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition disabled:cursor-not-allowed disabled:opacity-60";
 import MobileSheet from "@/components/layout/MobileSheet";
 import { useAuth } from "@/components/auth/AuthProvider";
-
-function getOrderDate(order) {
-  return order?.created_at || order?.order_date || order?.date || null;
-}
-
-function formatTaxes(taxes) {
-  if (!taxes || taxes.length === 0) return "—";
-  return taxes.map((tax) => `${tax.tax_type} ${formatPercent(tax.rate)}`).join(", ");
-}
-
-function InfoTile({ label, value, className = "" }) {
-  return (
-    <div className={`min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3 ${className}`}>
-      <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-slate-900 tabular-nums">{value || "—"}</p>
-    </div>
-  );
-}
-
-function DetailBlock({ title, children }) {
-  return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-slate-950 text-balance">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-const STATUS_BADGE = {
-  PENDING: "bg-slate-100 text-slate-700",
-  READY_TO_SHIP: "bg-sky-50 text-sky-700 border border-sky-200",
-  DRIVER_ASSIGNED: "bg-violet-50 text-violet-700 border border-violet-200",
-  OUT_FOR_DELIVERY: "bg-amber-50 text-amber-700 border border-amber-200",
-  DELIVERED: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  RETURNED: "bg-orange-50 text-orange-700 border border-orange-200",
-  CANCELLED: "bg-rose-50 text-rose-700 border border-rose-200",
-};
-
-const STATUS_TEXT = { DRIVER_ASSIGNED: "Awaiting Rider" };
-
-function StatusBadge({ status }) {
-  const cls = STATUS_BADGE[status] || "bg-slate-100 text-slate-700";
-  return (
-    <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-widest ${cls}`}>
-      {STATUS_TEXT[status] || toTitleCase(status)}
-    </span>
-  );
-}
-
-function OrderTrailTimeline({ trails }) {
-  if (!trails?.length) return null;
-  return (
-    <DetailBlock title="Order Trail">
-      <div className="relative ml-1.5 border-l-2 border-slate-200 pl-5">
-        {trails.map((trail, i) => {
-          const isLast = i === trails.length - 1;
-          return (
-            <div key={trail.id} className={isLast ? "pb-0" : "pb-5"}>
-              <div className="absolute -left-[5px] mt-0.5 h-2.5 w-2.5 rounded-full ring-4 ring-white" style={{
-                backgroundColor: isLast ? "#1a1b2e" : "#10b981",
-              }} />
-              <div className="flex items-start justify-between gap-3">
-                <StatusBadge status={trail.order_status} />
-                <span className="shrink-0 text-[11px] text-slate-400 tabular-nums">
-                  {formatDateTime(trail.created_at)}
-                </span>
-              </div>
-              {trail.description && (
-                <p className="mt-1 text-xs text-slate-500">{trail.description}</p>
-              )}
-              {trail.changed_by_name && (
-                <p className="mt-0.5 text-xs italic text-slate-400">by {trail.changed_by_name}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </DetailBlock>
-  );
-}
 
 const ACTION_CONFIG = {
   PENDING: {
     primary: { label: "Accept Order", nextStatus: "READY_TO_SHIP" },
     cancel: true,
   },
+  // One step: pick the rider and the order goes out (stock leaves, invoice issued). There is no
+  // separate rider accept/pickup.
   READY_TO_SHIP: {
-    primary: { label: "Assign Rider", nextStatus: "DRIVER_ASSIGNED", showDriver: true },
-    cancel: true,
-  },
-  // The rider accepting is the pickup: stock leaves and the invoice is issued. Admin can
-  // record it on the rider's behalf.
-  DRIVER_ASSIGNED: {
-    primary: { label: "Accept & Pick Up", adminLabel: "Mark Picked Up", nextStatus: "OUT_FOR_DELIVERY" },
-    back: { nextStatus: "READY_TO_SHIP" },
+    primary: { label: "Assign rider & send out", nextStatus: "OUT_FOR_DELIVERY", showDriver: true },
     cancel: true,
   },
   OUT_FOR_DELIVERY: {
@@ -119,9 +49,9 @@ const ACTION_CONFIG = {
 };
 
 const ROLE_ACTIONS = {
-  ADMIN: ["PENDING", "READY_TO_SHIP", "DRIVER_ASSIGNED", "OUT_FOR_DELIVERY"],
+  ADMIN: ["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY"],
   WAREHOUSE_MANAGER: ["PENDING", "READY_TO_SHIP"],
-  DRIVER: ["DRIVER_ASSIGNED", "OUT_FOR_DELIVERY"],
+  DRIVER: ["OUT_FOR_DELIVERY"],
   RETAILER: [],
   SALESMAN: [],
   ACCOUNTANT: [],
@@ -134,7 +64,6 @@ const ROLE_ACTIONS = {
 const CANCEL_ROLES_BY_STATUS = {
   PENDING: new Set(["ADMIN", "RETAILER"]),
   READY_TO_SHIP: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
-  DRIVER_ASSIGNED: new Set(["ADMIN", "WAREHOUSE_MANAGER", "RETAILER"]),
   OUT_FOR_DELIVERY: new Set(["ADMIN", "DRIVER"]),
 };
 
@@ -149,13 +78,6 @@ const CANCEL_ROLES_BY_STATUS = {
 // something to keep relying on: if a driver-requiring transition were ever granted to
 // another role, the select would render empty and submitAction would reject with
 // "Please select a driver" and nothing to select.
-// DRIVER_ASSIGNED -> READY_TO_SHIP: the rider declines, or the warehouse takes the order
-// back to give it to someone else. Same transition, named for who is doing it.
-const BACK_LABEL_BY_ROLE = {
-  DRIVER: "Decline",
-  WAREHOUSE_MANAGER: "Unassign Rider",
-  ADMIN: "Unassign Rider",
-};
 
 function roleNeedsDriverList(role) {
   return (ROLE_ACTIONS[role] || []).some((status) => ACTION_CONFIG[status]?.primary?.showDriver);
@@ -166,7 +88,7 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [backSheetOpen, setBackSheetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // An error describes the inputs that were submitted; once they change it no longer applies.
   useEffect(() => setError(""), [form]);
 
@@ -174,9 +96,10 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
   const allowedStatuses = ROLE_ACTIONS[role] || [];
   const canPrimary = config.primary && allowedStatuses.includes(order.status);
   const canCancel = config.cancel && (CANCEL_ROLES_BY_STATUS[order.status]?.has(role) ?? false);
-  const backLabel = config.back ? BACK_LABEL_BY_ROLE[role] : null;
-  const primaryLabel = canPrimary ? (role === "ADMIN" && config.primary.adminLabel) || config.primary.label : null;
-  // Two transitions cannot be a single tap: "Assign Rider" is rejected without a rider, and
+  const primaryLabel = canPrimary ? config.primary.label : null;
+  // An order sent back to Accepted when the pickup step was removed keeps its rider: offer them.
+  const driverId = form.driverId ?? (order.delivery_driver_id ? String(order.delivery_driver_id) : "");
+  // Two transitions cannot be a single tap: sending out is rejected without a rider, and
   // "Mark Delivered" carries cash collection. Those open the sheet instead of submitting
   // straight from the bar.
   const needsInput = Boolean(canPrimary && (config.primary.showDriver || config.primary.showPayment));
@@ -186,16 +109,13 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
     setError("");
     try {
       const body = { status: nextStatus };
-      if (nextStatus === "DRIVER_ASSIGNED") {
-        if (!form.driverId) {
+      if (order.status === "READY_TO_SHIP" && nextStatus === "OUT_FOR_DELIVERY") {
+        if (!driverId) {
           setError("Please select a rider.");
           setSaving(false);
           return;
         }
-        body.delivery_driver_id = Number(form.driverId);
-      }
-      if (order.status === "DRIVER_ASSIGNED" && nextStatus === "READY_TO_SHIP" && form.reason?.trim()) {
-        body.reason = form.reason.trim();
+        body.delivery_driver_id = Number(driverId);
       }
       if (nextStatus === "DELIVERED") {
         if (form.paymentStatus) body.payment_status = form.paymentStatus;
@@ -212,7 +132,7 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
       });
       setForm({});
       setSheetOpen(false);
-      setBackSheetOpen(false);
+      setMoreOpen(false);
       onUpdate();
     } catch (err) {
       setError(err?.payload?.detail || err?.message || "Update failed.");
@@ -229,7 +149,7 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
       <>
         {config.primary.showDriver && (
           <select
-            value={form.driverId || ""}
+            value={driverId}
             onChange={(e) => setForm((prev) => ({ ...prev, driverId: e.target.value }))}
             aria-label="Rider"
             className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm lg:h-9 lg:min-h-0 lg:rounded-md lg:border-control lg:py-0"
@@ -291,29 +211,16 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
 
   const cancelLabel = order.status === "OUT_FOR_DELIVERY" ? "Refused at Shop" : "Cancel Order";
 
-  const reasonInput = (
-    <input
-      type="text"
-      maxLength={200}
-      value={form.reason || ""}
-      onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
-      placeholder="Reason (optional)"
-      aria-label="Reason"
-      className="min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-base sm:text-sm"
-    />
-  );
-
   return (
     <>
-      {/* Desktop: the next step as one quiet panel: its inputs, one near-black primary, the
-          way back as a secondary, and cancelling as a red text action at the far end. */}
-      {(canPrimary || canCancel || backLabel) && (
+      {/* Desktop: the next step as one quiet panel: its inputs, one primary, and cancelling as
+          a red text action at the far end. */}
+      {(canPrimary || canCancel) && (
         <div className="hidden lg:block">
           <div className="space-y-3 rounded-lg border border-line bg-white p-4">
             {canPrimary && (config.primary.showDriver || config.primary.showPayment) ? (
               <div className="max-w-md space-y-2">{renderInputs()}</div>
             ) : null}
-            {backLabel && <div className="max-w-md">{reasonInput}</div>}
             <div className="flex flex-wrap items-center gap-2">
               {canPrimary && (
                 <button
@@ -323,16 +230,6 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
                   className={`h-9 cursor-pointer rounded-md px-4 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60 ${order.status === "PENDING" ? "bg-emerald-700 hover:bg-emerald-800 focus-visible:outline-emerald-700" : order.status === "READY_TO_SHIP" ? "bg-sky-700 hover:bg-sky-800 focus-visible:outline-sky-700" : "bg-accent hover:bg-accent-strong focus-visible:outline-ink"}`}
                 >
                   {saving ? "Saving…" : primaryLabel}
-                </button>
-              )}
-              {backLabel && (
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => submitAction(config.back.nextStatus)}
-                  className="h-9 cursor-pointer rounded-md border border-control bg-white px-4 text-sm font-medium text-ink hover:bg-raised disabled:opacity-60"
-                >
-                  {backLabel}
                 </button>
               )}
               {canCancel && (
@@ -351,10 +248,10 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
         </div>
       )}
 
-      {/* Phones: the same actions pinned in the thumb zone. secondaryActions keeps a bar
-          present for roles with no transitions at all (a salesman sees only Invoice PDF),
-          so the primary control never scrolls out of reach. */}
-      <MobileActionBar notice={error ? <p className="text-xs text-rose-500">{error}</p> : null}>
+      {/* Phones: the next step pinned in the thumb zone at full width. Cancelling sits behind
+          "More", two taps away, so a slip of the thumb next to the primary cannot cancel an order. secondaryActions keeps a bar present for roles with no transitions
+          at all (a salesman sees Record collected cash). */}
+      <MobileActionBar notice={error && !moreOpen ? <p className="text-xs text-rose-500">{error}</p> : null}>
         {canPrimary && (
           <button
             type="button"
@@ -365,28 +262,32 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
             {saving ? "Saving…" : primaryLabel}
           </button>
         )}
-        {backLabel && (
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setBackSheetOpen(true)}
-            className={BAR_ACTION_SECONDARY}
-          >
-            {backLabel}
-          </button>
-        )}
         {!canPrimary && secondaryActions}
         {canCancel && (
           <button
             type="button"
             disabled={saving}
-            onClick={() => submitAction("CANCELLED")}
-            className={BAR_ACTION_DANGER}
+            onClick={() => setMoreOpen(true)}
+            className={BAR_ACTION_MORE}
           >
-            {cancelLabel}
+            More
           </button>
         )}
       </MobileActionBar>
+
+      <MobileSheet open={moreOpen} title={`Order #${order.id}`} onClose={() => setMoreOpen(false)}>
+        {canCancel && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => submitAction("CANCELLED")}
+            className={`${BAR_ACTION_DANGER} w-full`}
+          >
+            {saving ? "Saving…" : cancelLabel}
+          </button>
+        )}
+        {error && <p className="text-xs text-rose-500">{error}</p>}
+      </MobileSheet>
 
       <MobileSheet open={sheetOpen} title={primaryLabel || "Confirm"} onClose={() => setSheetOpen(false)}>
         {renderInputs()}
@@ -401,20 +302,6 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
         </button>
       </MobileSheet>
 
-      {backLabel && (
-        <MobileSheet open={backSheetOpen} title={backLabel} onClose={() => setBackSheetOpen(false)}>
-          {reasonInput}
-          {error && <p className="text-xs text-rose-500">{error}</p>}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => submitAction(config.back.nextStatus)}
-            className={`${BAR_ACTION_PRIMARY} w-full`}
-          >
-            {saving ? "Saving…" : backLabel}
-          </button>
-        </MobileSheet>
-      )}
     </>
   );
 }
@@ -422,52 +309,30 @@ export function OrderActionBar({ order, role, drivers, onUpdate, secondaryAction
 // Loads one order and, for roles that can assign one, the riders to choose from. Shared by this
 // panel (phones and the field roles) and the desktop order desk.
 export function useOrderDetail(orderId, role) {
-  const [order, setOrder] = useState(null);
-  const [drivers, setDrivers] = useState([]);
-  const [loading, setLoading] = useState(Boolean(orderId));
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const orderQuery = useQuery({ queryKey: queryPath(apiEndpoints.orders.detail(orderId)), enabled: Boolean(orderId) });
+  // A failed rider list must not block the order: it shows with an empty rider picker.
+  const driversQuery = useQuery({
+    queryKey: queryPath(apiEndpoints.admin.drivers),
+    enabled: roleNeedsDriverList(role),
+    staleTime: 60_000,
+  });
 
-  async function loadOrder() {
-    if (!orderId) return;
-    setLoading(true);
-    try {
-      const [response, driversResponse] = await Promise.all([
-        apiFetch(apiEndpoints.orders.detail(orderId)),
-        roleNeedsDriverList(role)
-          ? apiFetchCached(apiEndpoints.admin.drivers, { ttl: 60000 }).catch(() => [])
-          : Promise.resolve([]),
-      ]);
-      setOrder(response);
-      setDrivers(driversResponse || []);
-      setError("");
-    } catch (err) {
-      setError(err?.message || "Unable to load order details.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadOrder();
-  }, [orderId, role]);
-
-  return { order, drivers, loading, error, reload: loadOrder };
+  return {
+    order: orderQuery.data ?? null,
+    drivers: driversQuery.data || [],
+    loading: orderQuery.isPending && Boolean(orderId),
+    error: orderQuery.error ? orderQuery.error.message || "Unable to load order details." : "",
+    // After a status change or a payment: this order and everything it feeds (the lists, the queue
+    // counts, the dashboard, what shops owe) refetch.
+    reload: () => invalidateOrders(queryClient),
+  };
 }
 
-export async function downloadInvoicePdf(orderId) {
-  const { blob, filename } = await apiFetchBlob(apiEndpoints.orders.invoicePdf(orderId));
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename || `invoice-${orderId}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.URL.revokeObjectURL(url);
-}
-
+// One order on a phone, and for the field roles at any width. Built from the same sections as the
+// desktop order desk, stacked: what it is worth, where it is, then the shop, the lines, the money
+// and the history. The next step stays pinned in the thumb zone by OrderActionBar.
 export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
-  const [downloading, setDownloading] = useState(false);
   const { role } = useAuth();
   const { order, drivers, loading, error, reload: loadOrder } = useOrderDetail(orderId, role);
 
@@ -476,216 +341,89 @@ export default function OrderDetailPanel({ orderId, onClose, onOrderUpdate }) {
     onOrderUpdate?.();
   }
 
-  async function downloadInvoice() {
-    if (!orderId || downloading) return;
-    setDownloading(true);
-    try {
-      await downloadInvoicePdf(orderId);
-    } finally {
-      setDownloading(false);
-    }
-  }
-
-  const itemColumns = useMemo(
-    () => [
-      {
-        header: "SKU",
-        accessorKey: "sku_code",
-        cell: ({ row }) =>
-          row.original.sku_code || row.original.sku_name || `SKU ${row.original.sku_id}`
-      },
-      {
-        header: "HSN",
-        accessorKey: "hsn_code",
-        cell: ({ row }) => row.original.hsn_code || "—"
-      },
-      {
-        header: "Qty",
-        accessorKey: "quantity",
-        meta: { type: "number" },
-        cell: ({ row }) => formatNumber(row.original.quantity)
-      },
-      {
-        header: "MRP",
-        accessorKey: "unit_price",
-        meta: { type: "number" },
-        cell: ({ row }) => formatCurrency(row.original.unit_price)
-      },
-      {
-        header: "Discount",
-        accessorKey: "discount_amount",
-        meta: { type: "number" },
-        cell: ({ row }) => formatCurrency(row.original.discount_amount || 0)
-      },
-      {
-        header: "Taxable",
-        accessorKey: "taxable_value",
-        meta: { type: "number" },
-        cell: ({ row }) => formatCurrency(row.original.taxable_value)
-      },
-      {
-        header: "GST",
-        accessorKey: "gst_amount",
-        meta: { type: "number" },
-        cell: ({ row }) => (
-          <div className="space-y-1">
-            <p className="font-semibold text-slate-700 tabular-nums">{formatCurrency(row.original.gst_amount)}</p>
-            <p className="text-xs text-slate-400">{formatTaxes(row.original.taxes)}</p>
-          </div>
-        )
-      },
-      {
-        header: "Final",
-        accessorKey: "line_total",
-        meta: { type: "number" },
-        cell: ({ row }) => formatCurrency(row.original.line_total)
-      }
-    ],
-    []
-  );
-
   if (!orderId) return null;
+  if (loading && !order) return <p className="py-6 text-sm text-muted">Loading order #{orderId}…</p>;
+  if (error && !order) return <p className="py-6 text-sm text-[#c4242a]">{error}</p>;
+  if (!order) return <p className="py-6 text-sm text-muted">Order not found.</p>;
 
-  if (loading) {
-    return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading order details...</div>;
-  }
-
-  if (error) {
-    return <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-sm text-rose-600">{error}</div>;
-  }
-
-  if (!order) {
-    return <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">Order not found.</div>;
-  }
+  const lineCount = (order.items || []).length;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
-        <div>
-          <p className="text-xs font-semibold uppercase text-slate-400">{formatDate(getOrderDate(order))}</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950 text-balance">Order #{order.id}</h2>
-          <div className="mt-1.5 flex items-center gap-2">
-            <StatusBadge status={order.status} />
-            <InvoiceCell invoiceNumber={order.invoice_number} status={order.status} />
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <h2 className="text-xl font-semibold text-ink">Order #{order.id}</h2>
+            <StatusPill status={order.status} />
           </div>
+          <p className="mt-1 text-sm text-muted">
+            {order.retailer_name || "Unknown shop"} · placed {formatDate(order.created_at)}
+          </p>
+          <p className="text-sm text-muted">
+            {order.invoice_number ? `Invoice ${order.invoice_number}` : "Invoice not issued yet"}
+          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {/* An invoice is issued at dispatch; before that the PDF endpoint 404s. */}
-          {order.invoice_number ? (
-            <button
-              type="button"
-              onClick={downloadInvoice}
-              disabled={downloading}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {downloading ? "Preparing..." : "Invoice PDF"}
-            </button>
-          ) : null}
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600"
-            >
-              Close
-            </button>
-          ) : null}
-        </div>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close order"
+            className="-mr-2 flex h-11 w-11 flex-none items-center justify-center rounded-md text-muted hover:bg-raised hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
+              <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        ) : null}
+      </header>
+
+      <div className="space-y-2.5">
+        <MoneySummary order={order} />
+        <OrderDocumentButton
+          order={order}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-control bg-white px-4 text-sm font-medium text-ink hover:bg-raised disabled:opacity-60 sm:h-9 sm:w-auto"
+        />
       </div>
 
       {role === "SALESMAN" && order.can_collect_cash ? <SalesmanCashCollection key={order.id} order={order} onRecorded={handleOrderUpdate} /> : null}
 
-      {/* Two-up on phones: these values are short ("Credit", "-", a rupee amount), so one
-          per row turned eight facts into eight screens' worth of scrolling. Long values
-          span the full width. */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
-        <InfoTile label="Retailer" value={order.retailer_name || order.to_entity_id} className="col-span-2 xl:col-span-1" />
-        <InfoTile label="Warehouse" value={[order.warehouse_name, order.warehouse_state].filter(Boolean).join(", ")} className="col-span-2 xl:col-span-1" />
-        <InfoTile label="Payment" value={toTitleCase(order.payment_status || "CREDIT")} />
-        <InfoTile label="Pending" value={formatCurrency(order.pending_amount)} />
-        <InfoTile label="Beat" value={order.beat_name} />
-        <InfoTile label="Driver" value={order.delivery_driver_name} />
-        <InfoTile label="Retailer GSTIN" value={order.retailer_gst_number} className="col-span-2 xl:col-span-1" />
-        <InfoTile label="Grand Total" value={formatCurrency(order.grand_total || order.total_amount)} className="col-span-2 xl:col-span-1" />
-      </div>
-
-      <OrderTrailTimeline trails={order.trails} />
+      <Section title="Progress">
+        <ProgressStrip order={order} />
+      </Section>
 
       <OrderActionBar
         order={order}
         role={role}
         drivers={drivers}
         onUpdate={handleOrderUpdate}
-        // Roles with no status transitions (ROLE_ACTIONS.SALESMAN is []) still get a bar,
-        // so the one thing they came for does not scroll away with the header.
+        // A salesman has no status transitions (ROLE_ACTIONS.SALESMAN is []) but still gets a
+        // bar for cash collection. The order's PDF is not repeated here: it sits under the total.
         secondaryActions={
-          role === "SALESMAN" && order.can_collect_cash ? <a href={`#order-cash-${order.id}`} className={BAR_ACTION_PRIMARY}>Record collected cash</a> :
-          !order.invoice_number ? null :
-          <button
-            type="button"
-            onClick={downloadInvoice}
-            disabled={downloading}
-            className={BAR_ACTION_PRIMARY}
-          >
-            {downloading ? "Preparing..." : "Invoice PDF"}
-          </button>
+          role === "SALESMAN" && order.can_collect_cash ? <a href={`#order-cash-${order.id}`} className={BAR_ACTION_PRIMARY}>Record collected cash</a> : null
         }
       />
 
-      <DetailBlock title="Line Items">
-        <DataTable
-          columns={itemColumns}
-          data={order.items || []}
-          emptyLabel="No line items on this order."
-          tableClassName="min-w-[1100px]"
-        />
-      </DetailBlock>
+      <Section title="Details">
+        <Facts order={order} />
+      </Section>
 
-      <DetailBlock title="Totals">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <InfoTile label="Taxable" value={formatCurrency(order.taxable_value)} />
-          <InfoTile label="GST" value={formatCurrency(order.gst_amount)} />
-          <InfoTile label="Subtotal" value={formatCurrency(order.subtotal)} />
-          <InfoTile label="Grand Total" value={formatCurrency(order.grand_total)} />
-        </div>
-      </DetailBlock>
+      <Section title="Items" aside={`${lineCount} ${lineCount === 1 ? "line" : "lines"}`}>
+        <Lines order={order} />
+      </Section>
 
-      <DetailBlock title="Payments">
-        {order.payments?.length ? (
-          <div className="space-y-2">
-            {order.payments.map((payment) => (
-              <div key={payment.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 tabular-nums">{formatCurrency(payment.amount)}</p>
-                  <p className="truncate text-xs text-slate-500">{payment.transaction_reference?.startsWith("SALESMAN-CASH-") ? `${toTitleCase(payment.payment_mode || "CASH")} collected by salesman` : payment.transaction_reference || "Transaction"}</p>
-                </div>
-                <p className="shrink-0 text-xs text-slate-500">{formatDate(payment.created_at)}</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-400">
-            No payment history available.
-          </div>
-        )}
-      </DetailBlock>
+      <Section title="Payments">
+        <Payments order={order} />
+      </Section>
 
-      <DetailBlock title="Credit Notes">
-        {order.credit_notes?.length ? (
-          <div className="space-y-2">
-            {order.credit_notes.map((note) => (
-              <div key={note.id} className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-                <p className="text-sm font-semibold text-slate-900">{note.credit_note_number}</p>
-                <p className="text-xs text-slate-500">{formatNumber(note.items?.length || 0)} items</p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-400">
-            No credit notes linked to this order.
-          </div>
-        )}
-      </DetailBlock>
+      {order.credit_notes?.length ? (
+        <Section title="Credit notes">
+          <CreditNotes notes={order.credit_notes} />
+        </Section>
+      ) : null}
+
+      <Section title="History">
+        <History trails={order.trails} />
+      </Section>
     </div>
   );
 }

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { apiEndpoints, apiFetch, apiFetchBlob, apiFetchCached } from "@/lib/api";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiEndpoints, apiFetch, apiFetchBlob } from "@/lib/api";
+import { invalidateOrders, queryPath } from "@/lib/query";
+import { ORDERS_QUEUE_PAGE_SIZE } from "@/lib/screenData";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { ORDER_QUEUES, PAYMENT_LABEL, PAYMENT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/orderStatus";
 import useIsDesktop from "@/lib/hooks/useIsDesktop";
@@ -17,7 +20,7 @@ import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 // with each?": the queues across the top are the work in the order it happens, each one a filter
 // with its count, and every row carries its next step in the last column.
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = ORDERS_QUEUE_PAGE_SIZE;
 const ROLE_SETUP = {
   ADMIN: { canCreate: true, canExport: true, canAccept: true },
   ACCOUNTANT: { canCreate: true, canExport: true, canAccept: false },
@@ -39,13 +42,12 @@ export default function OrdersQueue({ role }) {
   const isDesktop = useIsDesktop();
   const { notify } = useToast();
 
-  const [summary, setSummary] = useState(null);
-  const [orders, setOrders] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [totalValue, setTotalValue] = useState(null);
-  const [salesmen, setSalesmen] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const lookupsQuery = useQuery({ queryKey: queryPath(apiEndpoints.admin.lookups), staleTime: 5 * 60_000 });
+  const salesmen = useMemo(
+    () => [...(lookupsQuery.data?.salesmen || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+    [lookupsQuery.data]
+  );
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
@@ -55,7 +57,6 @@ export default function OrdersQueue({ role }) {
   const [exporting, setExporting] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
-  const requestId = useRef(0);
 
   // The queue and the salesman live in the URL (?queue=, ?salesman=), so a refresh or a shared link
   // opens the same list: one salesman's orders, counts and value are their sales at a glance.
@@ -101,60 +102,33 @@ export default function OrdersQueue({ role }) {
     return params;
   }
 
-  async function loadSummary() {
-    try {
-      const query = salesmanId ? `?salesman_id=${salesmanId}` : "";
-      setSummary((await apiFetch(`${apiEndpoints.admin.orderStatusSummary}${query}`)) || {});
-    } catch (err) {
-      setSummary({});
-      setError(err?.message || "Couldn't load the order counts.");
-    }
-  }
-
-  async function loadOrders() {
-    if (!queue) return;
-    const id = ++requestId.current;
-    setLoading(true);
-    try {
-      const params = listParams();
-      params.set("limit", String(PAGE_SIZE));
-      params.set("offset", String((page - 1) * PAGE_SIZE));
-      const response = await apiFetch(`${apiEndpoints.admin.orders}?${params.toString()}`);
-      if (id !== requestId.current) return; // a newer request has replaced this one
-      setOrders(response?.items || []);
-      setTotal(response?.total || 0);
-      setTotalValue(response?.total_value ?? null);
-      setError("");
-    } catch (err) {
-      if (id === requestId.current) setError(err?.message || "Couldn't load orders.");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadSummary();
-  }, [salesmanId]);
-
-  useEffect(() => {
-    loadOrders();
-  }, [queue?.key, page, search, extra, salesmanId]);
-
-  useEffect(() => {
-    let active = true;
-    apiFetchCached(apiEndpoints.admin.lookups)
-      .then((lookups) => {
-        if (active) setSalesmen([...(lookups?.salesmen || [])].sort((a, b) => (a.name || "").localeCompare(b.name || "")));
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Counts and the page of orders are cached by their exact path: going back to a queue shows it at
+  // once and refreshes behind, and paging or filtering keeps the old rows (dimmed) until the new
+  // ones land. A response for a superseded filter can no longer overwrite the current one.
+  const summaryQuery = useQuery({
+    queryKey: queryPath(`${apiEndpoints.admin.orderStatusSummary}${salesmanId ? `?salesman_id=${salesmanId}` : ""}`),
+  });
+  const pageParams = listParams();
+  pageParams.set("limit", String(PAGE_SIZE));
+  pageParams.set("offset", String((page - 1) * PAGE_SIZE));
+  const ordersQuery = useQuery({
+    queryKey: queryPath(`${apiEndpoints.admin.orders}?${pageParams.toString()}`),
+    enabled: Boolean(queue),
+    placeholderData: keepPreviousData,
+  });
+  const summary = summaryQuery.isSuccess ? summaryQuery.data || {} : summaryQuery.isError ? {} : null;
+  const orders = ordersQuery.data?.items || [];
+  const total = ordersQuery.data?.total || 0;
+  const totalValue = ordersQuery.data?.total_value ?? null;
+  const loading = ordersQuery.isPending || ordersQuery.isPlaceholderData;
+  const error = ordersQuery.error
+    ? ordersQuery.error.message || "Couldn't load orders."
+    : summaryQuery.error
+      ? summaryQuery.error.message || "Couldn't load the order counts."
+      : "";
 
   function refresh() {
-    loadSummary();
-    loadOrders();
+    invalidateOrders(queryClient);
   }
 
   async function acceptOrder(order) {
@@ -207,11 +181,10 @@ export default function OrdersQueue({ role }) {
     if (order.status === "READY_TO_SHIP" && setup.canAccept) {
       return (
         <button type="button" className={`${ROW_BUTTON} border-sky-700 bg-sky-700 text-white hover:bg-sky-800 focus-visible:outline-sky-700`} onClick={() => setSelectedOrderId(order.id)}>
-          Assign rider
+          Send out
         </button>
       );
     }
-    if (order.status === "DRIVER_ASSIGNED") return <span className="text-sm text-muted">Waiting on rider</span>;
     if (order.status === "OUT_FOR_DELIVERY") return <span className="text-sm text-muted">On the road</span>;
     if (order.status === "DELIVERED" && pending > 0) {
       return <span className="text-sm font-medium tabular-nums text-data">{formatCurrency(pending)} due</span>;

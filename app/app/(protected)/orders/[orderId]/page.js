@@ -28,7 +28,7 @@ export default function AdminOrderDetail() {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mx-auto max-w-[880px]">
       <OrderDetailPanel orderId={orderId} />
     </div>
   );

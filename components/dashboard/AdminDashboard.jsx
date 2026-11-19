@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQueries } from "@tanstack/react-query";
 import Link from "next/link";
 import dayjs from "dayjs";
-import { apiEndpoints, apiFetch } from "@/lib/api";
+import { queryPath } from "@/lib/query";
+import { adminDashboardPaths } from "@/lib/screenData";
 import { formatCompactCurrency, formatCount, formatCurrency } from "@/lib/format";
 import { PAYMENT_LABEL } from "@/lib/orderStatus";
 import { PeriodColumns, ThinRing } from "@/components/charts/LedgerCharts";
@@ -31,16 +33,7 @@ const MONEY_TABS = [
 
 const PAYMENT_COLORS = { PAID: "#2e7d32", PARTIAL: "#c08a2b", CREDIT: "#a3a3a3", UNPAID: "#d4d4d4" };
 
-function fetchDashboard(period) {
-  const query = periodQuery(period).toString();
-  const withPeriod = (url) => (query ? `${url}?${query}` : url);
-  return Promise.allSettled([
-    apiFetch(withPeriod(apiEndpoints.admin.summary)),
-    apiFetch(apiEndpoints.admin.orderStatusSummary),
-    apiFetch(apiEndpoints.admin.outstandingSummary),
-    apiFetch(withPeriod(apiEndpoints.admin.dailySales)),
-  ]);
-}
+
 
 function Panel({ title, aside, children, className = "" }) {
   return (
@@ -79,48 +72,37 @@ function Change({ now, before, format, period }) {
 }
 
 export default function AdminDashboard() {
-  const [summary, setSummary] = useState(null);
-  const [queues, setQueues] = useState(null);
-  const [owed, setOwed] = useState(null);
-  const [dailySales, setDailySales] = useState(null);
-  const [error, setError] = useState("");
   const [moneyTab, setMoneyTab] = useState("sales");
   const [period, setPeriod] = useState(ALL_TIME);
-  const [updatedAt, setUpdatedAt] = useState(null);
-  const [refreshing, setRefreshing] = useState(true);
+  // The period the figures are for: a custom range only takes effect once both ends are set.
+  const [shownPeriod, setShownPeriod] = useState(ALL_TIME);
   const [showCalculation, setShowCalculation] = useState(false);
 
-  function apply([s, q, o, d]) {
-    if (s.status === "fulfilled") setSummary(s.value);
-    if (q.status === "fulfilled") setQueues(q.value || {});
-    if (o.status === "fulfilled") setOwed(o.value);
-    if (d.status === "fulfilled") setDailySales(d.value);
-    const failed = [s, q, o, d].filter((r) => r.status === "rejected").length;
-    setError(failed ? `Couldn't load ${failed === 4 ? "the dashboard" : "part of the dashboard"}. Figures shown may be incomplete.` : "");
-    setUpdatedAt(dayjs());
-    setRefreshing(false);
-  }
+  // Each panel renders the moment its own request lands (a slow one no longer holds back the
+  // rest), a revisit shows the last figures at once while they refresh, and changing the period
+  // keeps the old figures on screen until the new ones arrive.
+  const results = useQueries({
+    queries: adminDashboardPaths(periodQuery(shownPeriod).toString()).map((path) => ({ queryKey: queryPath(path), placeholderData: keepPreviousData })),
+  });
+  const [summaryQ, queuesQ, owedQ, dailyQ] = results;
+  const summary = summaryQ.data ?? null;
+  const queues = queuesQ.isSuccess ? queuesQ.data || {} : null;
+  const owed = owedQ.data ?? null;
+  const dailySales = dailyQ.data ?? null;
+  const failed = results.filter((r) => r.isError).length;
+  const error = failed ? `Couldn't load ${failed === results.length ? "the dashboard" : "part of the dashboard"}. Figures shown may be incomplete.` : "";
+  const refreshing = results.some((r) => r.isFetching);
+  const lastUpdate = Math.max(...results.map((r) => r.dataUpdatedAt || 0));
+  const updatedAt = lastUpdate ? dayjs(lastUpdate) : null;
 
-  function load(nextPeriod) {
-    setRefreshing(true);
-    fetchDashboard(nextPeriod).then(apply);
+  function load() {
+    results.forEach((r) => r.refetch());
   }
 
   function changePeriod(nextPeriod) {
     setPeriod(nextPeriod);
-    // A custom range waits until both ends are set.
-    if (nextPeriod.key !== "custom" || (nextPeriod.from && nextPeriod.to)) load(nextPeriod);
+    if (nextPeriod.key !== "custom" || (nextPeriod.from && nextPeriod.to)) setShownPeriod(nextPeriod);
   }
-
-  useEffect(() => {
-    let active = true;
-    fetchDashboard(ALL_TIME).then((results) => {
-      if (active) apply(results);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const money = summary?.money;
   const tab = MONEY_TABS.find((t) => t.key === moneyTab);
@@ -154,7 +136,7 @@ export default function AdminDashboard() {
           <PeriodSelect value={period} onChange={changePeriod} />
           <button
             type="button"
-            onClick={() => load(period)}
+            onClick={load}
             disabled={refreshing}
             className="h-9 rounded-md border border-control bg-white px-3 font-medium text-ink hover:bg-raised disabled:opacity-60"
           >
