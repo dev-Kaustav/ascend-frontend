@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Plus, Search } from "lucide-react";
@@ -9,7 +10,6 @@ import FieldFeedback from "@/components/field/FieldFeedback";
 import FieldOrderCard from "@/components/field/FieldOrderCard";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
-import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 import InvoiceCell from "@/components/ui/InvoiceCell";
 
 const STATUS_OPTIONS = [
@@ -35,7 +35,7 @@ export default function SalesmanOrders() {
   const [filters, setFilters] = useState({ status: "ALL", search: "" });
   // What is typed; copied into filters.search after a pause so each keystroke is not a request.
   const [searchText, setSearchText] = useState("");
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const router = useRouter();
 
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -171,7 +171,7 @@ export default function SalesmanOrders() {
           tableClassName="min-w-[700px]"
           // Makes the whole mobile card tappable, which is what lets the duplicate "View"
           // button be hidden there. Matches DriverOrders, which already did this.
-          onRowClick={(order) => setSelectedOrderId(order.id)}
+          onRowClick={(order) => router.push(`/app/orders/${order.id}`)}
         />
         {total > pageSize ? <div className="mt-4 flex items-center justify-between gap-3 text-sm text-slate-500">
           <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
@@ -190,12 +190,6 @@ export default function SalesmanOrders() {
         <Plus className="h-5 w-5" strokeWidth={2.5} />
         New order
       </Link>
-
-      {selectedOrderId && (
-        <SectionCard title="Order Detail">
-          <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} />
-        </SectionCard>
-      )}
     </div>
   );
 }

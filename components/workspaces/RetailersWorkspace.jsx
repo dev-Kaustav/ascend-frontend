@@ -15,18 +15,21 @@ import { useAuth } from "@/components/auth/AuthProvider";
 export default function RetailersWorkspace() {
   const { role } = useAuth();
   const [warehouseId, setWarehouseId] = useState(null);
+  // Two tabs: the shops (with what each owes) and the beats (with what each beat owes). Coverage
+  // and the outstanding report are hidden for admin, still reachable from their links (the
+  // dashboard's "View outstanding"); the accountant, who has no shops or beats here, keeps outstanding.
   const tabs = [
-    { key: "directory", label: "Directory", roles: ["ADMIN"], description: "Add and edit retailers, manage contacts, and assign salesmen and beats. Newest retailers appear first.", render: () => <RetailersPanel /> },
+    { key: "directory", label: "Shops", roles: ["ADMIN"], description: "Every shop with its salesman, beat and what it owes. Open a shop for its report and orders.", render: () => <RetailersPanel /> },
     // { key: "requests", label: "Requests", roles: ["ADMIN"], description: "Review retailer onboarding requests from the field team.", render: () => <RetailerRequestsPanel /> },
-    { key: "beats", label: "Beats", roles: ["ADMIN"], description: "Expand beats to see their retailers, edit beat details, or create a new beat.", render: () => <RetailerBeatsPanel /> },
-    { key: "coverage", label: "Coverage", roles: ["ADMIN"], description: "Retailer activity, billing trends, coverage, and top-performing outlets.", render: () => <RetailCoveragePanel /> },
-    { key: "outstanding", label: "Outstanding", roles: ["ADMIN", "ACCOUNTANT"], description: "Track retailer balances, recovery, and aging by warehouse.", render: () => <div className="space-y-4"><WarehouseSelector value={warehouseId} onChange={setWarehouseId} /><OutstandingPanel warehouseId={warehouseId} /></div> }
+    { key: "beats", label: "Beats", roles: ["ADMIN"], description: "Each beat with its shops and what they owe.", render: () => <RetailerBeatsPanel /> },
+    { key: "coverage", label: "Coverage", roles: ["ADMIN"], hidden: true, description: "Retailer activity, billing trends, coverage, and top-performing outlets.", render: () => <RetailCoveragePanel /> },
+    { key: "outstanding", label: "Outstanding", roles: ["ADMIN", "ACCOUNTANT"], hidden: role === "ADMIN", description: "Track retailer balances, recovery, and aging by warehouse.", render: () => <div className="space-y-4"><WarehouseSelector value={warehouseId} onChange={setWarehouseId} /><OutstandingPanel warehouseId={warehouseId} /></div> }
   ];
 
   return (
     <WorkspaceTabs
       title="Retailers"
-      subtitle="Shops we supply: their details, beats, coverage, and what they owe."
+      subtitle="Shops we supply: their details, beats and what they owe."
       tabs={tabs}
       actions={
         role === "ADMIN" ? (

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight, Package } from "lucide-react";
-import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { statusLabel } from "@/lib/orderStatus";
 import { cn } from "@/lib/cn";
 
 export default function FieldOrderCard({ order, children }) {
@@ -11,7 +12,7 @@ export default function FieldOrderCard({ order, children }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-slate-500">Order #{order.id}</span>
         <span className={cn("rounded-lg px-2 py-1 text-xs font-semibold", complete ? "bg-emerald-50 text-emerald-800" : cancelled ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-700")}>
-          {toTitleCase(order.status)}
+          {statusLabel(order.status)}
         </span>
       </div>
       <Link href={`/app/orders/${order.id}`} className="field-order-title">

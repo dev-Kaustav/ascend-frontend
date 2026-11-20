@@ -34,6 +34,20 @@
 .app-shell table td,
 .app-shell table th { font-variant-numeric: tabular-nums; }
 
+/* Every dropdown in the staff app gets one chevron, inset from the edge and centred, with the
+   text kept clear of it; the browser's own arrow sits against the border and differs per
+   browser. The selector outranks spacing utilities (px-2 and the like) on purpose. */
+.app-shell select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 0.9rem 0.9rem;
+  padding-right: 2.25rem;
+  text-overflow: ellipsis;
+}
+
 /* Field workspace: phone and tablet layouts share one touch-first shell. */
 @media (max-width: 1023px) {
   .field-app {
@@ -90,9 +104,6 @@
     background: white;
     backdrop-filter: none;
   }
-  .field-app .field-detail-overlay { --field-nav-height: 0px; }
-  .field-app .field-detail-overlay .mobile-action-bar { padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important; }
-  .field-app .field-detail-overlay > aside { padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px)); }
   .field-app .field-workspace-heading {
     padding: 0;
     background: transparent;

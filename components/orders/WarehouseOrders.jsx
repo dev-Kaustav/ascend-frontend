@@ -1,26 +1,28 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch, apiFetchCached } from "@/lib/api";
 import { formatDate, toTitleCase } from "@/lib/format";
-import FieldFeedback from "@/components/field/FieldFeedback";
 import FieldOrderCard from "@/components/field/FieldOrderCard";
 import FieldStatusFilters from "@/components/field/FieldStatusFilters";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
-import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
+import { can, cancelLabel, nextStep } from "@/lib/policy";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || order?.date || null;
 }
 
-// The moves a warehouse manager can make from each status (mirrors _ALLOWED_TRANSITIONS in
-// ascend-backend/app/services/order.py, which stays authoritative). Choosing a rider sends the
-// order out at once: there is no separate rider accept/pickup.
-const WAREHOUSE_NEXT = {
-  PENDING: [["READY_TO_SHIP", "Accept order"]],
-  READY_TO_SHIP: [["OUT_FOR_DELIVERY", "Assign rider & send out"], ["CANCELLED", "Cancel order"]],
-};
+// The moves a warehouse manager can make on an order: its next step and cancelling, as
+// lib/policy allows. Choosing a rider sends the order out at once.
+function nextOptions(order) {
+  const step = nextStep("WAREHOUSE_MANAGER", order);
+  return [
+    ...(step ? [[step.nextStatus, step.label]] : []),
+    ...(can("WAREHOUSE_MANAGER", "cancel", order) ? [["CANCELLED", cancelLabel(order)]] : []),
+  ];
+}
 
 export default function WarehouseOrders() {
   const [orders, setOrders] = useState([]);
@@ -34,7 +36,7 @@ export default function WarehouseOrders() {
   const [pageSize, setPageSize] = useState(20);
   const [filters, setFilters] = useState({ status: "PENDING" });
   const [updates, setUpdates] = useState({});
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const router = useRouter();
 
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -160,7 +162,6 @@ export default function WarehouseOrders() {
           const orderId = row.original.id;
           const rowUpdate = updates[orderId] || {};
           const showDriverPicker = rowUpdate.status === "OUT_FOR_DELIVERY";
-          const nextOptions = WAREHOUSE_NEXT[row.original.status] || [];
           return (
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center gap-2">
@@ -171,7 +172,7 @@ export default function WarehouseOrders() {
                   className="rounded-full border border-slate-200 bg-white px-2 py-1"
                 >
                   <option value="">Set status</option>
-                  {nextOptions.map(([value, label]) => (
+                  {nextOptions(row.original).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
@@ -280,7 +281,7 @@ export default function WarehouseOrders() {
           </select>
         }
       >
-        <DataTable renderMobileRow={(order, renderCell) => <FieldOrderCard order={{ ...order, retailer_name: retailerMap.get(order.to_entity_id) }}>{renderCell("actions")}</FieldOrderCard>} columns={columns} data={orders} emptyLabel="No orders match the selected filter." onRowClick={(order) => setSelectedOrderId(order.id)} />
+        <DataTable renderMobileRow={(order, renderCell) => <FieldOrderCard order={{ ...order, retailer_name: retailerMap.get(order.to_entity_id) }}>{renderCell("actions")}</FieldOrderCard>} columns={columns} data={orders} emptyLabel="No orders match the selected filter." onRowClick={(order) => router.push(`/app/orders/${order.id}`)} />
         <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
           <span>
             Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
@@ -305,23 +306,6 @@ export default function WarehouseOrders() {
           </div>
         </div>
       </SectionCard>
-      {selectedOrderId ? (
-        <div className="field-detail-overlay fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
-          <button
-            type="button"
-            aria-label="Close order detail"
-            className="absolute inset-0 cursor-default"
-            onClick={() => setSelectedOrderId(null)}
-          />
-          <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
-            <OrderDetailPanel
-              orderId={selectedOrderId}
-              onClose={() => setSelectedOrderId(null)}
-              onOrderUpdate={() => loadOrders(false)}
-            />
-          </aside>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { apiEndpoints, apiFetchBlob } from "@/lib/api";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { formatCount, formatCurrency, formatDate, formatDateTime } from "@/lib/format";
-import { ORDER_STEPS, PAYMENT_LABEL, PAYMENT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/orderStatus";
+import { formatCurrency, formatDateTime } from "@/lib/format";
+import { can } from "@/lib/policy";
+import { itemName, lineDiscount, lineQuantity, lineRate } from "@/lib/orderLines";
+import { orderProgress, PAYMENT_LABEL, PAYMENT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/orderStatus";
 
-// The pieces of one order's screen, shared by the desktop order desk and the phone panel so the
-// two read the same. Each is laid out for a 390px phone first; the sm: rules restore the desk.
+// The pieces of the desktop order desk (OrderDesk). Phones read an order through OrderCards.
 
 export function Pill({ tone, children }) {
   return <span className={`inline-flex h-6 flex-none items-center whitespace-nowrap rounded px-2 text-xs font-medium ${tone}`}>{children}</span>;
@@ -40,25 +42,21 @@ function downloadBlob({ blob, filename }, fallback) {
   window.URL.revokeObjectURL(url);
 }
 
-export async function downloadInvoicePdf(orderId) {
+async function downloadInvoicePdf(orderId) {
   downloadBlob(await apiFetchBlob(apiEndpoints.orders.invoicePdf(orderId)), `invoice-${orderId}.pdf`);
 }
 
-export async function downloadOrderSummaryPdf(orderId) {
+async function downloadOrderSummaryPdf(orderId) {
   downloadBlob(await apiFetchBlob(apiEndpoints.orders.summaryPdf(orderId)), `order-${orderId}-summary.pdf`);
 }
 
-// The roles /orders/{id}/invoice.pdf and /summary.pdf serve; a rider would only get a 403.
-const PDF_ROLES = new Set(["ADMIN", "ACCOUNTANT", "WAREHOUSE_MANAGER", "SALESMAN"]);
-
 // The order's one document: the invoice once dispatch has issued it, the order summary before.
-// A cancelled order that never shipped has neither.
+// Who may download it, and when there is none, is lib/policy's call.
 export function OrderDocumentButton({ order, className }) {
   const { role } = useAuth();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  if (!PDF_ROLES.has(role)) return null;
-  if (!order.invoice_number && order.status === "CANCELLED") return null;
+  if (!can(role, "downloadPdf", order)) return null;
   const invoice = Boolean(order.invoice_number);
 
   async function download() {
@@ -84,29 +82,30 @@ export function OrderDocumentButton({ order, className }) {
   );
 }
 
-// The money first: what the order is worth and what is still owed. On a phone the total takes
-// the full first row and the two smaller figures share the second.
+// The money: what the order is worth, what has come in and what is still owed, as three equal
+// figures. Owed turns maroon only when something is owed.
 export function MoneySummary({ order }) {
   const total = order.grand_total ?? order.total_amount;
   const pending = Number(order.pending_amount) || 0;
+  const cell = "min-w-0 bg-white px-4 py-3";
   return (
-    <div className="grid grid-cols-2 rounded-lg border border-line bg-white sm:grid-cols-3">
-      <div className="col-span-2 border-b border-line px-4 py-3 sm:col-span-1 sm:border-b-0 sm:border-r">
-        <p className="text-[13px] text-muted">Order total</p>
-        <p className="mt-0.5 text-[28px] font-bold leading-tight tabular-nums text-ink">{formatCurrency(total)}</p>
+    <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line">
+      <div className={cell}>
+        <p className="text-xs text-muted">Order total</p>
+        <p className="mt-1 truncate text-xl font-semibold tabular-nums text-ink">{formatCurrency(total)}</p>
       </div>
-      <div className="border-r border-line px-4 py-3">
-        <p className="text-[13px] text-muted">Received</p>
-        <p className="mt-1.5 text-lg tabular-nums text-ink">{formatCurrency(order.amount_paid ?? 0)}</p>
+      <div className={cell}>
+        <p className="text-xs text-muted">Received</p>
+        <p className="mt-1 truncate text-xl font-semibold tabular-nums text-ink">{formatCurrency(order.amount_paid ?? 0)}</p>
       </div>
-      <div className="px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <p className="text-[13px] text-muted">Still owed</p>
+      <div className={cell}>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted">Still owed</p>
           <Pill tone={PAYMENT_TONE[order.payment_status] || PAYMENT_TONE.CREDIT}>
             {PAYMENT_LABEL[order.payment_status] || "On credit"}
           </Pill>
         </div>
-        <p className={`mt-1.5 text-lg tabular-nums ${pending > 0 ? "font-semibold text-data" : "text-muted"}`}>
+        <p className={`mt-1 truncate text-xl font-semibold tabular-nums ${pending > 0 ? "text-[#5e0b26]" : "text-muted"}`}>
           {formatCurrency(pending)}
         </p>
       </div>
@@ -117,74 +116,48 @@ export function MoneySummary({ order }) {
 // When, and by whom, the order reached each step: the latest entry for a status, because a
 // declined rider sends the order back and it reaches "Accepted" again. "Placed" is the first
 // entry instead, since later notes on a pending order (cash collected) are not its placing.
-function stepTimes(trails = []) {
-  const reached = {};
-  for (const trail of trails) {
-    if (trail.order_status === "PENDING" && reached.PENDING) continue;
-    reached[trail.order_status] = trail;
-  }
-  return reached;
-}
-
-// The header already gives the day the order was placed; a step on that day needs only its time.
-function stepWhen(value, placed) {
-  return formatDate(value) === formatDate(placed) ? formatDateTime(value).slice(-5) : formatDateTime(value);
-}
-
-// The steps across on the desk; on a phone narrow columns truncate every label, so the same steps
-// run down the screen, one line each, with when and by whom on the right.
+// The steps across the desk: a bar per step, its label, when and by whom. (Phones use
+// OrderProgress in OrderCards.)
 export function ProgressStrip({ order }) {
-  const reached = stepTimes(order.trails);
-  const interrupted = order.status === "CANCELLED" || order.status === "RETURNED";
-  const currentIndex = ORDER_STEPS.findIndex((step) => step.status === order.status);
-  // A rider declining sends the order back a step; the strip shows where it is now, not where it has been.
-  const steps = ORDER_STEPS.map((step, index) => ({
-    ...step,
-    done: !interrupted && index <= currentIndex,
-    current: !interrupted && index === currentIndex,
-    entry: !interrupted && index <= currentIndex ? reached[step.status] : null,
-  }));
+  // A delivered order has no step in progress: every step shows done.
+  const steps = orderProgress(order).map((step) => (order.status === "DELIVERED" ? { ...step, current: false } : step));
   return (
-    <>
-      <ol className="rounded-lg border border-line bg-white px-4 sm:hidden" aria-label="Order progress">
-        {steps.map((step) => (
-          <li
-            key={step.status}
-            aria-current={step.current ? "step" : undefined}
-            className="flex items-center gap-3 border-b border-rule py-2.5 text-sm last:border-0"
+    <ol className="grid rounded-lg border border-line bg-white px-4 py-4" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }} aria-label="Order progress">
+      {steps.map((step, index) => (
+        <li key={step.status} aria-current={step.current ? "step" : undefined} className="relative min-w-0 pr-3">
+          {/* The line to the next step: solid once that step is reached. */}
+          {index < steps.length - 1 ? (
+            <span aria-hidden="true" className={`absolute left-6 right-0 top-[11px] h-0.5 ${steps[index + 1].done ? "bg-ink" : "bg-line"}`} />
+          ) : null}
+          <span
+            aria-hidden="true"
+            className={`relative flex size-6 items-center justify-center rounded-full text-white ${
+              step.current ? "bg-[#5e0b26] ring-4 ring-[#5e0b26]/15" : step.done ? "bg-ink" : "border-2 border-line bg-white"
+            }`}
           >
-            <span
-              aria-hidden="true"
-              className={`h-2.5 w-2.5 flex-none rounded-full ${step.done ? (step.current ? "bg-data" : "bg-ink") : "border border-control bg-white"}`}
-            />
-            <span className={`min-w-0 flex-1 truncate ${step.current ? "font-semibold text-ink" : step.done ? "text-ink" : "text-muted"}`}>
-              {step.label}
-            </span>
-            <span className="flex-none text-right text-xs tabular-nums text-muted">
-              {step.entry ? stepWhen(step.entry.created_at, order.created_at) : "—"}
-              {step.entry?.changed_by_name ? ` · ${step.entry.changed_by_name}` : null}
-            </span>
-          </li>
-        ))}
-      </ol>
-      <ol className="hidden grid-cols-4 gap-2 sm:grid" aria-label="Order progress">
-        {steps.map((step) => (
-          <li key={step.status} aria-current={step.current ? "step" : undefined} className="min-w-0">
-            <div className={`h-1 rounded-full ${step.done ? (step.current ? "bg-data" : "bg-ink") : "bg-raised"}`} />
-            <p className={`mt-2 truncate text-sm ${step.done ? "font-medium text-ink" : "text-muted"}`}>{step.label}</p>
-            <p className="truncate text-xs text-muted">{step.entry ? formatDateTime(step.entry.created_at) : "—"}</p>
-            {step.entry?.changed_by_name ? <p className="truncate text-xs text-muted">{step.entry.changed_by_name}</p> : null}
-          </li>
-        ))}
-      </ol>
-    </>
+            {step.done && !step.current ? (
+              <svg viewBox="0 0 16 16" className="size-3.5"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            ) : step.current ? (
+              <span className="size-2 rounded-full bg-white" />
+            ) : null}
+          </span>
+          <p className={`mt-2.5 truncate text-sm ${step.done ? "font-semibold text-ink" : "text-muted"}`}>{step.label}</p>
+          <p className="truncate text-xs tabular-nums text-muted">{step.entry ? formatDateTime(step.entry.created_at) : "Not yet"}</p>
+          {step.entry?.changed_by_name ? <p className="truncate text-xs text-muted">by {step.entry.changed_by_name}</p> : null}
+        </li>
+      ))}
+    </ol>
   );
 }
 
+// Who and where, as a grid of label-over-value cells, three to a row. The shop opens its screen.
 export function Facts({ order }) {
   const place = [order.retailer_city, order.retailer_state].filter(Boolean).join(", ");
+  const shop = order.to_entity_id
+    ? <Link href={`/app/retailers/${order.to_entity_id}`} className="hover:underline">{order.retailer_name}</Link>
+    : order.retailer_name;
   const rows = [
-    ["Shop", order.retailer_name, place],
+    ["Shop", order.retailer_name && shop, place],
     ["Salesman", order.salesman_name, order.salesman_phone],
     ["Rider", order.delivery_driver_name],
     ["Beat", order.beat_name],
@@ -192,57 +165,34 @@ export function Facts({ order }) {
     ["GSTIN", order.retailer_gst_number],
     ["Channel", order.channel === "ONLINE" ? "Online store" : "Offline"],
   ].filter(([, value]) => value);
+  // Blank cells finish the last row, so the grid's hairlines never show through as grey blocks.
+  const blanks = (3 - (rows.length % 3)) % 3;
   return (
-    <dl className="grid grid-cols-1 rounded-lg border border-line bg-white px-4 py-1 sm:grid-cols-2 sm:gap-x-6">
+    <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line">
       {rows.map(([label, value, sub]) => (
-        <div
-          key={label}
-          className="flex min-w-0 items-baseline justify-between gap-3 border-b border-rule py-2.5 last:border-0 sm:[&:nth-last-child(-n+2)]:border-0"
-        >
-          <dt className="shrink-0 text-sm text-muted">{label}</dt>
-          <dd className="min-w-0 truncate text-right text-sm text-ink" title={sub ? `${value} · ${sub}` : value}>
-            {value}
-            {sub ? <span className="text-muted"> · {sub}</span> : null}
-          </dd>
+        <div key={label} className="min-w-0 bg-white px-4 py-3">
+          <dt className="text-xs text-muted">{label}</dt>
+          <dd className="mt-0.5 truncate text-sm font-medium text-ink">{value}</dd>
+          {sub ? <dd className="truncate text-xs text-muted">{sub}</dd> : null}
         </div>
       ))}
+      {Array.from({ length: blanks }, (_, index) => <div key={`blank-${index}`} className="bg-white" />)}
     </dl>
   );
-}
-
-function itemName(item) {
-  return item.sku_name || item.sku_code || `SKU ${item.sku_id}`;
 }
 
 export function Lines({ order }) {
   const items = order.items || [];
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-white">
-      {/* Phone: one row per line, name and amount on the first line, the arithmetic under it. */}
-      <ul className="px-4 sm:hidden">
-        {items.length === 0 ? <li className="py-6 text-center text-sm text-muted">No items on this order.</li> : null}
-        {items.map((item) => (
-          <li key={item.id} className="border-b border-rule py-3 last:border-0">
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <p className="min-w-0 text-ink">{itemName(item)}</p>
-              <p className="flex-none font-medium tabular-nums text-ink">{formatCurrency(item.line_total)}</p>
-            </div>
-            <p className="mt-0.5 text-xs tabular-nums text-muted">
-              {formatCount(item.quantity)} × {formatCurrency(item.unit_price)}
-              {Number(item.discount_amount) ? ` · ${formatCurrency(item.discount_amount)} off` : ""}
-              {item.hsn_code ? ` · HSN ${item.hsn_code}` : ""}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <table className="hidden w-full text-sm sm:table">
+      <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-line text-xs text-muted">
-            <th className="h-9 px-4 text-left font-normal">Item</th>
-            <th className="h-9 px-3 text-right font-normal">Qty</th>
-            <th className="h-9 px-3 text-right font-normal">Rate</th>
-            <th className="h-9 px-3 text-right font-normal">Discount</th>
-            <th className="h-9 px-4 text-right font-normal">Amount</th>
+          <tr className="border-b border-line bg-surface-soft text-xs text-muted">
+            <th className="h-9 px-4 text-left font-medium">Item</th>
+            <th className="h-9 px-3 text-right font-medium">Qty</th>
+            <th className="h-9 px-3 text-right font-medium">Rate</th>
+            <th className="h-9 px-3 text-right font-medium">Discount</th>
+            <th className="h-9 px-4 text-right font-medium">Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -252,17 +202,14 @@ export function Lines({ order }) {
             </tr>
           ) : (
             items.map((item) => (
-              <tr key={item.id} className="border-b border-rule">
+              <tr key={item.id} className="border-b border-rule transition-colors hover:bg-surface-soft">
                 <td className="px-4 py-2.5">
                   <p className="text-ink">{itemName(item)}</p>
-                  {item.hsn_code ? <p className="text-xs text-muted">HSN {item.hsn_code}</p> : null}
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{formatCount(item.quantity)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(item.unit_price)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-muted">
-                  {Number(item.discount_amount) ? formatCurrency(item.discount_amount) : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-ink">{formatCurrency(item.line_total)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{lineQuantity(item)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{lineRate(item)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-muted">{lineDiscount(item) || "—"}</td>
+                <td className="px-4 py-2.5 text-right font-medium tabular-nums text-ink">{formatCurrency(item.line_total)}</td>
               </tr>
             ))
           )}
@@ -284,7 +231,7 @@ export function Lines({ order }) {
             <dd className="tabular-nums">{formatCurrency(order.delivery_charge)}</dd>
           </div>
         ) : null}
-        <div className="flex justify-between gap-4 border-t border-line pt-1.5 font-semibold text-ink">
+        <div className="flex justify-between gap-4 border-t border-line pt-2 text-base font-semibold text-ink">
           <dt>Total</dt>
           <dd className="tabular-nums">{formatCurrency(order.grand_total ?? order.total_amount)}</dd>
         </div>
@@ -321,32 +268,23 @@ export function Payments({ order }) {
   );
 }
 
-export function CreditNotes({ notes = [] }) {
-  return (
-    <ul className="rounded-lg border border-line bg-white px-4">
-      {notes.map((note) => (
-        <li key={note.id} className="flex items-baseline justify-between gap-4 border-b border-rule py-2.5 text-sm last:border-0">
-          <span className="min-w-0 truncate text-ink">{note.credit_note_number}</span>
-          <span className="flex-none text-xs text-muted">
-            {formatCount(note.items?.length || 0)} {note.items?.length === 1 ? "item" : "items"} · {formatDate(note.created_at)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-// Newest first. On a phone the time drops under the entry instead of taking a 150px column.
+// A timeline, newest first: a dot per entry on one line, what happened and who did it, and when.
 export function History({ trails = [] }) {
   if (!trails.length) return <p className="text-sm text-muted">No history recorded.</p>;
+  // Latest first, like a stack: the server sends oldest first (created_at, then id).
+  const entries = [...trails].reverse();
   return (
-    <ol className="rounded-lg border border-line bg-white px-4">
-      {[...trails].reverse().map((trail) => (
-        <li key={trail.id} className="grid grid-cols-1 gap-0.5 border-b border-rule py-2.5 text-sm last:border-0 sm:grid-cols-[9.5rem_1fr] sm:gap-4">
-          <span className="order-2 text-xs tabular-nums text-muted sm:order-none sm:text-sm">{formatDateTime(trail.created_at)}</span>
-          <span className="min-w-0">
-            <span className="text-ink">{trail.description || STATUS_LABEL[trail.order_status] || trail.order_status}</span>
-            {trail.changed_by_name ? <span className="text-muted"> · {trail.changed_by_name}</span> : null}
+    <ol className="rounded-lg border border-line bg-white px-4 py-2">
+      {entries.map((trail, index) => (
+        <li key={trail.id} className="relative flex gap-3 py-2.5 text-sm">
+          {index < entries.length - 1 ? <span aria-hidden="true" className="absolute bottom-[-10px] left-[4.5px] top-[22px] w-px bg-line" /> : null}
+          <span aria-hidden="true" className={`relative mt-[6px] size-2.5 shrink-0 rounded-full ${index === 0 ? "bg-[#5e0b26]" : "bg-slate-300"}`} />
+          <span className="min-w-0 flex-1">
+            <span className="block text-ink">
+              {trail.description || STATUS_LABEL[trail.order_status] || trail.order_status}
+              {trail.changed_by_name ? <span className="text-muted"> · {trail.changed_by_name}</span> : null}
+            </span>
+            <span className="block text-xs tabular-nums text-muted">{formatDateTime(trail.created_at)}</span>
           </span>
         </li>
       ))}

@@ -1,19 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Clock, MapPin, Navigation, Pencil, Phone, Plus, ShoppingBag, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Clock, MapPin, Pencil, Phone, Plus, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SectionCard from "@/components/layout/SectionCard";
 import MobileActionBar, { BAR_ACTION_PRIMARY, BAR_ACTION_SECONDARY } from "@/components/layout/MobileActionBar";
 import { useToast } from "@/components/ui/ToastProvider";
 import { apiEndpoints, apiFetch } from "@/lib/api";
-import { formatAccuracy, getCoords, mapsUrl } from "@/lib/geo";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { can } from "@/lib/policy";
+import { formatAccuracy, getCoords } from "@/lib/geo";
+import { daysAgo, formatPhone, ShopActions, ShopAvatar } from "@/components/shops/ShopParts";
 import { loadMaps, normalizePlaceAddress, reverseGeocode } from "@/lib/store/maps.mjs";
-import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
+import Pager from "@/components/tables/Pager";
+import useShops, { useDebounced, useShopLabels, useShopsChanged } from "@/lib/hooks/useShops";
 import { INDIAN_STATES } from "@/lib/states";
 
-// A salesman works this screen on a phone in a market: card list, no horizontal scroll, 44px
-// targets, 16px inputs (which also stops iOS zooming the page when a field takes focus).
+// The shop list, one screen for every role that has one: a card per shop with Call, Map and Order.
+// Built for a phone in a market: no horizontal scroll, 44px targets, 16px inputs (which also stops
+// iOS zooming the page when a field takes focus).
+//
+// What differs by role comes from lib/policy. A salesman sees their own shops (the server scopes
+// /orders/lookups) and adds new ones through retailer requests. The office sees every shop with
+// its salesman and beat, filters by salesman, and adds and edits shops directly.
 const FIELD_CLASSNAME =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base text-slate-800 transition-colors placeholder:text-slate-400 focus:border-[#7c3aed] focus:outline-none focus:ring-2 focus:ring-[#7c3aed]/25";
 
@@ -25,6 +35,9 @@ const BLANK = {
   state: "",
   pincode: "",
   gst_number: "",
+  // Office only (manageRetailers): who sells to the shop and on which beat.
+  assigned_salesman_id: "",
+  beat_id: "",
   // Numbers, not strings, unlike every other field here — they come straight off the device
   // rather than a keyboard, and the API takes floats.
   latitude: null,
@@ -35,12 +48,6 @@ const BLANK = {
 const asText = (value) => (value === null || value === undefined ? "" : String(value));
 const orNull = (value) => (value === "" || value === undefined ? null : value);
 const numOrNull = (value) => (value === "" || value === null || value === undefined ? null : Number(value));
-
-const formatPhone = (value) => {
-  if (!value && value !== 0) return null;
-  const raw = String(value).replace(/\D/g, "");
-  return raw.length === 10 ? `${raw.slice(0, 5)} ${raw.slice(5)}` : raw || null;
-};
 
 // Text on every pill, never colour alone — the status has to survive a greyscale screen or a
 // colour-blind reader.
@@ -90,33 +97,40 @@ function DetectStatus({ detect, accuracy, onRetry }) {
   );
 }
 
-// A steady tint per shop, so the avatar helps the eye find a card it has seen before.
-const AVATAR_TINTS = [
-  "bg-violet-100 text-violet-700",
-  "bg-emerald-100 text-emerald-700",
-  "bg-amber-100 text-amber-800",
-  "bg-sky-100 text-sky-700",
-  "bg-rose-100 text-rose-700",
-  "bg-teal-100 text-teal-700"
-];
-const avatarTint = (name = "") =>
-  AVATAR_TINTS[[...name].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_TINTS.length];
+// The office has thousands of shops; the server sends one page at a time.
+const PAGE = 30;
 
-const CARD_ACTION =
-  "flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-sm font-semibold transition-colors";
-
-export default function MyRetailersPanel() {
-  // The backend scopes this to retailers actually assigned to this salesman, which is exactly
-  // the set they can book orders against — including ones they just added themselves.
-  const { retailers, loading, error, refreshLookups } = useOrderFormLookups({
-    errorMessage: "Unable to load your retailers."
-  });
+/** `beatId` narrows the list to one beat ("none" for shops on no beat), for the beat screen. */
+export default function RetailerList({ beatId = null }) {
+  const { role } = useAuth();
+  const router = useRouter();
+  const manage = can(role, "manageRetailers");
+  // A salesman's new shop goes through a retailer request; the office creates shops outright.
+  const viaRequests = can(role, "addRetailer") && !manage;
+  // Salesmen and beats for the office's filter and form.
+  const { salesmen, beats } = useShopLabels(manage);
+  const shopsChanged = useShopsChanged();
+  const [salesmanFilter, setSalesmanFilter] = useState("");
+  const [page, setPage] = useState(1);
   const { notify } = useToast();
   const [requests, setRequests] = useState([]);
   const [requestsError, setRequestsError] = useState("");
   const [search, setSearch] = useState("");
+  // The server scopes this by role: a salesman gets the shops assigned to them, which is exactly
+  // the set they can book orders against; the office gets every shop.
+  const settledSearch = useDebounced(search.trim());
+  const { shops, total, error, isPending, isPlaceholderData } = useShops({ search: settledSearch, salesmanId: salesmanFilter, beatId, page, pageSize: PAGE });
+  // A new search or filter starts again from page 1.
+  const [filterKey, setFilterKey] = useState("");
+  const key = [settledSearch, salesmanFilter].join("|");
+  if (key !== filterKey) {
+    setFilterKey(key);
+    setPage(1);
+  }
   const [draft, setDraft] = useState(null);
-  const [editingId, setEditingId] = useState(null);
+  // The record the inline form is editing: { kind: "request" | "retailer", id }, or null.
+  const [editing, setEditing] = useState(null);
+  const editingId = editing?.id ?? null;
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [showMore, setShowMore] = useState(false);
@@ -138,8 +152,8 @@ export default function MyRetailersPanel() {
   }, []);
 
   useEffect(() => {
-    loadRequests();
-  }, [loadRequests]);
+    if (viaRequests) loadRequests();
+  }, [loadRequests, viaRequests]);
 
   // Only pending and rejected requests are worth showing: an approved one has already become a
   // real outlet in the list above, so rendering both would double it.
@@ -150,6 +164,8 @@ export default function MyRetailersPanel() {
 
   const matches = useCallback(
     (row) => {
+      if (beatId && String(row.beat_id ?? "none") !== String(beatId)) return false;
+      if (salesmanFilter && String(row.assigned_salesman_id ?? "") !== salesmanFilter) return false;
       const tokens = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
       if (!tokens.length) return true;
       const haystack = [row.name, row.city, row.mobile_number, row.gst_number]
@@ -158,10 +174,9 @@ export default function MyRetailersPanel() {
         .toLowerCase();
       return tokens.every((token) => haystack.includes(token));
     },
-    [search]
+    [search, salesmanFilter, beatId]
   );
 
-  const visibleRetailers = useMemo(() => (retailers || []).filter(matches), [retailers, matches]);
   const visibleRequests = useMemo(() => openRequests.filter(matches), [openRequests, matches]);
 
   const detectLocation = async () => {
@@ -201,8 +216,9 @@ export default function MyRetailersPanel() {
   };
 
   const startCreate = () => {
-    setDraft({ ...BLANK });
-    setEditingId(null);
+    // A shop added from a beat's screen starts on that beat.
+    setDraft({ ...BLANK, beat_id: beatId && beatId !== "none" ? String(beatId) : "" });
+    setEditing(null);
     setFormError("");
     setShowMore(false);
     touched.current = new Set();
@@ -219,15 +235,28 @@ export default function MyRetailersPanel() {
       longitude: request.longitude ?? null,
       accuracy_m: null
     });
-    setEditingId(request.id);
+    setEditing({ kind: "request", id: request.id });
     setFormError("");
+  };
+
+  // The office edits a shop in place, with the same form plus its salesman and beat.
+  const startEditRetailer = (retailer) => {
+    setDraft({
+      ...Object.fromEntries(Object.keys(BLANK).map((key) => [key, asText(retailer[key])])),
+      latitude: retailer.latitude ?? null,
+      longitude: retailer.longitude ?? null,
+      accuracy_m: null
+    });
+    setEditing({ kind: "retailer", id: retailer.id });
+    setFormError("");
+    setShowMore(false);
   };
 
   const cancel = () => {
     detectRun.current += 1;
     setDetect(null);
     setDraft(null);
-    setEditingId(null);
+    setEditing(null);
     setFormError("");
   };
 
@@ -249,18 +278,20 @@ export default function MyRetailersPanel() {
       pincode: numOrNull(draft.pincode),
       gst_number: orNull(draft.gst_number),
       latitude: draft.latitude ?? null,
-      longitude: draft.longitude ?? null
+      longitude: draft.longitude ?? null,
+      ...(manage ? { assigned_salesman_id: numOrNull(draft.assigned_salesman_id), beat_id: numOrNull(draft.beat_id) } : {})
     };
+    // The office writes shops directly; a salesman writes retailer requests.
+    const url = manage
+      ? editingId ? apiEndpoints.admin.retailerUpdate(editingId) : apiEndpoints.admin.retailers
+      : editingId ? apiEndpoints.retailerRequests.update(editingId) : apiEndpoints.retailerRequests.create;
     try {
-      await apiFetch(
-        editingId ? apiEndpoints.retailerRequests.update(editingId) : apiEndpoints.retailerRequests.create,
-        { method: editingId ? "PATCH" : "POST", body: JSON.stringify(body) }
-      );
-      // Without an edit id this creates the retailer outright (approval workflow disabled), so
-      // the order picker has to be refreshed for the new outlet to be bookable.
-      notify(editingId ? "Request updated." : "Retailer added. You can book orders for it now.");
+      await apiFetch(url, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(body) });
+      // A new request creates the retailer outright (approval workflow disabled), so the order
+      // picker has to be refreshed for the new outlet to be bookable.
+      notify(editingId ? (manage ? "Shop updated." : "Request updated.") : "Retailer added. You can book orders for it now.");
       cancel();
-      await Promise.all([loadRequests(), refreshLookups()]);
+      await Promise.all([viaRequests ? loadRequests() : null, shopsChanged()]);
     } catch (err) {
       setFormError(err?.payload?.detail || err?.message || "Unable to submit the request.");
     } finally {
@@ -281,7 +312,7 @@ export default function MyRetailersPanel() {
   const form = (
     <div className="space-y-3 rounded-2xl border border-[#7c3aed]/30 bg-[#7c3aed]/[0.03] p-4">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-        {editingId ? "Edit request" : "New retailer"}
+        {editing?.kind === "retailer" ? "Edit shop" : editingId ? "Edit request" : "New retailer"}
       </p>
       {detect ? <DetectStatus detect={detect} accuracy={draft?.accuracy_m} onRetry={detectLocation} /> : null}
       <Field label="Shop name">
@@ -311,6 +342,22 @@ export default function MyRetailersPanel() {
           placeholder="Shop no., street, area"
         />
       </Field>
+      {manage ? (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Salesman">
+            <select className={FIELD_CLASSNAME} value={draft?.assigned_salesman_id ?? ""} onChange={(event) => setField("assigned_salesman_id", event.target.value)}>
+              <option value="">Unassigned</option>
+              {salesmen.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Beat">
+            <select className={FIELD_CLASSNAME} value={draft?.beat_id ?? ""} onChange={(event) => setField("beat_id", event.target.value)}>
+              <option value="">No beat</option>
+              {beats.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </Field>
+        </div>
+      ) : null}
       {/* City, state, pincode and GST fill themselves from the location; tucked away so the
           form is three fields unless the salesman needs to correct one. */}
       <button
@@ -397,7 +444,7 @@ export default function MyRetailersPanel() {
     </div>
   );
 
-  if (loading) {
+  if (isPending) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white/80 p-8 text-sm text-slate-500">
         Loading your retailers…
@@ -406,17 +453,19 @@ export default function MyRetailersPanel() {
   }
 
   if (error) {
-    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error}</div>;
+    return <div className="rounded-3xl border border-rose-200 bg-rose-50 p-8 text-sm text-rose-600">{error.message || "Unable to load your retailers."}</div>;
   }
 
-  const nothingToShow = visibleRetailers.length === 0 && visibleRequests.length === 0 && !draft;
+  const nothingToShow = shops.length === 0 && visibleRequests.length === 0 && !draft;
+  const canOrder = can(role, "createOrder");
+  const canAdd = can(role, "addRetailer");
 
   return (
     <SectionCard
-      title="My Retailers"
-      subtitle={`${visibleRetailers.length} outlets${openRequests.length ? ` · ${openRequests.length} older requests` : ""}`}
+      title={manage || !viaRequests ? "Shops" : "My Retailers"}
+      subtitle={`${total} ${total === 1 ? "shop" : "shops"}${openRequests.length ? ` · ${openRequests.length} older requests` : ""}`}
       actions={
-        <button
+        canAdd ? <button
           type="button"
           onClick={startCreate}
           disabled={Boolean(draft)}
@@ -424,7 +473,7 @@ export default function MyRetailersPanel() {
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Add retailer
-        </button>
+        </button> : null
       }
     >
       <div className="space-y-3">
@@ -432,10 +481,21 @@ export default function MyRetailersPanel() {
           type="text"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search your outlets"
-          aria-label="Search your outlets"
+          placeholder={manage || !viaRequests ? "Search shops, city, phone or GST" : "Search your outlets"}
+          aria-label="Search shops"
           className={FIELD_CLASSNAME}
         />
+        {manage ? (
+          <select
+            aria-label="Filter by salesman"
+            value={salesmanFilter}
+            onChange={(event) => setSalesmanFilter(event.target.value)}
+            className={`${FIELD_CLASSNAME} ${salesmanFilter ? "font-semibold" : "text-slate-500"}`}
+          >
+            <option value="">All salesmen</option>
+            {salesmen.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        ) : null}
 
         {draft && !editingId ? form : null}
 
@@ -447,13 +507,13 @@ export default function MyRetailersPanel() {
 
         {nothingToShow ? (
           <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-            {(retailers || []).length === 0 && openRequests.length === 0
+            {!settledSearch && !salesmanFilter && openRequests.length === 0
               ? "No outlets yet. Add your first retailer to start booking orders."
               : "No outlets match that search."}
           </p>
         ) : null}
 
-        <ul className="space-y-2.5">
+        <ul className={`space-y-2.5 ${isPlaceholderData ? "opacity-60 transition-opacity" : ""}`}>
           {visibleRequests.map((request) => {
             if (editingId === request.id) {
               return <li key={`request-${request.id}`}>{form}</li>;
@@ -522,60 +582,60 @@ export default function MyRetailersPanel() {
             );
           })}
 
-          {visibleRetailers.map((retailer) => {
-            const phone = formatPhone(retailer.mobile_number);
+          {shops.map((retailer) => {
+            if (editing?.kind === "retailer" && editingId === retailer.id) {
+              return <li key={`retailer-${retailer.id}`}>{form}</li>;
+            }
             const place = [retailer.address_line1, retailer.city].filter(Boolean).join(", ");
+            // The office reads who sells to the shop and on which beat.
+            const assignment = manage ? [retailer.salesman_name || "No salesman", retailer.beat_name || "No beat"].join(" · ") : null;
             return (
-              <li key={`retailer-${retailer.id}`} className="rounded-2xl border border-slate-200 bg-white p-3">
+              // The whole card opens the shop; its own buttons and links (Call, Map, Order, edit) do
+              // their own thing.
+              <li
+                key={`retailer-${retailer.id}`}
+                onClick={(event) => {
+                  if (!event.target.closest("button, a, select, input")) router.push(`/app/retailers/${retailer.id}`);
+                }}
+                className="cursor-pointer rounded-2xl border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50 active:bg-slate-100"
+              >
                 <div className="flex items-center gap-3 px-1 pt-1">
-                  <span
-                    aria-hidden="true"
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold ${avatarTint(retailer.name)}`}
-                  >
-                    {(retailer.name || "?").trim().charAt(0).toUpperCase()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-slate-900">{retailer.name}</p>
-                    <p className={`truncate text-sm ${place ? "text-slate-500" : "text-amber-600"}`}>
-                      {place || "No address"}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {phone ? (
-                    <a href={`tel:${retailer.mobile_number}`} aria-label={`Call ${retailer.name}, ${phone}`} className={`${CARD_ACTION} bg-slate-100 text-slate-700`}>
-                      <Phone className="h-4 w-4" strokeWidth={2} />
-                      Call
-                    </a>
-                  ) : (
-                    <span className={`${CARD_ACTION} bg-slate-50 text-slate-300`} aria-label="No phone number">
-                      <Phone className="h-4 w-4" strokeWidth={2} />
-                      Call
+                  {/* The shop's name opens its screen: report, orders and what it owes. */}
+                  <Link href={`/app/retailers/${retailer.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                    <ShopAvatar name={retailer.name} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-semibold text-slate-900">{retailer.name}</span>
+                      <span className={`block truncate text-sm ${place ? "text-slate-500" : "text-amber-600"}`}>{place || "No address"}</span>
+                      <span className="block truncate text-xs text-slate-400">
+                        {[retailer.last_order_at ? `Ordered ${daysAgo(retailer.last_order_at)}` : "No orders yet", assignment].filter(Boolean).join(" · ")}
+                      </span>
                     </span>
-                  )}
-                  <a
-                    href={mapsUrl(retailer)}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Open ${retailer.name} in Google Maps`}
-                    className={`${CARD_ACTION} bg-slate-100 text-slate-700`}
-                  >
-                    <Navigation className="h-4 w-4" strokeWidth={2} />
-                    Map
-                  </a>
-                  <Link href={`/app/orders/new?retailer=${retailer.id}`} className={`${CARD_ACTION} bg-slate-900 text-white`}>
-                    <ShoppingBag className="h-4 w-4" strokeWidth={2} />
-                    Order
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden="true" />
                   </Link>
+                  {manage ? (
+                    <button
+                      type="button"
+                      onClick={() => startEditRetailer(retailer)}
+                      disabled={Boolean(draft)}
+                      aria-label={`Edit ${retailer.name}`}
+                      className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 text-slate-500 disabled:opacity-40"
+                    >
+                      <Pencil className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3">
+                  <ShopActions shop={retailer} canOrder={canOrder} />
                 </div>
               </li>
             );
           })}
         </ul>
+        <Pager page={page} pageSize={PAGE} total={total} noun="shops" onChange={(number) => { setPage(number); window.scrollTo({ top: 0 }); }} />
       </div>
       {/* Phones: the add action lives in the thumb zone; while the form is open it becomes
           Save / Cancel there. Editing an old request keeps its own inline buttons. */}
-      {editingId ? null : (
+      {editingId || !canAdd ? null : (
         <MobileActionBar notice={draft && formError ? <p role="alert" className="text-sm text-rose-600">{formError}</p> : null}>
           {draft ? (
             <>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, MapPin, Minus, Pencil, Plus } from "lucide-react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import MobileActionBar, { BAR_ACTION_PRIMARY } from "@/components/layout/MobileActionBar";
@@ -11,11 +12,18 @@ import useOrderFormLookups from "@/lib/hooks/useOrderFormLookups";
 import useStockAvailability from "@/lib/hooks/useStockAvailability";
 import { getLineTaxAmount, getSkuGstRate, roundToTwo } from "@/lib/orders";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { can } from "@/lib/policy";
+import { queryPath } from "@/lib/query";
 
-// The salesman's order screen, built for a phone at a shop counter: pick the shop, add products
-// from the search dropdown, step quantities by the ladi, optionally note cash collected, done. No salesman picker (create_outgoing_order stamps
-// it from the login), no date (the server dates the order), and no pricing-mode toggle: the unit
-// price is what gets negotiated, and the discount is derived from it.
+// The one order form, for every role that books orders (lib/policy createOrder), built for a
+// phone at a shop counter: pick the shop, add products from the search dropdown, step quantities
+// by the ladi, optionally note cash collected, done. No date (the server dates the order) and no
+// pricing-mode toggle: the price per ladi is what gets negotiated, and the discount follows.
+//
+// A salesman books for their own shops and is stamped as the salesman from the login
+// (create_outgoing_order). The office picks the salesman the order counts for, defaulting to the
+// shop's assigned salesman; that is the only thing that differs, and the policy decides it.
 
 // Most orders are booked from the City warehouse, so it is preselected when it exists.
 const DEFAULT_WAREHOUSE_NAME = "city";
@@ -40,10 +48,15 @@ const PAYMENT_MODES = [
   ["CHEQUE", "Cheque"]
 ];
 
-export default function SalesmanOrderCreate() {
+export default function OrderForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { notify } = useToast();
+  const { role } = useAuth();
+  const pickSalesman = can(role, "pickSalesman");
+  // The salesmen come from the admin lookups the orders queue already loaded (same cache key).
+  const { data: adminLookups } = useQuery({ queryKey: queryPath(apiEndpoints.admin.lookups), enabled: pickSalesman });
+  const salesmen = adminLookups?.salesmen || [];
   const { retailers, skus, warehouses, brands, loading, error: lookupError } = useOrderFormLookups({
     errorMessage: "Unable to load order form data."
   });
@@ -59,6 +72,7 @@ export default function SalesmanOrderCreate() {
   const [editingPrice, setEditingPrice] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMode, setPaymentMode] = useState("CASH");
+  const [salesmanChoice, setSalesmanChoice] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -74,6 +88,8 @@ export default function SalesmanOrderCreate() {
     () => retailers.find((r) => String(r.id) === String(retailerId)) || null,
     [retailers, retailerId]
   );
+  // A choice made here wins; otherwise the salesman the shop is assigned to.
+  const salesmanId = salesmanChoice ?? String(retailer?.assigned_salesman_id ?? "");
   // A ?retailer= id that is not one of this salesman's outlets is dropped rather than submitted.
   useEffect(() => {
     if (!loading && retailerId && !retailer) setRetailerId("");
@@ -188,6 +204,7 @@ export default function SalesmanOrderCreate() {
         body: JSON.stringify({
           retailer_id: Number(retailerId),
           warehouse_id: Number(warehouseId),
+          ...(pickSalesman ? { salesman_id: salesmanId ? Number(salesmanId) : null } : {}),
           payment_mode: isCredit ? "CREDIT" : paymentMode,
           payment_amount: isCredit ? null : roundToTwo(collected),
           items: priced.map((l) => {
@@ -248,7 +265,7 @@ export default function SalesmanOrderCreate() {
             value={retailerId}
             onChange={setRetailerId}
             options={retailerOptions}
-            placeholder="Search your shops"
+            placeholder={pickSalesman ? "Search shops" : "Search your shops"}
             inputClassName="h-11 !rounded-xl !py-0"
             emptyLabel="No shops match"
           />
@@ -270,6 +287,14 @@ export default function SalesmanOrderCreate() {
             options={warehouses.map((w) => [String(w.id), w.name])}
           />
         </div>
+        {pickSalesman ? (
+          <FieldSelect
+            label="Salesman"
+            value={salesmanId}
+            onChange={setSalesmanChoice}
+            options={[["", "No salesman"], ...salesmen.map((m) => [String(m.id), m.name])]}
+          />
+        ) : null}
       </FieldSection>
 
       {/* Products: added from the dropdown, edited here. */}

@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { formatDate } from "@/lib/format";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { OrderActionBar, useOrderDetail } from "@/components/orders/OrderDetailPanel";
+import useOrderDetail from "@/lib/hooks/useOrderDetail";
+import OrderActionBar from "@/components/orders/OrderActionBar";
 import {
   Facts,
   History,
@@ -18,7 +20,7 @@ import {
 // The desktop view of one order, opened from the orders queue. One question: "where is this order,
 // and what is the next step?" The progress strip answers the first, the action panel the second;
 // everything else (the shop, the lines, the money, the history) follows in reading order.
-// Phones and the field roles get OrderDetailPanel, built from the same sections.
+// Phones, and the field roles at any width, get OrderScreen: same data hook, same action bar.
 
 export default function OrderDesk({ orderId, onClose, onOrderUpdate }) {
   const { role } = useAuth();
@@ -35,7 +37,7 @@ export default function OrderDesk({ orderId, onClose, onOrderUpdate }) {
   if (!order) return <p className="p-6 text-sm text-muted">Order not found.</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
@@ -43,7 +45,9 @@ export default function OrderDesk({ orderId, onClose, onOrderUpdate }) {
             <StatusPill status={order.status} />
           </div>
           <p className="mt-1 truncate text-sm text-muted">
-            {order.retailer_name || "Unknown shop"} · placed {formatDate(order.created_at)}
+            {order.to_entity_id && order.retailer_name ? (
+              <Link href={`/app/retailers/${order.to_entity_id}`} className="font-medium text-ink hover:underline">{order.retailer_name}</Link>
+            ) : (order.retailer_name || "Unknown shop")} · placed {formatDate(order.created_at)}
             {order.invoice_number ? ` · invoice ${order.invoice_number}` : " · invoice not issued yet"}
           </p>
         </div>
@@ -67,11 +71,13 @@ export default function OrderDesk({ orderId, onClose, onOrderUpdate }) {
         </div>
       </header>
 
+      {/* Where the order is, then what to do about it, then the money. */}
+      <div className="space-y-3">
+        <ProgressStrip order={order} />
+        <OrderActionBar order={order} role={role} drivers={drivers} onUpdate={handleUpdate} />
+      </div>
+
       <MoneySummary order={order} />
-
-      <ProgressStrip order={order} />
-
-      <OrderActionBar order={order} role={role} drivers={drivers} onUpdate={handleUpdate} />
 
       <Section title="Details">
         <Facts order={order} />

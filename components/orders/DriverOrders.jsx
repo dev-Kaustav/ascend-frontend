@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiEndpoints, apiFetch } from "@/lib/api";
 import { formatCurrency, formatDate, toTitleCase } from "@/lib/format";
@@ -8,15 +9,12 @@ import FieldOrderCard from "@/components/field/FieldOrderCard";
 import FieldStatusFilters from "@/components/field/FieldStatusFilters";
 import SectionCard from "@/components/layout/SectionCard";
 import DataTable from "@/components/tables/DataTable";
-import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
 import InvoiceCell from "@/components/ui/InvoiceCell";
 import { getCoords } from "@/lib/geo";
 
 function getOrderDate(order) {
   return order?.created_at || order?.order_date || null;
 }
-
-const CANCELLABLE = new Set(["PENDING", "READY_TO_SHIP", "OUT_FOR_DELIVERY"]);
 
 export default function DriverOrders() {
   const [orders, setOrders] = useState([]);
@@ -28,7 +26,7 @@ export default function DriverOrders() {
   // A rider opens on what is in their hands now: orders sent out with them, still to deliver.
   const [filters, setFilters] = useState({ status: "OUT_FOR_DELIVERY" });
   const [updates, setUpdates] = useState({});
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const router = useRouter();
 
   async function loadOrders(showLoading = true) {
     if (showLoading) setLoading(true);
@@ -232,7 +230,7 @@ export default function DriverOrders() {
           data={orders}
           emptyLabel="No orders found."
           tableClassName="min-w-[700px]"
-          onRowClick={(order) => setSelectedOrderId(order.id)}
+          onRowClick={(order) => router.push(`/app/orders/${order.id}`)}
         />
         {total > pageSize ? <div className="mt-4 flex items-center justify-between gap-3 text-sm text-slate-500">
           <span>Page {page} of {Math.max(1, Math.ceil(total / pageSize))}</span>
@@ -242,23 +240,6 @@ export default function DriverOrders() {
           </div>
         </div> : null}
       </SectionCard>
-      {selectedOrderId ? (
-        <div className="field-detail-overlay fixed inset-0 z-50 flex justify-end bg-slate-950/30 p-0 sm:p-4">
-          <button
-            type="button"
-            aria-label="Close order detail"
-            className="absolute inset-0 cursor-default"
-            onClick={() => setSelectedOrderId(null)}
-          />
-          <aside className="relative h-dvh w-full overflow-y-auto border-l border-slate-200 bg-slate-50 p-4 shadow-xl sm:max-w-5xl sm:rounded-lg sm:border">
-            <OrderDetailPanel
-              orderId={selectedOrderId}
-              onClose={() => setSelectedOrderId(null)}
-              onOrderUpdate={() => loadOrders(false)}
-            />
-          </aside>
-        </div>
-      ) : null}
     </div>
   );
 }

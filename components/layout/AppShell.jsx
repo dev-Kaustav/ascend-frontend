@@ -8,7 +8,7 @@ import { getAccessToken, getUserFromToken, logout } from "@/lib/auth";
 import useStoredValue, { writeStored } from "@/lib/hooks/useStoredValue";
 import HoverScrollbar from "@/components/ui/HoverScrollbar";
 import FieldMobileNavigation from "@/components/layout/FieldMobileNavigation";
-import { isFieldRole } from "@/lib/navigation";
+import { usesAppShell } from "@/lib/navigation";
 import { cn } from "@/lib/cn";
 import { prefetchNextScreensWhenIdle, prefetchRoute } from "@/lib/prefetch";
 
@@ -284,7 +284,7 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
   const token = getAccessToken();
   const user = getUserFromToken(token);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const fieldRole = isFieldRole(role);
+  const appShell = usesAppShell(role);
   const queryClient = useQueryClient();
 
   // Once the first screen has loaded and the browser is idle, warm the screens this role opens next.
@@ -311,8 +311,8 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
     );
 
   return (
-    <div className={cn("min-h-dvh bg-canvas text-ink app-shell", fieldRole && "field-app")}>
-      {fieldRole ? <FieldMobileNavigation role={role} /> : null}
+    <div className={cn("min-h-dvh bg-canvas text-ink app-shell", appShell && "field-app")}>
+      {appShell ? <FieldMobileNavigation role={role} /> : null}
       {sidebarOpen ? (
         <div
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
@@ -398,9 +398,9 @@ export default function AppShell({ navItems = [], roleLabel, role, children }) {
       </aside>
 
       <div className={sidebarCollapsed ? "lg:pl-[68px]" : "lg:pl-60"}>
-        {/* Phones and tablets only: the sidebar folds behind a menu button. The field roles have
-            their own header (FieldMobileNavigation), so this bar is not shown for them. */}
-        <header className={cn("sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 lg:hidden", fieldRole && "hidden")}>
+        {/* Phones and tablets only: the sidebar folds behind a menu button. Roles on the app shell
+            have their own header and tabs (FieldMobileNavigation), so this bar is not shown for them. */}
+        <header className={cn("sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-line bg-canvas px-4 lg:hidden", appShell && "hidden")}>
           <button
             type="button"
             className="-ml-1 flex h-10 w-10 items-center justify-center text-slate-600 hover:text-ink"

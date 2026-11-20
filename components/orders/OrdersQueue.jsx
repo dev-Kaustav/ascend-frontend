@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Plus } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiEndpoints, apiFetch, apiFetchBlob } from "@/lib/api";
@@ -11,21 +12,19 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { ORDER_QUEUES, PAYMENT_LABEL, PAYMENT_TONE, STATUS_LABEL, STATUS_TONE } from "@/lib/orderStatus";
 import useIsDesktop from "@/lib/hooks/useIsDesktop";
 import DataTable from "@/components/tables/DataTable";
+import Pager from "@/components/tables/Pager";
 import { InputBar, SelectBar } from "@/components/ui/InputBars";
 import { useToast } from "@/components/ui/ToastProvider";
 import OrderDesk from "@/components/orders/OrderDesk";
-import OrderDetailPanel from "@/components/orders/OrderDetailPanel";
+import FieldOrderCard from "@/components/field/FieldOrderCard";
+import { can } from "@/lib/policy";
 
 // The orders screen for the office roles. It answers "which orders need me now, and what do I do
 // with each?": the queues across the top are the work in the order it happens, each one a filter
-// with its count, and every row carries its next step in the last column.
+// with its count, and every row carries its next step in the last column. At a desk an order opens
+// in a side panel over the list; on a phone it opens as its own page, like every app screen.
 
 const PAGE_SIZE = ORDERS_QUEUE_PAGE_SIZE;
-const ROLE_SETUP = {
-  ADMIN: { canCreate: true, canExport: true, canAccept: true },
-  ACCOUNTANT: { canCreate: true, canExport: true, canAccept: false },
-  WAREHOUSE_MANAGER: { canCreate: false, canExport: false, canAccept: true },
-};
 
 function Pill({ tone, children }) {
   return <span className={`inline-flex h-6 flex-none items-center whitespace-nowrap rounded px-2 text-xs font-medium ${tone}`}>{children}</span>;
@@ -35,7 +34,6 @@ const ROW_BUTTON =
   "inline-flex min-h-9 max-lg:min-h-[44px] cursor-pointer items-center rounded-md border px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-wait disabled:opacity-60";
 
 export default function OrdersQueue({ role }) {
-  const setup = ROLE_SETUP[role] || ROLE_SETUP.ACCOUNTANT;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -53,10 +51,11 @@ export default function OrdersQueue({ role }) {
   const [search, setSearch] = useState("");
   // ?status= opens the All list on one status, e.g. the cancelled orders Finance asks to review.
   const [extra, setExtra] = useState(() => ({ channel: "ALL", paymentStatus: "ALL", status: searchParams.get("status") || "ALL", fromDate: "", toDate: "" }));
-  const [showFilters, setShowFilters] = useState(() => Boolean(searchParams.get("status")));
+  const [showFilters, setShowFilters] = useState(() => Boolean(searchParams.get("status") || searchParams.get("salesman")));
   const [exporting, setExporting] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState(null);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const openOrder = (id) => (isDesktop ? setSelectedOrderId(id) : router.push(`/app/orders/${id}`));
 
   // The queue and the salesman live in the URL (?queue=, ?salesman=), so a refresh or a shared link
   // opens the same list: one salesman's orders, counts and value are their sales at a glance.
@@ -171,16 +170,16 @@ export default function OrdersQueue({ role }) {
 
   function nextStep(order) {
     const pending = Number(order.pending_amount) || 0;
-    if (order.status === "PENDING" && setup.canAccept) {
+    if (order.status === "PENDING" && can(role, "advance", order)) {
       return (
         <button type="button" className={`${ROW_BUTTON} border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800 focus-visible:outline-emerald-700`} disabled={busyOrderId === order.id} onClick={() => acceptOrder(order)}>
           {busyOrderId === order.id ? "Accepting…" : "Accept"}
         </button>
       );
     }
-    if (order.status === "READY_TO_SHIP" && setup.canAccept) {
+    if (order.status === "READY_TO_SHIP" && can(role, "advance", order)) {
       return (
-        <button type="button" className={`${ROW_BUTTON} border-sky-700 bg-sky-700 text-white hover:bg-sky-800 focus-visible:outline-sky-700`} onClick={() => setSelectedOrderId(order.id)}>
+        <button type="button" className={`${ROW_BUTTON} border-sky-700 bg-sky-700 text-white hover:bg-sky-800 focus-visible:outline-sky-700`} onClick={() => openOrder(order.id)}>
           Send out
         </button>
       );
@@ -252,24 +251,22 @@ export default function OrdersQueue({ role }) {
         cell: ({ row }) => <div className="flex justify-end">{nextStep(row.original)}</div>,
       },
     ],
-    [busyOrderId, setup.canAccept, queue?.key]
+    [busyOrderId, role, queue?.key, isDesktop]
   );
 
   const counts = summary || {};
   const needsAction = (counts.PENDING || 0) + (counts.READY_TO_SHIP || 0);
   const firstRow = total ? (page - 1) * PAGE_SIZE + 1 : 0;
   const lastRow = Math.min(page * PAGE_SIZE, total);
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const pageNumbers = Array.from({ length: pageCount }, (_, index) => index + 1)
-    .filter((number) => number === 1 || number === pageCount || Math.abs(number - page) <= 2);
-  const filtersActive = extra.channel !== "ALL" || extra.paymentStatus !== "ALL" || extra.status !== "ALL" || extra.fromDate || extra.toDate;
+  const filtersActive = Boolean(salesmanId) || extra.channel !== "ALL" || extra.paymentStatus !== "ALL" || extra.status !== "ALL" || extra.fromDate || extra.toDate;
 
   return (
     <div className="space-y-5 max-lg:px-[2px] [&_.text-sm]:text-[14px] [&_.text-xs]:text-[12px]">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-[24px] font-semibold tracking-[-0.01em] text-ink">Orders</h1>
-          <p className="mt-1 text-sm text-muted">
+          {/* On a phone the app header already says Orders. */}
+          <h1 className="text-[24px] font-semibold tracking-[-0.01em] text-ink max-lg:hidden">Orders</h1>
+          <p className="mt-1 text-sm text-muted max-lg:mt-0">
             {salesmanName ? <span className="font-medium text-ink">{salesmanName}&rsquo;s orders. </span> : null}
             {summary === null
               ? "Counting orders…"
@@ -278,11 +275,12 @@ export default function OrdersQueue({ role }) {
                 : "Nothing waiting on the office right now."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Desk tools; a phone gets the floating New order button instead. */}
+        <div className="flex flex-wrap items-center gap-2 max-lg:hidden">
           <button type="button" onClick={refresh} className="h-9 rounded-md px-3 text-sm font-medium text-muted hover:bg-raised hover:text-ink">
             Refresh
           </button>
-          {setup.canExport ? (
+          {can(role, "exportOrders") ? (
             <button
               type="button"
               onClick={handleExport}
@@ -292,7 +290,7 @@ export default function OrdersQueue({ role }) {
               {exporting ? "Exporting…" : "Export to Excel"}
             </button>
           ) : null}
-          {setup.canCreate ? (
+          {can(role, "createOrder") ? (
             <Link href="/app/orders/new" className="inline-flex h-9 items-center rounded-md bg-accent px-4 text-sm font-medium text-white hover:bg-accent-strong">
               New order
             </Link>
@@ -300,7 +298,8 @@ export default function OrdersQueue({ role }) {
         </div>
       </header>
 
-      <div role="group" aria-label="Filter orders" className="flex flex-wrap gap-2">
+      {/* One row of queues; on a phone it scrolls sideways instead of wrapping onto three lines. */}
+      <div role="group" aria-label="Filter orders" className="flex flex-wrap gap-2 max-lg:-mx-4 max-lg:flex-nowrap max-lg:overflow-x-auto max-lg:px-4 max-lg:[scrollbar-width:none]">
         {ORDER_QUEUES.map((q) => {
           const selected = queue?.key === q.key;
           const count = summary ? q.count(summary) : null;
@@ -311,7 +310,7 @@ export default function OrdersQueue({ role }) {
               type="button"
               aria-pressed={selected}
               onClick={() => chooseQueue(q.key)}
-              className={`inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${
+              className={`inline-flex min-h-[44px] shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${
                 selected
                   ? attention ? "border-amber-700 bg-amber-100 text-amber-950 ring-1 ring-amber-700" : "border-ink bg-ink text-white"
                   : attention ? "border-amber-400 bg-amber-50 text-amber-900 hover:border-amber-700 hover:bg-amber-100" : "border-control bg-white text-ink hover:border-ink hover:bg-raised"
@@ -337,15 +336,6 @@ export default function OrdersQueue({ role }) {
             size="sm"
             className="max-w-xs"
           />
-          {/* SelectBar is always w-full; the wrapper sets its width. */}
-          <div className="w-48">
-            <SelectBar size="sm" aria-label="Salesman" value={salesmanId} onChange={(event) => setParam("salesman", event.target.value)}>
-              <option value="">All salesmen</option>
-              {salesmen.map((sm) => (
-                <option key={sm.id} value={String(sm.id)}>{sm.name}</option>
-              ))}
-            </SelectBar>
-          </div>
           <button
             type="button"
             aria-expanded={showFilters}
@@ -366,7 +356,13 @@ export default function OrdersQueue({ role }) {
         </div>
 
         {showFilters ? (
-          <div className="grid gap-3 border-b border-line bg-surface-soft px-4 py-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 border-b border-line bg-surface-soft px-4 py-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <SelectBar size="sm" aria-label="Salesman" value={salesmanId} onChange={(event) => setParam("salesman", event.target.value)}>
+              <option value="">All salesmen</option>
+              {salesmen.map((sm) => (
+                <option key={sm.id} value={String(sm.id)}>{sm.name}</option>
+              ))}
+            </SelectBar>
             {queue?.key === "all" ? (
               <SelectBar size="sm" aria-label="Status" value={extra.status} onChange={(e) => { setExtra((p) => ({ ...p, status: e.target.value })); setPage(1); }}>
                 <option value="ALL">Any status</option>
@@ -399,7 +395,7 @@ export default function OrdersQueue({ role }) {
             {filtersActive ? (
               <button
                 type="button"
-                onClick={() => { setExtra({ channel: "ALL", paymentStatus: "ALL", status: "ALL", fromDate: "", toDate: "" }); setPage(1); }}
+                onClick={() => { setExtra({ channel: "ALL", paymentStatus: "ALL", status: "ALL", fromDate: "", toDate: "" }); setParam("salesman", ""); setPage(1); }}
                 className="justify-self-start text-sm font-medium text-ink hover:underline"
               >
                 Clear filters
@@ -423,45 +419,31 @@ export default function OrdersQueue({ role }) {
               columns={columns}
               data={orders}
               emptyLabel={search || filtersActive ? "No orders match this search." : `Nothing in “${queue?.label || "this queue"}” right now.`}
-              onRowClick={(order) => setSelectedOrderId(order.id)}
+              onRowClick={(order) => openOrder(order.id)}
+              renderMobileRow={(order, renderCell) => <FieldOrderCard order={order}>{renderCell("next")}</FieldOrderCard>}
             />
           )}
         </div>
 
-        {total > PAGE_SIZE ? (
-          <nav aria-label="Order pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
-            <span className="text-sm tabular-nums text-muted">{firstRow}–{lastRow} of {total} orders</span>
-            <div className="flex flex-wrap items-center gap-1">
-              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="min-h-10 rounded-md border border-control bg-white px-3 text-sm hover:border-ink disabled:opacity-40">Previous</button>
-              {pageNumbers.map((number, index) => (
-                <span key={number} className="inline-flex items-center gap-1">
-                  {index > 0 && number - pageNumbers[index - 1] > 1 ? <span className="px-1 text-muted">…</span> : null}
-                  <button type="button" aria-label={`Page ${number}`} aria-current={number === page ? "page" : undefined} onClick={() => setPage(number)} className={`min-h-10 min-w-10 rounded-md border px-2 text-sm tabular-nums focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${number === page ? "border-ink bg-ink font-semibold text-white" : "border-control bg-white text-ink hover:border-ink hover:bg-raised"}`}>{number}</button>
-                </span>
-              ))}
-              <button type="button" onClick={() => setPage((p) => Math.min(pageCount, p + 1))} disabled={page === pageCount} className="min-h-10 rounded-md border border-control bg-white px-3 text-sm hover:border-ink disabled:opacity-40">Next</button>
-              <label className="ml-2 flex items-center gap-2 text-sm text-muted">Go to page
-                <select aria-label="Go to page" value={page} onChange={(event) => setPage(Number(event.target.value))} className="h-10 rounded-md border border-control bg-white px-2 tabular-nums text-ink">
-                  {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
-                </select>
-              </label>
-            </div>
-          </nav>
-        ) : null}
+        <Pager page={page} pageSize={PAGE_SIZE} total={total} noun="orders" onChange={setPage} />
       </section>
 
-      {selectedOrderId ? (
+      {can(role, "createOrder") ? (
+        <Link
+          href="/app/orders/new"
+          className="fixed right-4 z-20 inline-flex h-14 items-center gap-2 rounded-full bg-slate-900 pl-5 pr-6 text-base font-semibold text-white shadow-lg shadow-slate-900/25 bottom-[calc(var(--field-nav-height)+env(safe-area-inset-bottom,0px)+16px)] lg:hidden"
+        >
+          <Plus className="h-5 w-5" strokeWidth={2.5} />
+          New order
+        </Link>
+      ) : null}
+
+      {isDesktop && selectedOrderId ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
           <button type="button" aria-label="Close order" className="absolute inset-0 cursor-default" onClick={() => setSelectedOrderId(null)} />
-          {isDesktop ? (
-            <aside className="relative h-dvh w-full max-w-[760px] overflow-y-auto border-l border-line bg-canvas px-7 py-6 shadow-[0_0_40px_rgba(0,0,0,0.12)]">
-              <OrderDesk orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onOrderUpdate={refresh} />
-            </aside>
-          ) : (
-            <aside className="relative h-dvh w-full overflow-y-auto bg-slate-50 p-4">
-              <OrderDetailPanel orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onOrderUpdate={refresh} />
-            </aside>
-          )}
+          <aside className="relative h-dvh w-full max-w-[760px] overflow-y-auto border-l border-line bg-canvas px-7 py-6 shadow-[0_0_40px_rgba(0,0,0,0.12)]">
+            <OrderDesk orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} onOrderUpdate={refresh} />
+          </aside>
         </div>
       ) : null}
     </div>
